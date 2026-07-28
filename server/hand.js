@@ -43,6 +43,10 @@ export class Hand {
     this.runOut = false;
     this.revealed = false;
     this.allInEquity = null;
+    // Structured record of the hand, used by the replayer. Deliberately
+    // separate from ctx.log, which is prose for humans and will drift.
+    this.timeline = [];
+    this.startedAt = Date.now();
     this.discardsDone = !this.variant.discardAfter;
     this.finished = false;
     this.lastAction = null;
@@ -98,6 +102,9 @@ export class Hand {
     betting.pay(bb, this.bigBlind);
     this.currentBet = this.bigBlind;
     this.lastFullRaiseSize = this.bigBlind;
+    this.street = 'preflop';
+    this.pushEvent({ type: 'post', seat: this.sbSeat, kind: 'sb', amount: sb.betThisRound });
+    this.pushEvent({ type: 'post', seat: this.bbSeat, kind: 'bb', amount: bb.betThisRound });
     this.ctx.log(
       `Hand #${this.handNo} (${this.variant.label}) — ${sb.nickname} posts small blind ${this.smallBlind}, ` +
       `${bb.nickname} posts big blind ${this.bigBlind}`
@@ -112,6 +119,10 @@ export class Hand {
     }
 
     this.enterStreet('preflop', true);
+  }
+
+  pushEvent(event) {
+    this.timeline.push({ i: this.timeline.length, street: this.street, ...event });
   }
 
   seatAfter(seat) {
@@ -141,6 +152,9 @@ export class Hand {
     if (dealt) {
       this.board.push(...this.draw(dealt));
       this.ctx.log(`${cap(street)}: ${this.board.join(' ')}`);
+    }
+    if (dealt) {
+      this.pushEvent({ type: 'board', cards: this.board.slice(-dealt), board: [...this.board] });
     }
     if (street === 'flop') {
       for (const p of this.livePlayers()) {
@@ -186,6 +200,10 @@ export class Hand {
     }
     betting.applyAction(this, player, action, null);
     this.lastAction = { seat: player.seatIndex, action, amount: null };
+    this.pushEvent({
+      type: 'action', seat: player.seatIndex, action,
+      amount: player.betThisRound, timedOut: true, pot: betting.potTotal(this),
+    });
     this.ctx.log(`${player.nickname} ${action === 'check' ? 'checks' : 'folds'} (time)`);
     this.afterAction();
   }
@@ -212,6 +230,11 @@ export class Hand {
       : before === 0 ? `bets ${player.betThisRound}`
       : `raises to ${player.betThisRound}`;
     this.lastAction = { seat: player.seatIndex, action, amount: player.betThisRound };
+    this.pushEvent({
+      type: 'action', seat: player.seatIndex, action,
+      amount: player.betThisRound, allIn: player.allIn,
+      pot: betting.potTotal(this),
+    });
     this.ctx.log(`${player.nickname} ${shown}${player.allIn ? ' (all-in)' : ''}`);
     this.afterAction();
     return { ok: true };
@@ -348,6 +371,7 @@ export class Hand {
     }
     player.holeCards.splice(cardIndex, 1);
     player.hasDiscarded = true;
+    this.pushEvent({ type: 'discard', seat: player.seatIndex });
     this.ctx.log(`${player.nickname} discards a card`);
     if (this.discardPending().length === 0) {
       this.ctx.clearTimer();
@@ -404,6 +428,7 @@ export class Hand {
       byFold: true,
     };
     winner.handResult = { desc: null, won: pot };
+    this.pushEvent({ type: 'payout', seat: winner.seatIndex, amount: pot, byFold: true });
     this.ctx.log(`${winner.nickname} wins ${pot}`);
     this.ctx.changed();
     this.ctx.finished();
@@ -471,10 +496,16 @@ export class Hand {
     if (cooler) this.ctx.log(`${cooler.headline}: ${cooler.detail}`);
 
     for (const p of live) {
+      this.pushEvent({
+        type: 'reveal', seat: p.seatIndex, cards: [...p.holeCards], desc: p.handResult.desc,
+      });
       this.ctx.log(
         `${p.nickname} shows ${p.holeCards.join(' ')} — ${p.handResult.desc}` +
         (p.handResult.won ? `, wins ${p.handResult.won}` : '')
       );
+    }
+    for (const w of winners) {
+      this.pushEvent({ type: 'payout', seat: w.seat, amount: w.amount, byFold: false });
     }
     this.ctx.changed();
     this.ctx.finished();

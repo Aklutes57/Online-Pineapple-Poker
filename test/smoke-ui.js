@@ -167,6 +167,27 @@ try {
   );
   await check('CSV export button is present', await anna.locator('#ledger-csv').isVisible());
 
+  // ---- hand replay opens from the log and steps through ----
+  await anna.click('.tab[data-tab="log"]');
+  await anna.waitForSelector('.replay-link');
+  const replayHref = await anna.getAttribute('.replay-link', 'href');
+  const replay = await newPage('replay');
+  await replay.goto(base + replayHref);
+  await replay.waitForSelector('#replay-body:not(.hidden)');
+  await check('replay page loads a saved hand', true);
+  await check('replay renders the seats', (await replay.locator('#seats-layer .seat').count()) >= 2);
+
+  const endPosition = await replay.textContent('#rp-position');
+  await replay.click('#rp-first');
+  const startPosition = await replay.textContent('#rp-position');
+  await check('replay steps back to the start', startPosition.startsWith('0 /') && endPosition !== startPosition);
+  await replay.click('#rp-next');
+  await check('replay steps forward', (await replay.textContent('#rp-position')).startsWith('1 /'));
+
+  await replay.click('#rp-react-picker .react-option[data-emoji="😱"]');
+  await replay.waitForSelector('.reaction-chip');
+  await check('a reaction can be left on a saved hand', true);
+
   // ---- reconnect: reload keeps your seat ----
   await ben.reload();
   await ben.waitForSelector('.seat.me .nameplate');

@@ -7,7 +7,7 @@ import { escapeHtml, showToast } from '/js/ui.js';
 let clientRef = null;
 let chatLog = [];
 let unread = 0;
-let lastLogLength = 0;
+let lastLogSig = '';
 
 export function initPanels(client) {
   clientRef = client;
@@ -171,13 +171,19 @@ function renderChat() {
 
 function renderLog(client) {
   const logs = client.state.logTail || [];
-  if (logs.length === lastLogLength) return;
-  lastLogLength = logs.length;
+  const replayId = client.state.lastHandRecordId;
+  const sig = `${logs.length}:${replayId || ''}`;
+  if (sig === lastLogSig) return;
+  lastLogSig = sig;
   const list = document.getElementById('log-list');
   const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
-  list.innerHTML = logs
-    .map((l) => `<div class="log-line"><span class="log-no">#${l.handNo}</span> ${escapeHtml(l.text)}</div>`)
-    .join('');
+  list.innerHTML =
+    (replayId
+      ? `<a class="replay-link" href="/hands/${replayId}" target="_blank" rel="noopener">▶ Replay the last hand</a>`
+      : '') +
+    logs
+      .map((l) => `<div class="log-line"><span class="log-no">#${l.handNo}</span> ${escapeHtml(l.text)}</div>`)
+      .join('');
   if (atBottom) list.scrollTop = list.scrollHeight;
 }
 

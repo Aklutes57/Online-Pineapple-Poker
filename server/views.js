@@ -80,6 +80,7 @@ export function buildViews(game) {
     seats,
     seatRequests,
     hand: handView,
+    lastHandRecordId: game.lastHandRecordId || null,
     chatTail: game.chat.slice(-30),
     logTail: game.logs.slice(-80),
     ledger: game.ledgerRows(),

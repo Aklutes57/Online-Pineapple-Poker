@@ -24,7 +24,8 @@ import {
   addNotifyTarget, listNotifyTargets, removeNotifyTarget, announceTable,
   emailConfigured, recentDeliveries,
 } from './notify.js';
-import { VARIANTS } from '../shared/constants.js';
+import { VARIANTS, REACTIONS } from '../shared/constants.js';
+import { getHand, recentHandsForGame, addHandReaction } from './handStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -391,6 +392,44 @@ export function buildServer() {
 
   app.get('/me', (req, res) => {
     res.sendFile(path.join(root, 'public', 'me.html'));
+  });
+
+  // ---- hand replays ----
+
+  app.get('/api/hands/:id', (req, res) => {
+    const account = accountForRequest(req);
+    const hand = getHand(req.params.id, account?.id ?? null);
+    if (!hand) {
+      res.status(404).json({ error: 'no such hand' });
+      return;
+    }
+    res.json({ hand });
+  });
+
+  app.get('/api/games/:id/hands', (req, res) => {
+    res.json({ hands: recentHandsForGame(req.params.id, 25) });
+  });
+
+  app.post('/api/hands/:id/reactions', (req, res) => {
+    const account = accountForRequest(req);
+    const { emoji, nickname } = req.body || {};
+    if (!REACTIONS.includes(emoji)) {
+      res.status(400).json({ error: 'Unknown reaction' });
+      return;
+    }
+    const who = account?.displayName
+      || (typeof nickname === 'string' ? nickname.trim().slice(0, 20) : '')
+      || 'Guest';
+    const result = addHandReaction(req.params.id, { emoji, accountId: account?.id ?? null, nickname: who });
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.json({ reactions: result.reactions });
+  });
+
+  app.get('/hands/:id', (req, res) => {
+    res.sendFile(path.join(root, 'public', 'hand.html'));
   });
 
   const httpServer = createServer(app);

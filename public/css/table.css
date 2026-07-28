@@ -703,6 +703,23 @@ body.disconnected::after {
   font-variant-numeric: tabular-nums;
 }
 
+.replay-link {
+  display: block;
+  margin-bottom: 10px;
+  padding: 7px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  text-align: center;
+}
+
+.replay-link:hover {
+  border-color: var(--accent);
+}
+
 table.ledger {
   width: 100%;
   border-collapse: collapse;

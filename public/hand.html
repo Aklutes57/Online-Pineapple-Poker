@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hand replay — Pineapple Poker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍍</text></svg>">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/landing.css">
+  <link rel="stylesheet" href="/css/table.css">
+  <link rel="stylesheet" href="/css/replay.css">
+</head>
+<body class="replay-page">
+  <header class="site-header">
+    <div class="wrap">
+      <a class="pineapple-mark" href="/">🍍 <span class="pine">Pineapple</span> Poker</a>
+      <nav>
+        <span id="hand-title"></span>
+        <button class="btn btn-ghost nav-btn" id="share-btn">Copy link</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="replay-main">
+    <div id="replay-missing" class="hidden signed-out-card">
+      <h1>Hand not found</h1>
+      <p>That replay link has expired or never existed.</p>
+      <a class="btn btn-primary" href="/">Back to Pineapple Poker</a>
+    </div>
+
+    <div id="replay-body" class="hidden">
+      <div id="replay-table-area">
+        <div id="table">
+          <div id="table-center">
+            <div id="board"></div>
+            <div id="pot-line"></div>
+            <div id="center-message"></div>
+          </div>
+          <div id="bets-layer"></div>
+          <div id="seats-layer"></div>
+        </div>
+      </div>
+
+      <div class="replay-controls">
+        <button class="btn btn-ghost" id="rp-first" title="Start">⏮</button>
+        <button class="btn btn-ghost" id="rp-prev" title="Back">◀</button>
+        <button class="btn btn-primary" id="rp-play">▶ Play</button>
+        <button class="btn btn-ghost" id="rp-next" title="Forward">▶</button>
+        <button class="btn btn-ghost" id="rp-last" title="End">⏭</button>
+        <input type="range" id="rp-scrub" min="0" value="0">
+        <span id="rp-position"></span>
+      </div>
+
+      <div class="replay-panels">
+        <div class="replay-log">
+          <h3>Action</h3>
+          <div id="rp-log"></div>
+        </div>
+        <div class="replay-side">
+          <h3>React to this hand</h3>
+          <div id="rp-reactions"></div>
+          <div id="rp-react-picker"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+  <script type="module" src="/js/replay.js"></script>
+</body>
+</html>

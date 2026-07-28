@@ -5,6 +5,7 @@
 import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
+import { saveHand } from './handStore.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 function shortId() {
@@ -530,6 +531,7 @@ export class Game {
       try {
         recordHandStats(this, hand);
         syncSessionResults(this);
+        this.lastHandRecordId = saveHand(this, hand);
       } catch (err) {
         console.error(`stats write failed for game ${this.id}:`, err.message);
       }
