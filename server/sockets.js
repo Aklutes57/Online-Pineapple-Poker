@@ -30,13 +30,44 @@ function cleanNickname(raw) {
   return nick.length >= SETTINGS_LIMITS.nickname.min ? nick : null;
 }
 
+// Clients control event payloads entirely — a null/string/array payload must
+// not be able to throw inside a handler and take the process down.
+function asObject(payload) {
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+}
+
+const MAX_PLAYERS_PER_GAME = 60;
+
+// Undo a socket's current player/game binding (used on disconnect and when a
+// socket re-JOINs, so stale bindings can't pin `connected=true` forever).
+function detachSocket(socket) {
+  const { gameId, playerId } = socket.data;
+  if (!gameId) return null;
+  const sockets = socketsByGame.get(gameId);
+  if (sockets) {
+    sockets.delete(socket);
+    if (sockets.size === 0) socketsByGame.delete(gameId);
+  }
+  const game = getGame(gameId);
+  const player = game?.players.get(playerId);
+  socket.data.gameId = null;
+  socket.data.playerId = null;
+  if (!game || !player) return null;
+  player.sockets.delete(socket.id);
+  if (player.sockets.size === 0) {
+    player.connected = false;
+    game.noteDisconnect(player);
+  }
+  return game;
+}
+
 export function attachSockets(io) {
   io.on('connection', (socket) => {
     socket.data = { gameId: null, playerId: null };
 
     socket.on(EVENTS.JOIN, (payload, ack) => {
       if (typeof ack !== 'function') return;
-      const { gameId, token, nickname } = payload || {};
+      const { gameId, token, nickname } = asObject(payload);
       const game = getGame(typeof gameId === 'string' ? gameId : '');
       if (!game || game.closed) {
         ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
@@ -44,8 +75,15 @@ export function attachSockets(io) {
       }
       game.touch();
 
+      // A re-JOIN on a bound socket must release the old binding first.
+      const previousGame = detachSocket(socket);
+
       let player = typeof token === 'string' ? game.playerByToken(token) : null;
       if (!player) {
+        if (game.players.size >= MAX_PLAYERS_PER_GAME) {
+          ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
+          return;
+        }
         const nick = cleanNickname(nickname) || `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
         player = game.addPlayer(nick);
       }
@@ -56,6 +94,13 @@ export function attachSockets(io) {
       player.sockets.add(socket.id);
       player.connected = true;
       player.disconnectedAt = null;
+
+      // A reconnecting current actor gets their turn timer re-evaluated
+      // (restores the "no timer" state when the action clock is off).
+      const hand = game.currentHand;
+      if (hand && !hand.finished && hand.isBettingPhase() && hand.toActSeat === player.seatIndex) {
+        hand.beginTurn();
+      }
 
       if (!socketsByGame.has(game.id)) socketsByGame.set(game.id, new Set());
       socketsByGame.get(game.id).add(socket);
@@ -77,9 +122,11 @@ export function attachSockets(io) {
       broadcast(game);
     });
 
-    // Every other event requires a bound player.
+    // Every other event requires a bound player. Payloads are normalized and
+    // handler errors are contained per-event — a bad message from one client
+    // must never crash the process and take every table with it.
     function withGame(handler) {
-      return (payload = {}) => {
+      return (rawPayload) => {
         const game = getGame(socket.data.gameId || '');
         const player = game && game.players.get(socket.data.playerId);
         if (!game || !player) {
@@ -88,7 +135,12 @@ export function attachSockets(io) {
         }
         if (game.closed) return;
         game.touch();
-        handler(game, player, payload);
+        try {
+          handler(game, player, asObject(rawPayload));
+        } catch (err) {
+          sendError(socket, ERRORS.BAD_REQUEST, 'Something went wrong');
+          game.recoverFromError(err);
+        }
       };
     }
 
@@ -225,21 +277,8 @@ export function attachSockets(io) {
     }));
 
     socket.on('disconnect', () => {
-      const game = getGame(socket.data.gameId || '');
-      const sockets = socketsByGame.get(socket.data.gameId);
-      if (sockets) {
-        sockets.delete(socket);
-        if (sockets.size === 0) socketsByGame.delete(socket.data.gameId);
-      }
-      if (!game) return;
-      const player = game.players.get(socket.data.playerId);
-      if (!player) return;
-      player.sockets.delete(socket.id);
-      if (player.sockets.size === 0) {
-        player.connected = false;
-        game.noteDisconnect(player);
-      }
-      broadcast(game);
+      const game = detachSocket(socket);
+      if (game && !game.closed) broadcast(game);
     });
   });
 }

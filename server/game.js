@@ -2,7 +2,7 @@
 // Owns the single pending flow timer (action / discard / run-out / next-hand).
 // The sockets layer sets game.onChanged and calls the public methods here.
 
-import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS } from '../shared/constants.js';
+import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
@@ -54,9 +54,44 @@ export class Game {
       deadline,
       handle: setTimeout(() => {
         this.timer = null;
-        fn();
+        try {
+          fn();
+        } catch (err) {
+          this.recoverFromError(err);
+        }
       }, ms),
     };
+  }
+
+  // Containment for engine invariant failures: never let one table's bad hand
+  // crash the process. Void the hand (bets returned), pause, and let the host
+  // resume.
+  recoverFromError(err) {
+    console.error(`game ${this.id} internal error:`, err);
+    try {
+      const hand = this.currentHand;
+      if (hand && !hand.finished) {
+        for (const p of hand.players) {
+          p.stack += p.totalCommitted;
+          p.totalCommitted = 0;
+          p.betThisRound = 0;
+        }
+        hand.finished = true;
+        hand.phase = PHASES.COMPLETE;
+        hand.toActSeat = null;
+        this.addLog('Something went wrong — the hand was voided and all bets returned');
+      }
+      this.clearTimer();
+      this.pauseRequested = false;
+      if (this.status === GAME_STATUS.RUNNING) {
+        this.status = GAME_STATUS.PAUSED;
+        this.addLog('Game paused — the host can resume from the Host menu');
+      }
+      this.applyPendingOps();
+      this.emitChanged();
+    } catch (recoveryErr) {
+      console.error(`game ${this.id} recovery failed:`, recoveryErr);
+    }
   }
 
   clearTimer() {
@@ -82,6 +117,7 @@ export class Game {
       pendingBuyIn: 0,
       requestedSeat: null,
       seatedAt: null,
+      createdAt: Date.now(),
       disconnectedAt: null,
       lastChatAt: 0,
       kicked: false,
@@ -181,10 +217,27 @@ export class Game {
       player.kicked = true;
       this.queueOp({ type: 'unseat', playerId: player.id, reason });
       this.addLog(`${player.nickname} will leave after this hand`);
+      this.nudgeCurrentTurn(player);
       return { ok: true, queued: true };
     }
     this.unseatNow(player, reason);
     return { ok: true };
+  }
+
+  // If this player is the one to act in a live betting round, re-arm the turn
+  // timer so an away/kicked/disconnected player can't freeze the table (with
+  // actionTime=0 there is otherwise no pending timer at all).
+  nudgeCurrentTurn(player) {
+    const hand = this.currentHand;
+    if (
+      hand &&
+      !hand.finished &&
+      hand.isBettingPhase() &&
+      hand.toActSeat === player.seatIndex &&
+      this.playerInLiveHand(player)
+    ) {
+      hand.beginTurn();
+    }
   }
 
   unseatNow(player, reason) {
@@ -206,6 +259,7 @@ export class Game {
     if (player.status !== 'seated') return { ok: false, error: 'not seated' };
     player.sittingOut = true;
     this.addLog(`${player.nickname} is away`);
+    this.nudgeCurrentTurn(player);
     return { ok: true };
   }
 
@@ -245,6 +299,25 @@ export class Game {
     if (player.stack > 0 && player.sittingOut && !player.kicked) {
       // Broke players are auto-away; a top-up brings them back next hand.
       player.sittingOut = false;
+    }
+  }
+
+  // Drop spectators who disconnected long ago and never bought in, so a
+  // long-lived table's player map can't grow without bound.
+  pruneStalePlayers(maxIdleMs = 10 * 60 * 1000) {
+    const now = Date.now();
+    for (const [id, p] of this.players) {
+      if (
+        id !== this.hostId &&
+        p.status === 'spectating' &&
+        !p.connected &&
+        !this.ledger.has(id) &&
+        p.disconnectedAt &&
+        now - p.disconnectedAt > maxIdleMs
+      ) {
+        this.players.delete(id);
+        this.byToken.delete(p.token);
+      }
     }
   }
 
@@ -473,18 +546,35 @@ export class Game {
   noteDisconnect(player) {
     player.disconnectedAt = Date.now();
     if (player.id === this.hostId) {
-      clearTimeout(this.hostTransferTimeout);
-      this.hostTransferTimeout = setTimeout(() => this.maybeTransferHost(), TIMINGS.HOST_TRANSFER_AFTER);
+      this.armHostTransferCheck(TIMINGS.HOST_TRANSFER_AFTER);
     }
+    this.nudgeCurrentTurn(player);
+  }
+
+  armHostTransferCheck(ms) {
+    clearTimeout(this.hostTransferTimeout);
+    this.hostTransferTimeout = setTimeout(() => this.maybeTransferHost(), ms);
+    this.hostTransferTimeout.unref?.();
   }
 
   maybeTransferHost() {
+    if (this.closed) return;
     const host = this.players.get(this.hostId);
-    if (host?.connected || this.closed) return;
+    if (host?.connected) return;
+    // Prefer seated players (earliest seated first); fall back to any
+    // connected player so a hostless lobby can still be managed.
     const candidates = [...this.players.values()]
-      .filter((p) => p.connected && p.status === 'seated')
-      .sort((a, b) => (a.seatedAt || Infinity) - (b.seatedAt || Infinity));
-    if (candidates.length === 0) return;
+      .filter((p) => p.connected)
+      .sort((a, b) => {
+        const aSeated = a.status === 'seated' ? 0 : 1;
+        const bSeated = b.status === 'seated' ? 0 : 1;
+        return aSeated - bSeated || (a.createdAt || 0) - (b.createdAt || 0);
+      });
+    if (candidates.length === 0) {
+      // Nobody here to take over — check again in case someone shows up.
+      this.armHostTransferCheck(60000);
+      return;
+    }
     this.hostId = candidates[0].id;
     this.addLog(`${candidates[0].nickname} is now the host`);
     this.emitChanged();

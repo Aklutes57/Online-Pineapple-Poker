@@ -325,6 +325,19 @@ function totalChips(players, hand) {
   check('crazy-runout: chips conserved', totalChips(players, hand) === 200);
 }
 
+// --- showCards is rejected for players not dealt into the hand ---
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'fold');
+  check('showcards: hand ended by fold', hand.finished && hand.results.byFold);
+  const outsider = { ...makePlayer(5, 200, 'stranger'), holeCards: ['As', 'Ad'], folded: false };
+  check('showcards: outsider rejected', !hand.handleShowCards(outsider).ok);
+  check('showcards: winner may show', hand.handleShowCards(hand.bySeat.get(1)).ok);
+}
+
 // --- Chip conservation on an ordinary multi-street hand ---
 {
   const players = [makePlayer(0, 300), makePlayer(1, 300), makePlayer(2, 300)];

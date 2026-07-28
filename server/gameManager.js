@@ -14,12 +14,17 @@ function newGameId() {
   return id;
 }
 
+const MAX_GAMES = 500;
+
 export function createGame(settings, hostNickname) {
+  if (games.size >= MAX_GAMES) return null;
   const game = new Game(newGameId(), settings);
   const host = game.addPlayer(hostNickname);
   game.hostId = host.id;
   game.addLog(`${hostNickname} created the table`);
   games.set(game.id, game);
+  // If the creator never opens the table, hostship must still be able to pass.
+  game.armHostTransferCheck(120000);
   return { game, host };
 }
 
@@ -45,6 +50,7 @@ export function startIdleSweep() {
   const interval = setInterval(() => {
     const now = Date.now();
     for (const [id, game] of games) {
+      game.pruneStalePlayers();
       const anyConnected = [...game.players.values()].some((p) => p.connected);
       if (!anyConnected && now - game.lastActivity > IDLE_MS) {
         game.close('idle');

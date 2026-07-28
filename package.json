@@ -6,7 +6,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/test-evaluator.js && node test/test-pots.js && node test/test-betting.js",
+    "test": "node test/test-evaluator.js && node test/test-pots.js && node test/test-betting.js && node test/test-hardening.js",
     "soak": "node test/bots.js"
   },
   "license": "MIT",

@@ -144,6 +144,7 @@ export class Hand {
     let ms = null;
     if (player.sittingOut) ms = TIMINGS.AWAY_GRACE;
     else if (this.actionTime > 0) ms = this.actionTime * 1000;
+    else if (!player.connected) ms = TIMINGS.DISCONNECT_GRACE; // no-limit timer can't wait forever for a gone player
     if (ms !== null) {
       this.ctx.setTimer('action', ms, () => this.handleTimeout());
     } else {
@@ -397,6 +398,9 @@ export class Hand {
   // Voluntary reveal after winning by fold.
   handleShowCards(player) {
     if (!this.finished || !this.results?.byFold) return { ok: false, error: 'nothing to show' };
+    if (this.bySeat.get(player.seatIndex) !== player) {
+      return { ok: false, error: 'you were not in this hand' };
+    }
     if (player.folded) return { ok: false, error: 'you folded' };
     player.showedCards = true;
     this.ctx.log(`${player.nickname} shows ${player.holeCards.join(' ')}`);

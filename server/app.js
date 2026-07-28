@@ -26,8 +26,12 @@ export function buildServer() {
       res.status(400).json({ error: 'nickname required' });
       return;
     }
-    const { game, host } = createGame(settings || {}, nick);
-    res.json({ gameId: game.id, token: host.token, playerId: host.id });
+    const created = createGame(settings || {}, nick);
+    if (!created) {
+      res.status(503).json({ error: 'server is full — try again later' });
+      return;
+    }
+    res.json({ gameId: created.game.id, token: created.host.token, playerId: created.host.id });
   });
 
   app.get('/api/games/:id', (req, res) => {
