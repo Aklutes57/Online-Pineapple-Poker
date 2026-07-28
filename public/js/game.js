@@ -2,6 +2,7 @@
 
 import { EVENTS } from '/shared/constants.js';
 import { showToast, escapeHtml } from '/js/ui.js';
+import { getAccountToken, loadAccount, currentAccount } from '/js/auth.js';
 import { renderAll, startTimerLoop } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels } from '/js/panels.js';
@@ -31,7 +32,8 @@ function saved() {
 
 function join() {
   const { token, nickname } = saved();
-  socket.emit(EVENTS.JOIN, { gameId, token, nickname }, (res) => {
+  const accountToken = getAccountToken();
+  socket.emit(EVENTS.JOIN, { gameId, token, nickname, accountToken }, (res) => {
     if (!res?.ok) {
       location.href = '/?error=notfound';
       return;
@@ -146,4 +148,14 @@ document.getElementById('copy-link').addEventListener('click', async () => {
 initActionBar(client);
 initPanels(client);
 startTimerLoop(client);
+loadAccount().then((account) => {
+  client.account = account;
+  if (account) {
+    const chip = document.getElementById('account-chip');
+    if (chip) {
+      chip.textContent = account.displayName;
+      chip.classList.remove('hidden');
+    }
+  }
+});
 join();

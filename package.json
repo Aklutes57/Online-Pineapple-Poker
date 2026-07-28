@@ -5,9 +5,10 @@
   "type": "module",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "test": "node test/test-evaluator.js && node test/test-pots.js && node test/test-betting.js && node test/test-hardening.js",
-    "soak": "node test/bots.js"
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node test/test-evaluator.js && node test/test-pots.js && node test/test-betting.js && node --disable-warning=ExperimentalWarning test/test-db.js && node --disable-warning=ExperimentalWarning test/test-hardening.js",
+    "soak": "node --disable-warning=ExperimentalWarning test/bots.js",
+    "smoke": "node --disable-warning=ExperimentalWarning test/smoke-ui.js"
   },
   "license": "MIT",
   "dependencies": {

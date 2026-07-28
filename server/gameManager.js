@@ -16,11 +16,12 @@ function newGameId() {
 
 const MAX_GAMES = 500;
 
-export function createGame(settings, hostNickname) {
+export function createGame(settings, hostNickname, hostAccountId = null) {
   if (games.size >= MAX_GAMES) return null;
   const game = new Game(newGameId(), settings);
-  const host = game.addPlayer(hostNickname);
+  const host = game.addPlayer(hostNickname, hostAccountId);
   game.hostId = host.id;
+  game.hostAccountId = hostAccountId;
   game.addLog(`${hostNickname} created the table`);
   games.set(game.id, game);
   // If the creator never opens the table, hostship must still be able to pass.

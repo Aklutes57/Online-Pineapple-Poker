@@ -204,8 +204,73 @@ label {
 .pineapple-mark {
   font-weight: 800;
   letter-spacing: 0.5px;
+  text-decoration: none;
+  color: inherit;
 }
 
 .pineapple-mark .pine {
   color: var(--accent);
+}
+
+/* ---- accounts ---- */
+
+.nav-btn {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.nav-account {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 10px;
+}
+
+.nav-account:hover {
+  text-decoration: underline;
+}
+
+.account-chip {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 12px;
+  white-space: nowrap;
+}
+
+.account-chip:hover {
+  border-color: var(--accent);
+}
+
+.auth-blurb {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  margin-bottom: 18px;
+}
+
+.auth-error {
+  color: var(--red);
+  font-size: 13.5px;
+  margin-top: 10px;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.linkish {
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+  padding: 0;
 }

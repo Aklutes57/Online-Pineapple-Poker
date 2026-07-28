@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your profile — Pineapple Poker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍍</text></svg>">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/landing.css">
+  <link rel="stylesheet" href="/css/profile.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="pineapple-mark" href="/">🍍 <span class="pine">Pineapple</span> Poker</a>
+      <nav>
+        <a href="/">Home</a>
+        <span id="account-slot"></span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap profile-wrap">
+    <div id="signed-out" class="hidden signed-out-card">
+      <h1>Your profile</h1>
+      <p>Sign in to see your all-time ledger, poker stats, invite list and table theme.</p>
+      <button class="btn btn-primary" id="so-signin">Sign in or create an account</button>
+      <p class="fine">You can always keep playing as a guest — an account is optional.</p>
+    </div>
+
+    <div id="signed-in" class="hidden">
+      <h1 id="profile-name"></h1>
+      <p class="profile-sub" id="profile-sub"></p>
+
+      <section class="profile-section">
+        <h2>All-time ledger</h2>
+        <div id="alltime-summary" class="stat-row"></div>
+        <div id="sessions-table"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Poker stats</h2>
+        <div id="stats-block"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Settings</h2>
+        <div class="row">
+          <div class="field">
+            <label for="p-name">Display name</label>
+            <input id="p-name" maxlength="20">
+          </div>
+          <div class="field field-btn">
+            <button class="btn btn-primary" id="p-save">Save</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+  <script type="module" src="/js/me.js"></script>
+</body>
+</html>

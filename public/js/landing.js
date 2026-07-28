@@ -1,10 +1,46 @@
+import { loadAccount, currentAccount, signout, authHeaders } from '/js/auth.js';
+import { openAuthModal } from '/js/authModal.js';
+
 const modal = document.getElementById('create-modal');
 const toast = document.getElementById('toast');
 
 document.getElementById('start-btn').addEventListener('click', () => {
   modal.classList.remove('hidden');
-  document.getElementById('c-nickname').focus();
+  const nickInput = document.getElementById('c-nickname');
+  const account = currentAccount();
+  if (account && !nickInput.value) nickInput.value = account.displayName;
+  nickInput.focus();
 });
+
+// ---- account chip in the header (optional — guests see a Sign in button) ----
+
+function renderAccountSlot() {
+  const slot = document.getElementById('account-slot');
+  const account = currentAccount();
+  if (!account) {
+    slot.innerHTML = '<button class="btn btn-ghost nav-btn" id="signin-btn">Sign in</button>';
+    document.getElementById('signin-btn').addEventListener('click', () =>
+      openAuthModal({ onSuccess: renderAccountSlot })
+    );
+    return;
+  }
+  slot.innerHTML = `
+    <a class="nav-account" href="/me">${escapeHtml(account.displayName)}</a>
+    <button class="btn btn-ghost nav-btn" id="signout-btn">Sign out</button>`;
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    await signout();
+    renderAccountSlot();
+    showToast('Signed out');
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+loadAccount().then(renderAccountSlot);
 
 document.getElementById('c-cancel').addEventListener('click', () => {
   modal.classList.add('hidden');
@@ -53,7 +89,7 @@ async function createGame() {
   try {
     const res = await fetch('/api/games', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ nickname, settings }),
     });
     if (!res.ok) throw new Error('create failed');

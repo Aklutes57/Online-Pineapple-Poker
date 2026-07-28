@@ -18,10 +18,21 @@ Open the site, click **Start a New Game**, pick your settings, and share the
 table URL. Friends request seats; the host approves each one with their
 buy-in. Works on phones (landscape recommended).
 
+## Accounts are optional
+
+You never need one. Open a link, pick a nickname, play — exactly as before.
+Signing up with an email adds an all-time ledger across sessions, poker
+stats, a saved invite list, and a table theme that follows you.
+
+Data lives in a SQLite file at `data/pineapple.db` (override with
+`PP_DB_PATH`), created automatically on first run.
+
 ## Features
 
 - Real-time multiplayer over Socket.IO — server-authoritative engine, hole
   cards never leave the server except to their owner
+- Optional email accounts (scrypt-hashed passwords, bearer session tokens)
+  with a profile page at `/me`
 - Full ring-game rules: heads-up blinds, min-raise tracking, short all-ins
   that don't reopen action, side pots with odd-chip distribution, all-in
   run-outs with revealed hands, split pots
@@ -53,8 +64,7 @@ test/         plain-node test suites (no framework)
 ## Tests
 
 ```bash
-npm test               # evaluator, side pots, betting engine
-npm run soak           # bots play 60 hands per variant end-to-end
-node test/bots.js 200  # longer soak
-node test/smoke-ui.js  # Playwright UI smoke test (3 browsers)
+npm test               # evaluator, side pots, betting, database/accounts, hardening
+npm run soak           # bots play hands on every variant end-to-end
+npm run smoke          # Playwright UI test (real browsers, guest + account flows)
 ```

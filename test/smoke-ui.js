@@ -4,8 +4,14 @@
 // the real buttons, then chat and the ledger are verified.
 // Usage: node test/smoke-ui.js
 
-import { chromium } from 'playwright';
-import { buildServer } from '../server/app.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-smoke-')), 'test.db');
+
+const { chromium } = await import('playwright');
+const { buildServer } = await import('../server/app.js');
 
 const SCREENSHOT_DIR = process.env.PP_SHOT_DIR || '.';
 
@@ -146,6 +152,59 @@ try {
   await ben.reload();
   await ben.waitForSelector('.seat.me .nameplate');
   await check('reload restores seat via stored token', true);
+
+  // ---- accounts are optional: guests above never signed in and played fine ----
+  await check('guests played a full hand without any account', winnerSeen);
+
+  // ---- sign up through the UI, then host a table as that account ----
+  const dana = await newPage('dana');
+  await dana.goto(base);
+  await dana.click('#signin-btn');
+  await dana.click('#a-switch'); // switch to "create an account"
+  await dana.fill('#a-name', 'Dana');
+  await dana.fill('#a-email', 'dana@example.com');
+  await dana.fill('#a-password', 'a good long password');
+  await dana.click('#a-submit');
+  await dana.waitForSelector('.nav-account');
+  await check('sign-up from the landing page works', true);
+
+  const navName = await dana.textContent('.nav-account');
+  await check('header shows the display name', navName.trim() === 'Dana');
+
+  // Creating a table now prefills the nickname from the profile.
+  await dana.click('#start-btn');
+  const prefilled = await dana.inputValue('#c-nickname');
+  await check('create-table nickname prefills from the profile', prefilled === 'Dana');
+  await dana.click('#c-create');
+  await dana.waitForURL('**/games/**');
+  await dana.waitForSelector('#account-chip:not(.hidden)');
+  await check('table header shows the account chip', true);
+
+  // ---- profile page ----
+  await dana.goto(`${base}/me`);
+  await dana.waitForSelector('#signed-in:not(.hidden)');
+  const profileName = await dana.textContent('#profile-name');
+  await check('profile page shows the account', profileName.trim() === 'Dana');
+
+  // ---- sign out, sign back in ----
+  await dana.click('#signout-btn');
+  await dana.waitForURL(`${base}/`);
+  await dana.click('#signin-btn');
+  await dana.fill('#a-email', 'dana@example.com');
+  await dana.fill('#a-password', 'a good long password');
+  await dana.click('#a-submit');
+  await dana.waitForSelector('.nav-account');
+  await check('sign out then sign back in works', true);
+
+  // ---- wrong password is rejected in the UI ----
+  await dana.click('#signout-btn');
+  await dana.waitForSelector('#signin-btn');
+  await dana.click('#signin-btn');
+  await dana.fill('#a-email', 'dana@example.com');
+  await dana.fill('#a-password', 'definitely the wrong one');
+  await dana.click('#a-submit');
+  await dana.waitForSelector('#auth-error:not(.hidden)');
+  await check('wrong password shows an error and does not sign in', true);
 
   console.log('smoke-ui: all checks passed');
 } catch (err) {

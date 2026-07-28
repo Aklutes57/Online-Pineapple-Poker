@@ -16,6 +16,7 @@ export class Game {
     this.settings = sanitizeSettings({ ...DEFAULT_SETTINGS, ...settings });
     this.status = GAME_STATUS.LOBBY;
     this.hostId = null;
+    this.hostAccountId = null;
     this.players = new Map(); // playerId -> player
     this.byToken = new Map(); // token -> player
     this.seats = new Array(SEAT_COUNT).fill(null); // playerId | null
@@ -103,11 +104,12 @@ export class Game {
 
   // ---- players ----
 
-  addPlayer(nickname) {
+  addPlayer(nickname, accountId = null) {
     const player = {
       id: shortId(),
       token: randomUUID(),
       nickname,
+      accountId,
       seatIndex: null,
       stack: 0,
       status: 'spectating', // spectating | requesting | seated

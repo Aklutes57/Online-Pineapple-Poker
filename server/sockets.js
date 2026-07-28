@@ -4,6 +4,7 @@
 import { EVENTS, ERRORS, SETTINGS_LIMITS } from '../shared/constants.js';
 import { buildViews } from './views.js';
 import { getGame, destroyGame } from './gameManager.js';
+import { accountForToken } from './accounts.js';
 
 const socketsByGame = new Map(); // gameId -> Set<socket>
 
@@ -67,7 +68,7 @@ export function attachSockets(io) {
 
     socket.on(EVENTS.JOIN, (payload, ack) => {
       if (typeof ack !== 'function') return;
-      const { gameId, token, nickname } = asObject(payload);
+      const { gameId, token, nickname, accountToken } = asObject(payload);
       const game = getGame(typeof gameId === 'string' ? gameId : '');
       if (!game || game.closed) {
         ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
@@ -76,7 +77,15 @@ export function attachSockets(io) {
       game.touch();
 
       // A re-JOIN on a bound socket must release the old binding first.
-      const previousGame = detachSocket(socket);
+      detachSocket(socket);
+
+      // Accounts are optional — a missing or bad token just means "guest".
+      let account = null;
+      try {
+        account = accountForToken(accountToken);
+      } catch {
+        account = null;
+      }
 
       let player = typeof token === 'string' ? game.playerByToken(token) : null;
       if (!player) {
@@ -84,9 +93,16 @@ export function attachSockets(io) {
           ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
           return;
         }
-        const nick = cleanNickname(nickname) || `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
-        player = game.addPlayer(nick);
+        const nick =
+          cleanNickname(nickname) ||
+          cleanNickname(account?.displayName) ||
+          `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
+        player = game.addPlayer(nick, account?.id ?? null);
+      } else if (account && !player.accountId) {
+        // Signed in after joining as a guest — adopt the account.
+        player.accountId = account.id;
       }
+      if (account) player.accountName = account.displayName;
 
       // Bind this socket to the player (multiple tabs allowed).
       socket.data.gameId = game.id;

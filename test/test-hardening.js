@@ -2,9 +2,15 @@
 // must never crash the server, and abuse paths must be rejected cleanly.
 // Usage: node test/test-hardening.js
 
-import { io as ioc } from 'socket.io-client';
-import { buildServer } from '../server/app.js';
-import { EVENTS } from '../shared/constants.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-hard-')), 'test.db');
+
+const { io: ioc } = await import('socket.io-client');
+const { buildServer } = await import('../server/app.js');
+const { EVENTS } = await import('../shared/constants.js');
 
 let failures = 0;
 let passes = 0;

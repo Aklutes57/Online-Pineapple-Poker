@@ -3,9 +3,15 @@
 // from each bot's own availableActions. Asserts chip conservation, no negative
 // stacks, and no stalls. Usage: node test/bots.js [handsPerVariant]
 
-import { io as ioc } from 'socket.io-client';
-import { buildServer } from '../server/app.js';
-import { EVENTS, TIMINGS } from '../shared/constants.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-soak-')), 'test.db');
+
+const { io: ioc } = await import('socket.io-client');
+const { buildServer } = await import('../server/app.js');
+const { EVENTS, TIMINGS } = await import('../shared/constants.js');
 
 // Speed the game way up for the soak (in-process mutation of shared timings).
 TIMINGS.NEXT_HAND_DELAY = 40;

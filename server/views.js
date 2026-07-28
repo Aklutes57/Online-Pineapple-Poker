@@ -21,6 +21,7 @@ export function buildViews(game) {
     seats.push({
       playerId: p.id,
       nickname: p.nickname,
+      registered: !!p.accountId,
       stack: p.stack,
       connected: p.connected,
       sittingOut: p.sittingOut,
@@ -93,6 +94,7 @@ export function buildViews(game) {
     return {
       playerId: p.id,
       nickname: p.nickname,
+      accountId: p.accountId ?? null,
       isHost: game.hostId === p.id,
       spectator: p.status !== 'seated',
       status: p.status,
