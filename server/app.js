@@ -14,6 +14,7 @@ import {
   createAccount, login, logout, accountForRequest, tokenFromRequest,
   updateDisplayName, updatePrefs, purgeExpiredSessions,
 } from './accounts.js';
+import { accountSummary } from './stats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -103,6 +104,15 @@ export function buildServer() {
       updatePrefs(account.id, prefs);
     }
     res.json({ account: accountForRequest(req) });
+  });
+
+  app.get('/api/me/summary', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json(accountSummary(account.id));
   });
 
   app.post('/api/games', (req, res) => {

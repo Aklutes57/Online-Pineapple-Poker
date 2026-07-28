@@ -1,6 +1,7 @@
 // Side panel (Chat / Log / Ledger tabs), seat-request queue, and host modal.
 
 import { EVENTS, GAME_STATUS } from '/shared/constants.js';
+import { settleUp } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
 
 let clientRef = null;
@@ -182,6 +183,8 @@ function renderLog(client) {
 
 // ---- ledger ----
 
+// NOTE: "Net" must stay the last column — the browser test reads it with
+// td:last-child to assert the ledger balances to zero.
 function renderLedger(client) {
   const rows = client.state.ledger || [];
   const host = document.getElementById('ledger-table');
@@ -189,9 +192,10 @@ function renderLedger(client) {
     host.innerHTML = '<p class="empty-note">Nobody has bought in yet.</p>';
     return;
   }
+  const payments = settleUp(rows);
   host.innerHTML = `
     <table class="ledger">
-      <thead><tr><th>Player</th><th>Buy-ins</th><th>Stack</th><th>Net</th></tr></thead>
+      <thead><tr><th>Player</th><th>Buy-ins</th><th>Stack</th><th>Hand</th><th>Net</th></tr></thead>
       <tbody>
         ${rows
           .map(
@@ -200,13 +204,61 @@ function renderLedger(client) {
             <td>${escapeHtml(r.nickname)}</td>
             <td>${r.buyIns}</td>
             <td>${r.stack}</td>
+            <td class="${deltaClass(r.lastHandDelta)}">${formatDelta(r.lastHandDelta)}</td>
             <td class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${r.net}</td>
           </tr>`
           )
           .join('')}
       </tbody>
     </table>
-    <p class="empty-note">Net = cash-outs + current stack − buy-ins</p>`;
+    <p class="empty-note">Net = cash-outs + current stack − buy-ins · "Hand" is the last hand's result</p>
+    <div class="settle-block">
+      <h4>Settle up</h4>
+      ${
+        payments.length
+          ? `<ul class="settle-list">${payments
+              .map(
+                (p) =>
+                  `<li><strong>${escapeHtml(p.from)}</strong> pays <strong>${escapeHtml(p.to)}</strong> <span class="settle-amt">${p.amount}</span></li>`
+              )
+              .join('')}</ul>`
+          : '<p class="empty-note">Everyone is square.</p>'
+      }
+      <button class="btn btn-ghost ledger-export" id="ledger-csv">Download CSV</button>
+    </div>`;
+
+  document.getElementById('ledger-csv').addEventListener('click', () => exportLedgerCsv(client));
+}
+
+function deltaClass(delta) {
+  if (!delta) return 'dim';
+  return delta > 0 ? 'pos' : 'neg';
+}
+
+function formatDelta(delta) {
+  if (!delta) return '—';
+  return `${delta > 0 ? '+' : ''}${delta}`;
+}
+
+function exportLedgerCsv(client) {
+  const rows = client.state.ledger || [];
+  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [
+    ['Player', 'Buy-ins', 'Cash-outs', 'Stack', 'Hands', 'Net'].join(','),
+    ...rows.map((r) =>
+      [esc(r.nickname), r.buyIns, r.cashOuts, r.stack, r.handsPlayed || 0, r.net].join(',')
+    ),
+    '',
+    ['Settle up: from', 'to', 'amount'].join(','),
+    ...settleUp(rows).map((p) => [esc(p.from), esc(p.to), p.amount].join(',')),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pineapple-ledger-${client.gameId}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ---- seat requests (host) ----

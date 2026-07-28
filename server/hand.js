@@ -64,7 +64,22 @@ export class Hand {
       p.hasDiscarded = false;
       p.showedCards = false;
       p.handResult = null;
+      // Per-hand stat flags, rolled into account aggregates when the hand ends.
+      p.handStartStack = p.stack;
+      p.handStats = {
+        vpip: false,
+        pfr: false,
+        threeBet: false,
+        threeBetOp: false,
+        sawFlop: false,
+        wtsd: false,
+        wsd: false,
+        aggressive: 0,
+        passive: 0,
+        showdownScore: 0,
+      };
     }
+    this.preflopRaises = 0;
 
     // Heads-up: the button posts the small blind.
     if (this.players.length === 2) {
@@ -124,6 +139,11 @@ export class Hand {
       this.board.push(...this.draw(dealt));
       this.ctx.log(`${cap(street)}: ${this.board.join(' ')}`);
     }
+    if (street === 'flop') {
+      for (const p of this.livePlayers()) {
+        if (p.handStats) p.handStats.sawFlop = true;
+      }
+    }
 
     if (this.runOut) {
       this.afterStreetComplete();
@@ -174,8 +194,12 @@ export class Hand {
     if (player.seatIndex !== this.toActSeat) return { ok: false, error: 'not your turn' };
 
     const before = this.currentBet;
+    this.noteActionStats(player, action);
     const result = betting.applyAction(this, player, action, amount);
     if (!result.ok) return result;
+    if (this.street === 'preflop' && (action === 'bet' || action === 'raise')) {
+      this.preflopRaises++;
+    }
 
     this.ctx.clearTimer();
     const shown =
@@ -188,6 +212,27 @@ export class Hand {
     this.ctx.log(`${player.nickname} ${shown}${player.allIn ? ' (all-in)' : ''}`);
     this.afterAction();
     return { ok: true };
+  }
+
+  // Records the standard poker stats. Called before the action is applied so
+  // preflop raise counts still describe the state the player faced.
+  noteActionStats(player, action) {
+    const s = player.handStats;
+    if (!s) return;
+    const isPreflop = this.street === 'preflop';
+    const raising = action === 'bet' || action === 'raise';
+
+    if (raising) s.aggressive++;
+    else if (action === 'call') s.passive++;
+
+    if (!isPreflop) return;
+    if (this.preflopRaises >= 1) s.threeBetOp = true;
+    // Blinds are posted, not chosen — only a call or raise is voluntary.
+    if (action === 'call' || raising) s.vpip = true;
+    if (raising) {
+      s.pfr = true;
+      if (this.preflopRaises >= 1) s.threeBet = true;
+    }
   }
 
   afterAction() {
@@ -373,10 +418,15 @@ export class Hand {
       winners.push({ seat, amount });
     }
     for (const p of live) {
-      p.handResult = {
-        desc: describe(scores.get(p.seatIndex)),
-        won: winnings.get(p.seatIndex) || 0,
-      };
+      const won = winnings.get(p.seatIndex) || 0;
+      p.handResult = { desc: describe(scores.get(p.seatIndex)), won };
+      if (p.handStats) {
+        // Only a contested showdown counts — an all-in run-out still shows
+        // cards down, which is exactly what "went to showdown" means.
+        p.handStats.wtsd = true;
+        p.handStats.wsd = won > 0;
+        p.handStats.showdownScore = scores.get(p.seatIndex);
+      }
     }
     this.clearCommitments();
     this.revealed = true;

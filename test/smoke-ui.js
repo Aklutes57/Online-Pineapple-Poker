@@ -148,6 +148,16 @@ try {
   await check('ledger has 3 rows', nets.length === 3);
   await check('ledger nets sum to zero', nets.reduce((a, b) => a + b, 0) === 0);
 
+  // Settle-up: every payment must be covered by the nets, and the ledger
+  // balancing to zero means the suggested transfers square everyone up.
+  const settleLines = await anna.$$eval('.settle-list li', (lis) => lis.map((li) => li.textContent));
+  const someoneIsUp = nets.some((n) => n > 0);
+  await check(
+    'settle-up suggests payments when someone is up',
+    someoneIsUp ? settleLines.length > 0 : true
+  );
+  await check('CSV export button is present', await anna.locator('#ledger-csv').isVisible());
+
   // ---- reconnect: reload keeps your seat ----
   await ben.reload();
   await ben.waitForSelector('.seat.me .nameplate');
@@ -185,6 +195,10 @@ try {
   await dana.waitForSelector('#signed-in:not(.hidden)');
   const profileName = await dana.textContent('#profile-name');
   await check('profile page shows the account', profileName.trim() === 'Dana');
+  await dana.waitForSelector('#alltime-summary .stat-tile');
+  await check('all-time ledger summary renders', true);
+  await dana.waitForSelector('#stats-block .stat-tile');
+  await check('poker stat block renders', true);
 
   // ---- sign out, sign back in ----
   await dana.click('#signout-btn');

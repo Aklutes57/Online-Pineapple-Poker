@@ -612,6 +612,43 @@ table.ledger td {
 
 td.pos { color: var(--green); font-weight: 700; }
 td.neg { color: var(--red); font-weight: 700; }
+td.dim { color: var(--text-dim); }
+
+.settle-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.settle-block h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.settle-list {
+  list-style: none;
+  margin-bottom: 12px;
+}
+
+.settle-list li {
+  padding: 4px 0;
+  font-size: 13.5px;
+}
+
+.settle-amt {
+  color: var(--accent);
+  font-weight: 700;
+  float: right;
+}
+
+.ledger-export {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+}
 
 .empty-note {
   color: var(--text-dim);

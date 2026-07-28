@@ -4,6 +4,7 @@
 
 import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES } from '../shared/constants.js';
 import { Hand } from './hand.js';
+import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 function shortId() {
@@ -17,6 +18,7 @@ export class Game {
     this.status = GAME_STATUS.LOBBY;
     this.hostId = null;
     this.hostAccountId = null;
+    this.tableSessionId = null;
     this.players = new Map(); // playerId -> player
     this.byToken = new Map(); // token -> player
     this.seats = new Array(SEAT_COUNT).fill(null); // playerId | null
@@ -123,6 +125,8 @@ export class Game {
       disconnectedAt: null,
       lastChatAt: 0,
       kicked: false,
+      handsPlayed: 0,
+      lastHandDelta: 0,
       // per-hand fields, managed by Hand:
       holeCards: [],
       folded: false,
@@ -350,6 +354,9 @@ export class Game {
         cashOuts: row.cashOuts,
         stack,
         net: row.cashOuts + stack - row.buyIns,
+        lastHandDelta: player?.lastHandDelta || 0,
+        handsPlayed: player?.handsPlayed || 0,
+        seated: player?.status === 'seated',
       };
     });
   }
@@ -511,6 +518,21 @@ export class Game {
   }
 
   onHandFinished() {
+    const hand = this.currentHand;
+    if (hand) {
+      for (const player of hand.players) {
+        player.handsPlayed = (player.handsPlayed || 0) + 1;
+        player.lastHandDelta = player.stack - (player.handStartStack ?? player.stack);
+      }
+      // Persistence must never take a table down.
+      try {
+        recordHandStats(this, hand);
+        syncSessionResults(this);
+      } catch (err) {
+        console.error(`stats write failed for game ${this.id}:`, err.message);
+      }
+    }
+
     for (const id of this.seats) {
       if (!id) continue;
       const player = this.players.get(id);
@@ -588,6 +610,11 @@ export class Game {
     this.status = GAME_STATUS.CLOSED;
     this.clearTimer();
     clearTimeout(this.hostTransferTimeout);
+    try {
+      if (this.tableSessionId || this.handNo > 0) closeTableSession(this);
+    } catch (err) {
+      console.error(`closing table session for ${this.id} failed:`, err.message);
+    }
     if (this.onClosed) this.onClosed(reason);
   }
 }
