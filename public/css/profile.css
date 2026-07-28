@@ -92,3 +92,98 @@
 .field-btn {
   flex: 0 0 auto;
 }
+
+.section-note {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  margin-bottom: 16px;
+  margin-top: -8px;
+}
+
+.theme-editor {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.theme-preview {
+  aspect-ratio: 2 / 1.12;
+  border: 10px solid var(--rail);
+  border-radius: 50% / 52%;
+  background: radial-gradient(ellipse at 50% 38%, #2a8c58 0%, var(--felt) 55%, var(--felt-dark) 100%);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+.theme-controls .row {
+  display: flex;
+  gap: 12px;
+}
+
+.theme-controls input[type='color'] {
+  height: 42px;
+  padding: 3px;
+  cursor: pointer;
+}
+
+.actions-left {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.sound-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sound-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sound-meta span {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.sound-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sound-upload {
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sound-clear {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--red);
+}
+
+@media (max-width: 720px) {
+  .theme-editor {
+    grid-template-columns: 1fr;
+  }
+}

@@ -443,6 +443,7 @@ export class Game {
     if (patch.minBuyIn !== undefined) next.minBuyIn = patch.minBuyIn;
     if (patch.maxBuyIn !== undefined) next.maxBuyIn = patch.maxBuyIn;
     if (patch.defaultBuyIn !== undefined) next.defaultBuyIn = patch.defaultBuyIn;
+    if (patch.tableTheme !== undefined) next.tableTheme = patch.tableTheme;
     const clean = sanitizeSettings(next);
     // Variant is fixed at creation.
     clean.variant = this.settings.variant;
@@ -635,5 +636,23 @@ export function sanitizeSettings(s) {
   const variant = ['holdem', 'pineapple', 'crazyPineapple', 'plo'].includes(s.variant)
     ? s.variant
     : DEFAULT_SETTINGS.variant;
-  return { variant, smallBlind, bigBlind, minBuyIn, maxBuyIn, defaultBuyIn, actionTime };
+  return {
+    variant, smallBlind, bigBlind, minBuyIn, maxBuyIn, defaultBuyIn, actionTime,
+    tableTheme: cleanTheme(s.tableTheme),
+  };
+}
+
+// Only ever accept an uploads-relative image path and #rrggbb colours, so a
+// crafted settings payload can't inject a URL or CSS into every client.
+function cleanTheme(theme) {
+  if (!theme || typeof theme !== 'object' || Array.isArray(theme)) return null;
+  const colour = (v) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
+  const feltImage =
+    typeof theme.feltImage === 'string' && /^\/uploads\/[a-f0-9]{64}\.[a-z0-9]{2,5}$/.test(theme.feltImage)
+      ? theme.feltImage
+      : null;
+  const feltColor = colour(theme.feltColor);
+  const railColor = colour(theme.railColor);
+  if (!feltImage && !feltColor && !railColor) return null;
+  return { feltImage, feltColor, railColor };
 }

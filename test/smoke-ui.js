@@ -200,6 +200,31 @@ try {
   await dana.waitForSelector('#stats-block .stat-tile');
   await check('poker stat block renders', true);
 
+  // ---- table theme follows the host to a new table ----
+  await dana.locator('#t-felt').evaluate((el) => {
+    el.value = '#7a1f4b';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await dana.click('#t-save');
+  await dana.waitForTimeout(400);
+  await dana.goto(base);
+  await dana.click('#start-btn');
+  await dana.click('#c-create');
+  await dana.waitForURL('**/games/**');
+  await dana.waitForSelector('#table');
+  const feltColor = await dana.locator('#table').evaluate((el) => el.style.backgroundColor);
+  await check('saved felt colour applies to a newly hosted table', feltColor === 'rgb(122, 31, 75)');
+
+  // A guest opening the same table sees the host's look too.
+  const guestView = await newPage('guestview');
+  await guestView.goto(dana.url());
+  await guestView.waitForSelector('#table');
+  const guestFelt = await guestView.locator('#table').evaluate((el) => el.style.backgroundColor);
+  await check("guests see the host's table look", guestFelt === 'rgb(122, 31, 75)');
+
+  await dana.goto(`${base}/me`);
+  await dana.waitForSelector('#signed-in:not(.hidden)');
+
   // ---- sign out, sign back in ----
   await dana.click('#signout-btn');
   await dana.waitForURL(`${base}/`);

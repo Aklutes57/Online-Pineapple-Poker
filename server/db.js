@@ -168,6 +168,22 @@ const MIGRATIONS = [
     updated_at INTEGER NOT NULL
   );
   `,
+
+  // 3 — content-addressed uploads backing table themes and the soundboard
+  `
+  CREATE TABLE uploads (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    sha256 TEXT NOT NULL UNIQUE,
+    mime TEXT NOT NULL,
+    ext TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    original_name TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_uploads_account ON uploads(account_id, kind);
+  `,
 ];
 
 export function initDb(dbPath = process.env.PP_DB_PATH || path.join(root, 'data', 'pineapple.db')) {

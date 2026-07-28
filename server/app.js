@@ -15,6 +15,10 @@ import {
   updateDisplayName, updatePrefs, purgeExpiredSessions,
 } from './accounts.js';
 import { accountSummary } from './stats.js';
+import {
+  storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
+  saveSoundClip, listSoundClips, deleteSoundClip, defaultTheme, LIMITS as UPLOAD_LIMITS,
+} from './uploads.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -106,6 +110,115 @@ export function buildServer() {
     res.json({ account: accountForRequest(req) });
   });
 
+  // ---- uploads, themes, soundboard ----
+
+  // Path-scoped raw parser so it never swallows JSON bodies elsewhere.
+  const rawUpload = express.raw({
+    type: () => true,
+    limit: Math.max(UPLOAD_LIMITS.image, UPLOAD_LIMITS.audio),
+  });
+
+  app.post('/api/uploads', rawUpload, (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'Sign in to upload' });
+      return;
+    }
+    const wantKind = req.query.kind === 'audio' ? 'audio' : 'image';
+    const result = storeUpload({
+      buffer: req.body,
+      accountId: account.id,
+      wantKind,
+      originalName: typeof req.query.name === 'string' ? req.query.name : null,
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json({ upload: result.upload });
+  });
+
+  // Uploaded bytes are user-controlled and served from the same origin as
+  // session tokens, so the type comes from our own sniffing and the response
+  // is locked down against being interpreted as anything active.
+  app.get('/uploads/:file', (req, res) => {
+    const sha = String(req.params.file).split('.')[0];
+    const upload = getUploadBySha(sha);
+    if (!upload) {
+      res.status(404).end();
+      return;
+    }
+    res.set({
+      'Content-Type': upload.mime,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Content-Disposition': 'inline',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+    res.sendFile(uploadPath(upload));
+  });
+
+  app.get('/api/me/theme', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json({ themes: listThemes(account.id), sounds: listSoundClips(account.id) });
+  });
+
+  app.post('/api/me/theme', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json(saveTheme(account.id, req.body || {}));
+  });
+
+  app.delete('/api/me/theme/:id', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    deleteTheme(account.id, Number(req.params.id));
+    res.json({ themes: listThemes(account.id) });
+  });
+
+  app.post('/api/me/sounds/:trigger', rawUpload, (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'Sign in to upload sounds' });
+      return;
+    }
+    const stored = storeUpload({
+      buffer: req.body,
+      accountId: account.id,
+      wantKind: 'audio',
+      originalName: typeof req.query.name === 'string' ? req.query.name : null,
+    });
+    if (!stored.ok) {
+      res.status(400).json({ error: stored.error });
+      return;
+    }
+    const result = saveSoundClip(account.id, req.params.trigger, stored.upload);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json({ clips: result.clips });
+  });
+
+  app.delete('/api/me/sounds/:trigger', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json(deleteSoundClip(account.id, req.params.trigger));
+  });
+
   app.get('/api/me/summary', (req, res) => {
     const account = accountForRequest(req);
     if (!account) {
@@ -126,7 +239,14 @@ export function buildServer() {
       res.status(400).json({ error: 'nickname required' });
       return;
     }
-    const created = createGame(settings || {}, nick, account?.id ?? null);
+    // A signed-in host's saved table look follows them to every game.
+    const theme = account ? defaultTheme(account.id) : null;
+    const withTheme = theme
+      ? { ...(settings || {}), tableTheme: {
+          feltImage: theme.feltImage, feltColor: theme.feltColor, railColor: theme.railColor,
+        } }
+      : settings || {};
+    const created = createGame(withTheme, nick, account?.id ?? null);
     if (!created) {
       res.status(503).json({ error: 'server is full — try again later' });
       return;

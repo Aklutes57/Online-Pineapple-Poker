@@ -14,6 +14,7 @@ const betsLayer = () => document.getElementById('bets-layer');
 export function renderAll(client) {
   const { state, you } = client;
   if (!state) return;
+  renderTheme(client);
   renderHeader(client);
   renderSeats(client);
   renderBets(client);
@@ -22,6 +23,29 @@ export function renderAll(client) {
   renderActionBar(client);
   document.getElementById('host-menu-btn').classList.toggle('hidden', !you?.isHost);
   document.getElementById('leave-btn').classList.toggle('hidden', !you || you.spectator);
+}
+
+// The host's saved table look. Applied as inline styles so it overrides
+// table.css while the oval, rail and inner shadow all stay intact.
+function renderTheme(client) {
+  const theme = client.state.settings.tableTheme;
+  const table = document.getElementById('table');
+  const sig = JSON.stringify(theme || null);
+  if (table.dataset.themeSig === sig) return;
+  table.dataset.themeSig = sig;
+
+  if (!theme) {
+    table.style.backgroundImage = '';
+    table.style.backgroundColor = '';
+    table.style.borderColor = '';
+    return;
+  }
+  // The image wins when there is one; the colour is the fallback underneath.
+  table.style.backgroundImage = theme.feltImage ? `url("${theme.feltImage}")` : '';
+  table.style.backgroundSize = theme.feltImage ? 'cover' : '';
+  table.style.backgroundPosition = 'center';
+  table.style.backgroundColor = theme.feltColor || '';
+  table.style.borderColor = theme.railColor || '';
 }
 
 function renderHeader(client) {
