@@ -2,7 +2,9 @@
 
 import { EVENTS } from '/shared/constants.js';
 import { showToast, escapeHtml } from '/js/ui.js';
-import { getAccountToken, loadAccount, currentAccount } from '/js/auth.js';
+import { getAccountToken, loadAccount, currentAccount, authHeaders } from '/js/auth.js';
+import { initReactions, showReaction } from '/js/reactions.js';
+import { play as playSound, setCustomClips } from '/js/sounds.js';
 import { renderAll, startTimerLoop } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels } from '/js/panels.js';
@@ -49,6 +51,8 @@ socket.on(EVENTS.STATE, applyState);
 
 socket.on(EVENTS.CHAT_MSG, (msg) => onChatMessage(msg));
 
+socket.on(EVENTS.REACTION, (msg) => showReaction(msg));
+
 socket.on(EVENTS.ERROR_MSG, ({ message }) => showToast(message || 'Something went wrong'));
 
 socket.on(EVENTS.TABLE_CLOSED, ({ reason }) => {
@@ -67,17 +71,50 @@ socket.io.on('reconnect', () => {
   setConnBanner(false);
 });
 
+let lastCoolerHandId = null;
+let lastResultHandId = null;
+
 function applyState(state) {
   if (!state || state.seq <= client.lastSeq) return;
   client.lastSeq = state.seq;
   const wasMyTurn = !!client.you?.availableActions;
+  const previousStack = client.you?.stack;
   client.state = state;
   client.you = state.you;
   renderAll(client);
   notifyStateForPanels(client);
+
   if (!wasMyTurn && client.you?.availableActions) {
-    playTurnSound();
+    playSound('yourTurn', { enabled: client.soundOn });
   }
+
+  const hand = state.hand;
+  if (hand?.finished && hand.handId !== lastResultHandId) {
+    lastResultHandId = hand.handId;
+    const mySeat = client.you?.seatIndex;
+    const iWon = mySeat !== null && (hand.winners || []).some((w) => w.seat === mySeat);
+    if (iWon) playSound('win', { enabled: client.soundOn });
+    else if (previousStack > 0 && client.you?.stack === 0) {
+      playSound('bust', { enabled: client.soundOn });
+    }
+  }
+
+  // The cooler callout fires once per hand, and its sound outranks the
+  // ordinary win chime.
+  if (hand?.cooler && hand.handId !== lastCoolerHandId) {
+    lastCoolerHandId = hand.handId;
+    showCoolerBanner(hand.cooler);
+    playSound(hand.cooler.trigger, { enabled: client.soundOn });
+  }
+}
+
+let coolerTimeout = null;
+function showCoolerBanner(cooler) {
+  const banner = document.getElementById('cooler-banner');
+  banner.innerHTML = `<strong>${escapeHtml(cooler.headline)}</strong> ${escapeHtml(cooler.detail)}`;
+  banner.className = `cooler-banner cooler-${cooler.trigger}`;
+  clearTimeout(coolerTimeout);
+  coolerTimeout = setTimeout(() => banner.classList.add('hidden'), 6000);
 }
 
 function send(event, payload = {}) {
@@ -107,26 +144,6 @@ function renderClosedLedger() {
     </table>`;
 }
 
-// ---- sound: tiny WebAudio blip on your turn, no asset files ----
-
-let audioCtx = null;
-function playTurnSound() {
-  if (!client.soundOn) return;
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.25);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.25);
-  } catch {
-    /* sound is best-effort */
-  }
-}
-
 document.getElementById('sound-toggle').addEventListener('click', (e) => {
   client.soundOn = !client.soundOn;
   localStorage.setItem('pp:sound', client.soundOn ? 'on' : 'off');
@@ -147,15 +164,22 @@ document.getElementById('copy-link').addEventListener('click', async () => {
 
 initActionBar(client);
 initPanels(client);
+initReactions(client);
 startTimerLoop(client);
-loadAccount().then((account) => {
+loadAccount().then(async (account) => {
   client.account = account;
-  if (account) {
-    const chip = document.getElementById('account-chip');
-    if (chip) {
-      chip.textContent = account.displayName;
-      chip.classList.remove('hidden');
-    }
+  if (!account) return;
+  const chip = document.getElementById('account-chip');
+  if (chip) {
+    chip.textContent = account.displayName;
+    chip.classList.remove('hidden');
+  }
+  // Your own uploaded clips replace the built-in patches for you.
+  try {
+    const res = await fetch('/api/me/theme', { headers: authHeaders() });
+    if (res.ok) setCustomClips((await res.json()).sounds || {});
+  } catch {
+    /* built-in sounds are the fallback */
   }
 });
 join();

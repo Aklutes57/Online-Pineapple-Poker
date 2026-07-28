@@ -133,6 +133,15 @@ try {
   }
   await check('a hand played to a finish (winner shown)', winnerSeen);
 
+  // ---- emoji reactions reach the other players ----
+  await ben.click('#react-btn');
+  await ben.waitForSelector('#react-picker:not(.hidden)');
+  await ben.click('.react-option[data-emoji="🔥"]');
+  await anna.waitForSelector('.floating-reaction');
+  const reactionText = await anna.textContent('.floating-reaction');
+  await check('a reaction from one player floats up for another', reactionText.includes('🔥'));
+  await check('the reaction is attributed', reactionText.includes('Ben'));
+
   // ---- chat round-trip ----
   await ben.fill('#chat-input', 'good game everyone');
   await ben.press('#chat-input', 'Enter');

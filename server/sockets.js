@@ -1,7 +1,7 @@
 // Socket.IO protocol boundary: token auth, input validation, host checks,
 // and tailored per-socket state broadcasts.
 
-import { EVENTS, ERRORS, SETTINGS_LIMITS } from '../shared/constants.js';
+import { EVENTS, ERRORS, SETTINGS_LIMITS, REACTIONS, REACTION_COOLDOWN } from '../shared/constants.js';
 import { buildViews } from './views.js';
 import { getGame, destroyGame } from './gameManager.js';
 import { accountForToken } from './accounts.js';
@@ -253,6 +253,29 @@ export function attachSockets(io) {
       const sockets = socketsByGame.get(game.id);
       if (sockets) {
         for (const s of sockets) s.emit(EVENTS.CHAT_MSG, r.msg);
+      }
+    }));
+
+    // Reactions are ephemeral: fanned out directly like chat rather than
+    // churning the whole game state for a floating emoji.
+    socket.on(EVENTS.REACT, withGame((game, player, payload) => {
+      if (!REACTIONS.includes(payload.emoji)) {
+        sendError(socket, ERRORS.BAD_REQUEST, 'Unknown reaction');
+        return;
+      }
+      const nowMs = Date.now();
+      if (nowMs - (player.lastReactAt || 0) < REACTION_COOLDOWN) return;
+      player.lastReactAt = nowMs;
+
+      const message = {
+        emoji: payload.emoji,
+        from: player.nickname,
+        seatIndex: player.seatIndex,
+        ts: nowMs,
+      };
+      const sockets = socketsByGame.get(game.id);
+      if (sockets) {
+        for (const s of sockets) s.emit(EVENTS.REACTION, message);
       }
     }));
 

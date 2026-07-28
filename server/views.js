@@ -64,6 +64,7 @@ export function buildViews(game) {
         timerName: game.timer ? game.timer.name : null,
         lastAction: hand.lastAction,
         winners: hand.finished ? hand.results?.winners ?? null : null,
+        cooler: hand.finished ? hand.results?.cooler ?? null : null,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
       }

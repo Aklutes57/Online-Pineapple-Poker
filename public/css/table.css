@@ -455,6 +455,121 @@ body.disconnected::after {
   outline-color: var(--red);
 }
 
+/* ---- reactions ---- */
+
+.react-wrap {
+  position: relative;
+}
+
+#react-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  z-index: 80;
+}
+
+.react-option {
+  width: 38px;
+  height: 38px;
+  font-size: 20px;
+  background: none;
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.react-option:hover {
+  background: var(--bg-raised);
+  transform: scale(1.15);
+}
+
+#reactions-layer {
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 50;
+}
+
+.floating-reaction {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  animation: float-up 2.4s ease-out forwards;
+  pointer-events: none;
+}
+
+.fr-emoji {
+  display: block;
+  font-size: 30px;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.6));
+}
+
+.fr-name {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: rgba(10, 12, 18, 0.7);
+  border-radius: 8px;
+  padding: 0 6px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--drift, 0px)), calc(-50% - 110px)) scale(0.95);
+  }
+}
+
+/* ---- cooler banner ---- */
+
+#cooler-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, 90%);
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: center;
+  z-index: 70;
+  box-shadow: var(--shadow);
+  animation: banner-in 0.35s ease-out;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+#cooler-banner strong {
+  color: var(--accent);
+  margin-right: 6px;
+}
+
+.cooler-badBeat {
+  border-color: var(--red) !important;
+  background: linear-gradient(180deg, rgba(224, 82, 82, 0.22), var(--bg-raised)) !important;
+}
+
+.cooler-quads {
+  border-color: var(--accent) !important;
+  background: linear-gradient(180deg, rgba(245, 197, 66, 0.22), var(--bg-raised)) !important;
+}
+
+@keyframes banner-in {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+}
+
 /* ---- rotate hint ---- */
 
 #rotate-hint {

@@ -15,6 +15,7 @@ export const EVENTS = {
   SIT_IN: 'sitIn',
   STAND_UP: 'standUp',
   CHAT: 'chat',
+  REACT: 'react',
   HOST_APPROVE_SEAT: 'host:approveSeat',
   HOST_START_GAME: 'host:startGame',
   HOST_PAUSE: 'host:pause',
@@ -25,6 +26,7 @@ export const EVENTS = {
   // server -> client
   STATE: 'state',
   CHAT_MSG: 'chatMsg',
+  REACTION: 'reaction',
   LOG: 'log',
   ERROR_MSG: 'errorMsg',
   TABLE_CLOSED: 'tableClosed',
@@ -138,6 +140,16 @@ export const BET_COORDS = [
   { left: 83, top: 58 },
   { left: 70, top: 72 },
 ];
+
+// The reaction palette. Server-validated, so a client can't inject arbitrary
+// text through the reaction channel.
+export const REACTIONS = ['👍', '😂', '😱', '🤯', '🔥', '💀', '🍍', '🤡', '😭', '🙌'];
+
+export const REACTION_COOLDOWN = 700; // ms between reactions per player
+
+// Sound cues the table can raise. Every one has a built-in synthesized
+// fallback, and a host can map their own uploaded clip to any of them.
+export const SOUND_TRIGGERS = ['cooler', 'badBeat', 'quads', 'win', 'bust', 'yourTurn'];
 
 export const ERRORS = {
   NOT_JOINED: 'NOT_JOINED',

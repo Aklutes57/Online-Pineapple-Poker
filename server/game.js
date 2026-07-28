@@ -124,6 +124,7 @@ export class Game {
       createdAt: Date.now(),
       disconnectedAt: null,
       lastChatAt: 0,
+      lastReactAt: 0,
       kicked: false,
       handsPlayed: 0,
       lastHandDelta: 0,

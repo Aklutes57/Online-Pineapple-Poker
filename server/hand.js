@@ -12,6 +12,8 @@ import * as betting from './betting.js';
 import { buildPots, payoutPots } from './pots.js';
 import { best7, bestOmaha, describe } from './evaluator.js';
 import { shuffledDeck } from './deck.js';
+import { equity } from './equity.js';
+import { detectCooler } from './cooler.js';
 
 const NEXT_STREET = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' };
 const BOARD_CARDS = { flop: 3, turn: 1, river: 1 };
@@ -40,6 +42,7 @@ export class Hand {
     this.toActSeat = null;
     this.runOut = false;
     this.revealed = false;
+    this.allInEquity = null;
     this.discardsDone = !this.variant.discardAfter;
     this.finished = false;
     this.lastAction = null;
@@ -274,6 +277,17 @@ export class Hand {
     const actors = live.filter((p) => !p.allIn);
     if (!this.runOut && live.length >= 2 && actors.length <= 1) {
       this.runOut = true;
+      // Snapshot the odds at the moment the chips went in — that is what
+      // makes a later loss a bad beat rather than just a loss.
+      try {
+        this.allInEquity = equity(
+          live.map((p) => ({ seat: p.seatIndex, holeCards: p.holeCards })),
+          this.board,
+          { omaha: !!this.variant.omaha }
+        );
+      } catch {
+        this.allInEquity = null;
+      }
     }
     if (this.runOut && !this.revealed && this.discardsDone) {
       this.revealed = true;
@@ -428,12 +442,33 @@ export class Hand {
         p.handStats.showdownScore = scores.get(p.seatIndex);
       }
     }
+    const potTotal = pots.reduce((a, p) => a + p.amount, 0);
+    let cooler = null;
+    try {
+      cooler = detectCooler({
+        players: live.map((p) => ({
+          seat: p.seatIndex,
+          nickname: p.nickname,
+          score: scores.get(p.seatIndex),
+          desc: p.handResult.desc,
+          won: p.handResult.won,
+          folded: false,
+        })),
+        potTotal,
+        bigBlind: this.bigBlind,
+        allInEquity: this.allInEquity,
+      });
+    } catch {
+      cooler = null;
+    }
+
     this.clearCommitments();
     this.revealed = true;
     this.phase = PHASES.SHOWDOWN;
     this.toActSeat = null;
     this.finished = true;
-    this.results = { pots, winners, uncalledReturn, byFold: false };
+    this.results = { pots, winners, uncalledReturn, byFold: false, cooler };
+    if (cooler) this.ctx.log(`${cooler.headline}: ${cooler.detail}`);
 
     for (const p of live) {
       this.ctx.log(

@@ -16,6 +16,10 @@
       <a id="account-chip" class="account-chip hidden" href="/me"></a>
       <div class="top-actions">
         <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">🔗 Invite</button>
+        <span class="react-wrap">
+          <button id="react-btn" class="btn-ghost btn top-btn" title="React">😀</button>
+          <div id="react-picker" class="hidden"></div>
+        </span>
         <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on/off">🔊</button>
         <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">⚙️ Host</button>
         <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
@@ -32,7 +36,9 @@
         </div>
         <div id="bets-layer"></div>
         <div id="seats-layer"></div>
+        <div id="reactions-layer"></div>
       </div>
+      <div id="cooler-banner" class="hidden"></div>
       <div id="rotate-hint" class="hidden">Rotate your phone for the best view <button id="rotate-dismiss">✕</button></div>
     </main>
 
