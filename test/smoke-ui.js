@@ -209,6 +209,25 @@ try {
   await dana.waitForSelector('#stats-block .stat-tile');
   await check('poker stat block renders', true);
 
+  // ---- invite list and Discord webhook validation through the UI ----
+  await dana.fill('#n-email', 'friend@example.com');
+  await dana.fill('#n-label', 'Ben');
+  await dana.click('#n-add');
+  await dana.waitForSelector('[data-remove-contact]');
+  await check('an email joins the auto-invite list', true);
+
+  await dana.fill('#n-webhook', 'https://evil.example/api/webhooks/1/x');
+  await dana.click('#n-add-webhook');
+  await dana.waitForSelector('#toast.show');
+  await check('a non-Discord webhook URL is refused', await dana.locator('[data-remove-target]').count() === 0);
+
+  await dana.fill('#n-webhook', 'https://discord.com/api/webhooks/123456789/abcdefghijklmnop');
+  await dana.click('#n-add-webhook');
+  await dana.waitForSelector('[data-remove-target]');
+  const webhookShown = await dana.textContent('#target-list');
+  await check('a real Discord webhook connects', true);
+  await check('the webhook secret is never shown back', !webhookShown.includes('abcdefghijklmnop'));
+
   // ---- table theme follows the host to a new table ----
   await dana.locator('#t-felt').evaluate((el) => {
     el.value = '#7a1f4b';

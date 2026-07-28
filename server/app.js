@@ -19,6 +19,12 @@ import {
   storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
   saveSoundClip, listSoundClips, deleteSoundClip, defaultTheme, LIMITS as UPLOAD_LIMITS,
 } from './uploads.js';
+import {
+  addContact, listContacts, setContactAutoSend, removeContact, unsubscribeByToken,
+  addNotifyTarget, listNotifyTargets, removeNotifyTarget, announceTable,
+  emailConfigured, recentDeliveries,
+} from './notify.js';
+import { VARIANTS } from '../shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -219,6 +225,94 @@ export function buildServer() {
     res.json(deleteSoundClip(account.id, req.params.trigger));
   });
 
+  // ---- invite lists and Discord ----
+
+  app.get('/api/me/notify', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json({
+      contacts: listContacts(account.id),
+      targets: listNotifyTargets(account.id),
+      emailConfigured: emailConfigured(),
+      recent: recentDeliveries(10),
+    });
+  });
+
+  app.post('/api/me/contacts', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const { email: address, label } = req.body || {};
+    const result = addContact(account.id, address, label);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  });
+
+  app.patch('/api/me/contacts/:id', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json(setContactAutoSend(account.id, Number(req.params.id), !!(req.body || {}).autoSend));
+  });
+
+  app.delete('/api/me/contacts/:id', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json(removeContact(account.id, Number(req.params.id)));
+  });
+
+  app.post('/api/me/targets', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const { kind, value, label } = req.body || {};
+    const result = addNotifyTarget(account.id, kind, value, label);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  });
+
+  app.delete('/api/me/targets/:id', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json(removeNotifyTarget(account.id, Number(req.params.id)));
+  });
+
+  app.get('/unsubscribe/:token', (req, res) => {
+    const result = unsubscribeByToken(req.params.token);
+    res.type('html').send(
+      `<body style="font-family:system-ui;background:#10131c;color:#e8ebf4;padding:60px;text-align:center">
+        <h1>🍍 ${result.ok ? 'Unsubscribed' : 'Link not recognised'}</h1>
+        <p style="color:#9aa3ba">${
+          result.ok
+            ? 'You will not get any more table invites from this list.'
+            : 'That unsubscribe link is no longer valid.'
+        }</p>
+        <a href="/" style="color:#f5c542">Back to Pineapple Poker</a>
+      </body>`
+    );
+  });
+
   app.get('/api/me/summary', (req, res) => {
     const account = accountForRequest(req);
     if (!account) {
@@ -251,6 +345,20 @@ export function buildServer() {
       res.status(503).json({ error: 'server is full — try again later' });
       return;
     }
+    // Fire the host's saved invite list. Deliberately not awaited: a slow
+    // mail server must never delay handing back the table link.
+    if (account && (req.body || {}).announce !== false) {
+      const s = created.game.settings;
+      const origin = `${req.protocol}://${req.get('host')}`;
+      announceTable(account.id, {
+        gameId: created.game.id,
+        variantLabel: VARIANTS[s.variant]?.label || s.variant,
+        blinds: `${s.smallBlind}/${s.bigBlind}`,
+        link: `${origin}/games/${created.game.id}`,
+        hostName: nick,
+      }).catch(() => {});
+    }
+
     res.json({ gameId: created.game.id, token: created.host.token, playerId: created.host.id });
   });
 

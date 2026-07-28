@@ -115,6 +115,132 @@ function renderSummary({ totals, sessions, stats }) {
     ${stats.bestHandDesc ? `<p class="empty-note">Best hand shown down: ${escapeHtml(stats.bestHandDesc)}</p>` : ''}`;
 }
 
+// ---- invite list and Discord ----
+
+async function loadNotify() {
+  try {
+    const res = await fetch('/api/me/notify', { headers: authHeaders() });
+    if (!res.ok) return;
+    renderNotify(await res.json());
+  } catch {
+    /* the rest of the page still works */
+  }
+}
+
+function renderNotify({ contacts, targets, emailConfigured, recent }) {
+  document.getElementById('email-status').textContent = emailConfigured
+    ? 'Everyone here gets a link whenever you start a table.'
+    : 'Email sending is not configured on this server, so invites are logged rather than delivered. Set SMTP_URL to turn it on — your list is saved either way.';
+
+  document.getElementById('contact-list').innerHTML = contacts.length
+    ? contacts
+        .map(
+          (c) => `
+      <div class="list-row">
+        <span class="list-main">${escapeHtml(c.label || c.email)}
+          ${c.label ? `<span class="list-sub">${escapeHtml(c.email)}</span>` : ''}</span>
+        <label class="toggle">
+          <input type="checkbox" data-contact="${c.id}" ${c.autoSend ? 'checked' : ''}>
+          <span>Auto-invite</span>
+        </label>
+        <button class="btn btn-ghost row-remove" data-remove-contact="${c.id}">Remove</button>
+      </div>`
+        )
+        .join('')
+    : '<p class="empty-note">No one on your list yet.</p>';
+
+  document.getElementById('target-list').innerHTML = targets.length
+    ? targets
+        .map(
+          (t) => `
+      <div class="list-row">
+        <span class="list-main">${escapeHtml(t.label || 'Discord')}
+          <span class="list-sub">${escapeHtml(t.value)}</span></span>
+        <button class="btn btn-ghost row-remove" data-remove-target="${t.id}">Disconnect</button>
+      </div>`
+        )
+        .join('')
+    : '<p class="empty-note">No Discord channel connected.</p>';
+
+  if (recent?.length) {
+    document.getElementById('target-list').insertAdjacentHTML(
+      'beforeend',
+      `<details class="delivery-log"><summary>Recent invites (${recent.length})</summary>
+        ${recent
+          .map(
+            (r) =>
+              `<div class="log-line"><span class="log-no">${escapeHtml(r.status)}</span> ${escapeHtml(r.channel)} → ${escapeHtml(r.target)}</div>`
+          )
+          .join('')}
+      </details>`
+    );
+  }
+
+  document.querySelectorAll('[data-contact]').forEach((box) => {
+    box.addEventListener('change', async () => {
+      const res = await fetch(`/api/me/contacts/${box.dataset.contact}`, {
+        method: 'PATCH',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ autoSend: box.checked }),
+      });
+      if (res.ok) loadNotify();
+    });
+  });
+  document.querySelectorAll('[data-remove-contact]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await fetch(`/api/me/contacts/${btn.dataset.removeContact}`, {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      loadNotify();
+    });
+  });
+  document.querySelectorAll('[data-remove-target]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await fetch(`/api/me/targets/${btn.dataset.removeTarget}`, {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      loadNotify();
+    });
+  });
+}
+
+document.getElementById('n-add').addEventListener('click', async () => {
+  const email = document.getElementById('n-email').value.trim();
+  const label = document.getElementById('n-label').value.trim();
+  if (!email) return;
+  const res = await fetch('/api/me/contacts', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ email, label }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showToast(data.error || 'Could not add that address');
+    return;
+  }
+  document.getElementById('n-email').value = '';
+  document.getElementById('n-label').value = '';
+  loadNotify();
+});
+
+document.getElementById('n-add-webhook').addEventListener('click', async () => {
+  const value = document.getElementById('n-webhook').value.trim();
+  if (!value) return;
+  const res = await fetch('/api/me/targets', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ kind: 'discord_webhook', value, label: 'Discord' }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showToast(data.error || 'Could not connect that webhook');
+    return;
+  }
+  document.getElementById('n-webhook').value = '';
+  showToast('Discord connected');
+  loadNotify();
+});
+
 // ---- table look ----
 
 const SOUND_SLOTS = [
@@ -258,5 +384,6 @@ loadAccount().then(() => {
   if (currentAccount()) {
     loadSummary();
     loadTheme();
+    loadNotify();
   }
 });

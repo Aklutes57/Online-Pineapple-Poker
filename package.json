@@ -6,13 +6,14 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
-    "test": "node test/test-evaluator.js && node test/test-pots.js && node test/test-betting.js && node --disable-warning=ExperimentalWarning test/test-db.js && node --disable-warning=ExperimentalWarning test/test-stats.js && node --disable-warning=ExperimentalWarning test/test-uploads.js && node test/test-cooler.js && node --disable-warning=ExperimentalWarning test/test-hardening.js",
+    "test": "node test/test-evaluator.js && node test/test-pots.js && node test/test-betting.js && node --disable-warning=ExperimentalWarning test/test-db.js && node --disable-warning=ExperimentalWarning test/test-stats.js && node --disable-warning=ExperimentalWarning test/test-uploads.js && node test/test-cooler.js && node --disable-warning=ExperimentalWarning test/test-notify.js && node --disable-warning=ExperimentalWarning test/test-hardening.js",
     "soak": "node --disable-warning=ExperimentalWarning test/bots.js",
     "smoke": "node --disable-warning=ExperimentalWarning test/smoke-ui.js"
   },
   "license": "MIT",
   "dependencies": {
     "express": "^4.19.2",
+    "nodemailer": "^9.0.3",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {

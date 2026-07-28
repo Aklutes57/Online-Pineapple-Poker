@@ -44,6 +44,43 @@
       </section>
 
       <section class="profile-section">
+        <h2>Auto-invite list</h2>
+        <p class="section-note" id="email-status"></p>
+        <div class="row">
+          <div class="field">
+            <label for="n-email">Friend's email</label>
+            <input id="n-email" type="email" placeholder="friend@example.com">
+          </div>
+          <div class="field">
+            <label for="n-label">Name (optional)</label>
+            <input id="n-label" maxlength="40" placeholder="Ben">
+          </div>
+          <div class="field field-btn">
+            <button class="btn btn-primary" id="n-add">Add</button>
+          </div>
+        </div>
+        <div id="contact-list"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Discord</h2>
+        <p class="section-note">
+          Paste a webhook URL from your Discord server's channel settings and new tables
+          post there automatically. Nothing else about your server is accessed.
+        </p>
+        <div class="row">
+          <div class="field">
+            <label for="n-webhook">Discord webhook URL</label>
+            <input id="n-webhook" type="url" placeholder="https://discord.com/api/webhooks/…">
+          </div>
+          <div class="field field-btn">
+            <button class="btn btn-primary" id="n-add-webhook">Connect</button>
+          </div>
+        </div>
+        <div id="target-list"></div>
+      </section>
+
+      <section class="profile-section">
         <h2>Your table look</h2>
         <p class="section-note">Applied automatically to every table you host.</p>
         <div class="theme-editor">
