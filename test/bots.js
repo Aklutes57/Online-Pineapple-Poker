@@ -133,7 +133,7 @@ class Bot {
   }
 }
 
-async function soakVariant(variantKey) {
+async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
   const { httpServer } = buildServer();
   await new Promise((resolve) => httpServer.listen(0, resolve));
   const port = httpServer.address().port;
@@ -144,7 +144,11 @@ async function soakVariant(variantKey) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       nickname: 'host',
-      settings: { variant: variantKey, smallBlind: 1, bigBlind: 2, defaultBuyIn: BUY_IN, minBuyIn: 40, maxBuyIn: 1000 },
+      settings: {
+        variant: variantKey, smallBlind: 1, bigBlind: 2,
+        defaultBuyIn: BUY_IN, minBuyIn: 40, maxBuyIn: 1000,
+        ...extraSettings,
+      },
     }),
   });
   const { gameId, token } = await createRes.json();
@@ -169,7 +173,7 @@ async function soakVariant(variantKey) {
   function checkInvariants(state) {
     const seats = state.seats.filter(Boolean);
     for (const s of seats) {
-      if (s.stack < 0) fail(`${variantKey}: negative stack for ${s.nickname}`, state);
+      if (s.stack < 0) fail(`${label}: negative stack for ${s.nickname}`, state);
     }
     if (state.hand?.finished) {
       const sumStacks = seats.reduce((a, s) => a + s.stack, 0);
@@ -218,7 +222,7 @@ async function soakVariant(variantKey) {
       lastFinishedHandNo = state.hand.handNo;
       handsFinished++;
       if (handsFinished % 20 === 0) {
-        process.stdout.write(`  ${variantKey}: ${handsFinished}/${HANDS_PER_VARIANT} hands\r`);
+        process.stdout.write(`  ${label}: ${handsFinished}/${HANDS_PER_VARIANT} hands\r`);
       }
       if (handsFinished >= HANDS_PER_VARIANT && !done) {
         done = true;
@@ -242,12 +246,12 @@ async function soakVariant(variantKey) {
 
   const watchdog = setInterval(() => {
     if (Date.now() - lastEventAt > 10000) {
-      fail(`${variantKey}: no state broadcast for 10s (stall) after ${handsFinished} hands`, host.state);
+      fail(`${label}: no state broadcast for 10s (stall) after ${handsFinished} hands`, host.state);
     }
   }, 1000);
 
   const timeout = setTimeout(() => {
-    fail(`${variantKey}: soak did not finish in time (${handsFinished}/${HANDS_PER_VARIANT})`);
+    fail(`${label}: soak did not finish in time (${handsFinished}/${HANDS_PER_VARIANT})`);
   }, 240000);
 
   await finished;
@@ -256,12 +260,25 @@ async function soakVariant(variantKey) {
   clearTimeout(timeout);
   for (const bot of bots) bot.disconnect();
   await new Promise((resolve) => httpServer.close(resolve));
-  console.log(`  ${variantKey}: ${handsFinished} hands OK                    `);
+  console.log(`  ${label}: ${handsFinished} hands OK                    `);
 }
 
 for (const variantKey of VARIANT_KEYS) {
   console.log(`Soaking ${variantKey}…`);
   await soakVariant(variantKey);
 }
-console.log('soak: all variants passed');
+
+// Every chip-moving home-game option at once. Antes, bounties and two-board
+// payouts all have to keep `sum of stacks === buy-ins - cash-outs` exact.
+const OPTION_PASSES = [
+  ['holdem', { straddle: true, runItTwice: true, bombPotEvery: 4, sevenDeuceBounty: 15, rabbitHunt: true }, 'holdem+options'],
+  ['plo', { straddle: true, runItTwice: true, bombPotEvery: 5, sevenDeuceBounty: 10 }, 'plo+options'],
+  ['crazyPineapple', { bombPotEvery: 3, sevenDeuceBounty: 20, runItTwice: true }, 'crazyPineapple+options'],
+];
+for (const [variantKey, settings, label] of OPTION_PASSES) {
+  console.log(`Soaking ${label}…`);
+  await soakVariant(variantKey, settings, label);
+}
+
+console.log('soak: all variants and options passed');
 process.exit(0);

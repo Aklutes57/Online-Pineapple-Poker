@@ -62,8 +62,14 @@ export function initPanels(client) {
       smallBlind: parseInt(document.getElementById('h-sb').value, 10),
       bigBlind: parseInt(document.getElementById('h-bb').value, 10),
       actionTime: parseInt(document.getElementById('h-timer').value, 10),
+      timeBank: parseInt(document.getElementById('h-timebank').value, 10),
+      bombPotEvery: parseInt(document.getElementById('h-bomb').value, 10),
+      sevenDeuceBounty: parseInt(document.getElementById('h-72').value, 10) || 0,
+      straddle: document.getElementById('h-straddle').checked,
+      rabbitHunt: document.getElementById('h-rabbit').checked,
+      runItTwice: document.getElementById('h-rit').checked,
     });
-    showToast('Settings saved');
+    showToast('Settings saved — they apply from the next hand');
   });
   document.getElementById('h-pause').addEventListener('click', () => {
     const paused = clientRef.state.status === GAME_STATUS.PAUSED || clientRef.state.pauseRequested;
@@ -77,12 +83,21 @@ export function initPanels(client) {
 
   // Seat-request approvals (delegated).
   document.getElementById('seat-requests').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-approve]');
-    if (!btn) return;
-    client.send(EVENTS.HOST_APPROVE_SEAT, {
-      playerId: btn.dataset.player,
-      approve: btn.dataset.approve === 'yes',
-    });
+    const seatBtn = e.target.closest('button[data-approve]');
+    if (seatBtn) {
+      client.send(EVENTS.HOST_APPROVE_SEAT, {
+        playerId: seatBtn.dataset.player,
+        approve: seatBtn.dataset.approve === 'yes',
+      });
+      return;
+    }
+    const waitBtn = e.target.closest('button[data-wait]');
+    if (waitBtn) {
+      client.send(EVENTS.HOST_APPROVE_WAITLIST, {
+        playerId: waitBtn.dataset.player,
+        approve: waitBtn.dataset.wait === 'yes',
+      });
+    }
   });
 
   // Host player-list actions (delegated).
@@ -90,7 +105,10 @@ export function initPanels(client) {
     const btn = e.target.closest('button[data-haction]');
     if (!btn) return;
     const playerId = btn.dataset.player;
-    if (btn.dataset.haction === 'kick') {
+    if (btn.dataset.haction === 'nudge') {
+      client.send(EVENTS.HOST_NUDGE, { playerId });
+      showToast('Nudged — they have a few seconds to act');
+    } else if (btn.dataset.haction === 'kick') {
       if (confirm('Remove this player from the table?')) {
         client.send(EVENTS.HOST_KICK, { playerId });
       }
@@ -267,22 +285,25 @@ function exportLedgerCsv(client) {
   URL.revokeObjectURL(url);
 }
 
-// ---- seat requests (host) ----
+// ---- seat requests and waitlist (host) ----
 
 function renderSeatRequests(client) {
   const box = document.getElementById('seat-requests');
   const reqs = client.state.seatRequests || [];
-  const show = client.you?.isHost && reqs.length > 0;
+  const queue = client.state.waitlist || [];
+  const isHost = client.you?.isHost;
+  const show = (isHost && (reqs.length > 0 || queue.length > 0)) || queue.length > 0;
   box.classList.toggle('hidden', !show);
   if (!show) {
     box.innerHTML = '';
     return;
   }
-  box.innerHTML = `
-    <div class="sr-title">Seat requests</div>
-    ${reqs
-      .map(
-        (r) => `
+
+  const requestBlock = isHost && reqs.length
+    ? `<div class="sr-title">Seat requests</div>
+       ${reqs
+         .map(
+           (r) => `
       <div class="sr-row">
         <span>${escapeHtml(r.nickname)} · ${r.buyIn}</span>
         <span>
@@ -290,8 +311,31 @@ function renderSeatRequests(client) {
           <button class="btn btn-red sr-btn" data-approve="no" data-player="${r.playerId}">✕</button>
         </span>
       </div>`
-      )
-      .join('')}`;
+         )
+         .join('')}`
+    : '';
+
+  const queueBlock = queue.length
+    ? `<div class="sr-title">Waitlist — table full</div>
+       ${queue
+         .map(
+           (w) => `
+      <div class="sr-row">
+        <span>${w.position}. ${escapeHtml(w.nickname)} · ${w.buyIn}${w.approved ? ' ✓' : ''}</span>
+        ${
+          isHost && !w.approved
+            ? `<span>
+                 <button class="btn btn-green sr-btn" data-wait="yes" data-player="${w.playerId}">✓</button>
+                 <button class="btn btn-red sr-btn" data-wait="no" data-player="${w.playerId}">✕</button>
+               </span>`
+            : ''
+        }
+      </div>`
+         )
+         .join('')}`
+    : '';
+
+  box.innerHTML = requestBlock + queueBlock;
 }
 
 // ---- host modal ----
@@ -301,6 +345,12 @@ function openHostModal(client) {
   document.getElementById('h-sb').value = s.smallBlind;
   document.getElementById('h-bb').value = s.bigBlind;
   document.getElementById('h-timer').value = String(s.actionTime);
+  document.getElementById('h-timebank').value = String(s.timeBank ?? 0);
+  document.getElementById('h-bomb').value = String(s.bombPotEvery ?? 0);
+  document.getElementById('h-72').value = String(s.sevenDeuceBounty ?? 0);
+  document.getElementById('h-straddle').checked = !!s.straddle;
+  document.getElementById('h-rabbit').checked = !!s.rabbitHunt;
+  document.getElementById('h-rit').checked = !!s.runItTwice;
   refreshHostModal(client, true);
   document.getElementById('host-modal').classList.remove('hidden');
 }
@@ -336,6 +386,12 @@ function refreshHostModal(client, force = false) {
         <span class="hp-actions">
           <button class="btn btn-ghost hp-btn" data-haction="topup" data-player="${p.playerId}">＋ chips</button>
           <button class="btn btn-ghost hp-btn" data-haction="reduce" data-player="${p.playerId}">− chips</button>
+          ${
+            client.state.hand && !client.state.hand.finished &&
+            client.state.hand.toActSeat === p.seatIndex
+              ? `<button class="btn btn-ghost hp-btn" data-haction="nudge" data-player="${p.playerId}">Nudge</button>`
+              : ''
+          }
           ${p.playerId !== client.you.playerId
             ? `<button class="btn btn-ghost hp-btn hp-kick" data-haction="kick" data-player="${p.playerId}">Kick</button>`
             : ''}

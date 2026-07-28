@@ -30,6 +30,7 @@ export class Game {
     this.logs = [];
     this.ledger = new Map(); // playerId -> { nickname, buyIns, cashOuts }
     this.pendingOps = []; // ops queued while a hand is live, applied at hand end
+    this.waitlist = []; // queue for a full table, drained between hands
     this.pauseRequested = false;
     this.timer = null; // { name, deadline, handle }
     this.hostTransferTimeout = null;
@@ -169,6 +170,10 @@ export class Game {
         return { ok: false, error: 'bad seat' };
       }
       if (this.seats[seatIndex] !== null) return { ok: false, error: 'seat taken' };
+    }
+    // Table full: join the queue instead of being turned away.
+    if (!this.seats.includes(null)) {
+      return this.joinWaitlist(player, buyIn, seatIndex);
     }
     player.status = 'requesting';
     player.pendingBuyIn = buyIn;
@@ -446,6 +451,9 @@ export class Game {
     if (patch.maxBuyIn !== undefined) next.maxBuyIn = patch.maxBuyIn;
     if (patch.defaultBuyIn !== undefined) next.defaultBuyIn = patch.defaultBuyIn;
     if (patch.tableTheme !== undefined) next.tableTheme = patch.tableTheme;
+    for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery', 'sevenDeuceBounty']) {
+      if (patch[key] !== undefined) next[key] = patch[key];
+    }
     const clean = sanitizeSettings(next);
     // Variant is fixed at creation.
     clean.variant = this.settings.variant;
@@ -473,6 +481,8 @@ export class Game {
         this.applyStackAdjust(player, op.delta);
       }
     }
+    // After unseats have freed any seats, pull people off the queue.
+    this.seatFromWaitlist();
   }
 
   nextButtonSeat() {
@@ -497,14 +507,29 @@ export class Game {
     }
     this.buttonSeat = this.nextButtonSeat();
     this.handNo++;
+    const s = this.settings;
+    const bombPot = s.bombPotEvery > 0 && this.handNo % s.bombPotEvery === 0;
+    // Top the time bank back up each hand so it is a per-decision reserve
+    // rather than a per-session one.
+    for (const p of players) {
+      p.timeBank = s.timeBank > 0 ? s.timeBank * 1000 : 0;
+    }
     this.currentHand = new Hand({
       handNo: this.handNo,
-      variantKey: this.settings.variant,
-      smallBlind: this.settings.smallBlind,
-      bigBlind: this.settings.bigBlind,
-      actionTime: this.settings.actionTime,
+      variantKey: s.variant,
+      smallBlind: s.smallBlind,
+      bigBlind: s.bigBlind,
+      actionTime: s.actionTime,
       buttonSeat: this.buttonSeat,
       players: players.sort((a, b) => a.seatIndex - b.seatIndex),
+      options: {
+        straddle: s.straddle,
+        rabbitHunt: s.rabbitHunt,
+        runItTwice: s.runItTwice,
+        sevenDeuceBounty: s.sevenDeuceBounty,
+        bombPot,
+        ante: bombPot ? s.bigBlind : 0,
+      },
       ctx: {
         log: (text) => this.addLog(text),
         changed: () => this.emitChanged(),
@@ -563,6 +588,96 @@ export class Game {
     if (this.timer?.name === 'nexthand') return;
     if (this.eligiblePlayers().length < 2) return;
     this.setTimer('nexthand', TIMINGS.NEXT_HAND_DELAY, () => this.startHand());
+  }
+
+  // Host prod for a stalling player. Reuses the timeout path, which already
+  // does the correct auto-check-or-fold, but without marking them away —
+  // nudging someone who is present shouldn't punish them.
+  nudgePlayer(targetId, immediate = false) {
+    const target = this.players.get(targetId);
+    const hand = this.currentHand;
+    if (!target || !hand || hand.finished || hand.toActSeat !== target.seatIndex) {
+      return { ok: false, error: 'it is not their turn' };
+    }
+    if (immediate) {
+      this.addLog(`The host forced an action for ${target.nickname}`);
+      hand.handleTimeout({ markAway: false });
+      return { ok: true };
+    }
+    this.addLog(`The host nudged ${target.nickname} — ${TIMINGS.NUDGE_GRACE / 1000}s to act`);
+    this.setTimer('nudge', TIMINGS.NUDGE_GRACE, () => hand.handleTimeout({ markAway: false }));
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  // ---- waitlist ----
+
+  joinWaitlist(player, buyIn, seatIndex) {
+    const { minBuyIn, maxBuyIn } = this.settings;
+    // Validated here as well as in requestSeat: skipping it would let an
+    // invalid buy-in in through the queue when a seat later frees up.
+    if (!Number.isInteger(buyIn) || buyIn < minBuyIn || buyIn > maxBuyIn) {
+      return { ok: false, error: `buy-in must be ${minBuyIn}-${maxBuyIn}` };
+    }
+    if (this.waitlist.some((e) => e.playerId === player.id)) {
+      return { ok: false, error: 'you are already in the queue' };
+    }
+    player.status = 'waitlisted';
+    player.pendingBuyIn = buyIn;
+    this.waitlist.push({ playerId: player.id, buyIn, seatIndex: seatIndex ?? null, approved: false });
+    this.addLog(`${player.nickname} joined the waitlist`);
+    return { ok: true };
+  }
+
+  leaveWaitlist(player) {
+    this.waitlist = this.waitlist.filter((e) => e.playerId !== player.id);
+    if (player.status === 'waitlisted') {
+      player.status = 'spectating';
+      player.pendingBuyIn = 0;
+    }
+    return { ok: true };
+  }
+
+  approveWaitlist(playerId, approve) {
+    const entry = this.waitlist.find((e) => e.playerId === playerId);
+    if (!entry) return { ok: false, error: 'not in the queue' };
+    if (!approve) {
+      const player = this.players.get(playerId);
+      if (player) this.leaveWaitlist(player);
+      return { ok: true };
+    }
+    entry.approved = true;
+    this.seatFromWaitlist();
+    return { ok: true };
+  }
+
+  // Only ever runs between hands: seating someone mid-hand would desync the
+  // seat map from the hand's own player list.
+  seatFromWaitlist() {
+    if (this.currentHand && !this.currentHand.finished) return;
+    const { minBuyIn, maxBuyIn } = this.settings;
+    for (let i = 0; i < this.waitlist.length && this.seats.includes(null); ) {
+      const entry = this.waitlist[i];
+      const player = this.players.get(entry.playerId);
+      if (!player || player.status === 'seated' || !player.connected) {
+        this.waitlist.splice(i, 1);
+        continue;
+      }
+      if (!entry.approved) {
+        i++;
+        continue;
+      }
+      if (entry.buyIn < minBuyIn || entry.buyIn > maxBuyIn) {
+        this.waitlist.splice(i, 1);
+        continue;
+      }
+      player.status = 'requesting';
+      player.pendingBuyIn = entry.buyIn;
+      player.requestedSeat =
+        entry.seatIndex !== null && this.seats[entry.seatIndex] === null ? entry.seatIndex : null;
+      if (this.approveSeat(player.id, true).ok) this.waitlist.splice(i, 1);
+      else i++;
+    }
   }
 
   // ---- host ----
@@ -639,9 +754,17 @@ export function sanitizeSettings(s) {
   const variant = ['holdem', 'pineapple', 'crazyPineapple', 'plo'].includes(s.variant)
     ? s.variant
     : DEFAULT_SETTINGS.variant;
+  const bounded = (v, min, max, dflt) =>
+    Number.isInteger(v) ? Math.max(min, Math.min(max, v)) : dflt;
   return {
     variant, smallBlind, bigBlind, minBuyIn, maxBuyIn, defaultBuyIn, actionTime,
     tableTheme: cleanTheme(s.tableTheme),
+    timeBank: bounded(s.timeBank, 0, 300, 0),
+    straddle: !!s.straddle,
+    rabbitHunt: !!s.rabbitHunt,
+    runItTwice: !!s.runItTwice,
+    bombPotEvery: bounded(s.bombPotEvery, 0, 100, 0),
+    sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, 100000, 0),
   };
 }
 

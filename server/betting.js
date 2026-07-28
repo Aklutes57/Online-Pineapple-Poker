@@ -46,7 +46,12 @@ export function nextActorSeat(hand, fromSeat) {
 }
 
 export function firstToActSeat(hand, isPreflop) {
-  const from = isPreflop ? hand.bbSeat : hand.buttonSeat;
+  // Preflop action starts left of the last forced bet — the straddle when
+  // there is one, otherwise the big blind. A bomb pot has neither, so it
+  // falls through to button-relative order like any postflop street.
+  const from = isPreflop
+    ? (hand.straddleSeat ?? hand.bbSeat ?? hand.buttonSeat)
+    : hand.buttonSeat;
   return nextActorSeat(hand, from);
 }
 

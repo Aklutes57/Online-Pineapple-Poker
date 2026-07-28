@@ -9,7 +9,7 @@
 
 import { VARIANTS, PHASES, TIMINGS } from '../shared/constants.js';
 import * as betting from './betting.js';
-import { buildPots, payoutPots } from './pots.js';
+import { buildPots, payoutPots, splitPotsForBoards } from './pots.js';
 import { best7, bestOmaha, describe } from './evaluator.js';
 import { shuffledDeck } from './deck.js';
 import { equity } from './equity.js';
@@ -17,9 +17,12 @@ import { detectCooler } from './cooler.js';
 
 const NEXT_STREET = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' };
 const BOARD_CARDS = { flop: 3, turn: 1, river: 1 };
+const VERBS = { fold: 'folds', check: 'checks', call: 'calls', bet: 'bets', raise: 'raises' };
+
+export const PRE_ACTIONS = ['fold', 'checkFold', 'check', 'callAny'];
 
 export class Hand {
-  constructor({ handNo, variantKey, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, ctx }) {
+  constructor({ handNo, variantKey, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, ctx, options = {} }) {
     this.handNo = handNo;
     this.handId = `h${handNo}`;
     this.variant = VARIANTS[variantKey];
@@ -29,6 +32,18 @@ export class Hand {
     this.bigBlind = bigBlind;
     this.actionTime = actionTime;
     this.buttonSeat = buttonSeat;
+    this.straddleEnabled = !!options.straddle;
+    this.rabbitHuntEnabled = !!options.rabbitHunt;
+    this.runItTwiceEnabled = !!options.runItTwice;
+    this.sevenDeuceBounty = options.sevenDeuceBounty || 0;
+    this.bombPot = !!options.bombPot;
+    this.ante = options.ante || 0;
+    this.straddleSeat = null;
+    this.board2 = null;
+    this.runItTwice = false;
+    this.rabbit = null;
+    this.timeBankEngaged = false;
+    this.timeBankStartedAt = 0;
     this.players = players;
     this.bySeat = new Map(players.map((p) => [p.seatIndex, p]));
     this.seatOrder = players.map((p) => p.seatIndex).sort((a, b) => a - b);
@@ -71,6 +86,7 @@ export class Hand {
       p.hasDiscarded = false;
       p.showedCards = false;
       p.handResult = null;
+      p.preAction = null;
       // Per-hand stat flags, rolled into account aggregates when the hand ends.
       p.handStartStack = p.stack;
       p.handStats = {
@@ -87,6 +103,12 @@ export class Hand {
       };
     }
     this.preflopRaises = 0;
+
+    // Bomb pot: no blinds, everyone antes, straight to the flop.
+    if (this.bombPot && this.ante > 0) {
+      this.startBombPot();
+      return;
+    }
 
     // Heads-up: the button posts the small blind.
     if (this.players.length === 2) {
@@ -110,15 +132,53 @@ export class Hand {
       `${bb.nickname} posts big blind ${this.bigBlind}`
     );
 
-    // Deal hole cards, starting left of the button.
+    // Straddle: UTG posts double the big blind before the deal, and action
+    // starts to their left. Skipped heads-up, where the button already posts
+    // the small blind and is the only candidate seat.
+    if (this.straddleEnabled && this.players.length >= 3) {
+      const seat = this.seatAfter(this.bbSeat);
+      const straddler = this.bySeat.get(seat);
+      const want = this.bigBlind * 2;
+      const paid = betting.pay(straddler, want);
+      this.straddleSeat = seat;
+      this.currentBet = Math.max(this.currentBet, straddler.betThisRound);
+      // Only a full straddle resets the raise size; a short all-in straddle
+      // follows the same rule as any other undersized all-in.
+      if (paid >= want) this.lastFullRaiseSize = want;
+      this.pushEvent({ type: 'post', seat, kind: 'straddle', amount: paid });
+      this.ctx.log(`${straddler.nickname} straddles ${paid}${straddler.allIn ? ' (all-in)' : ''}`);
+    }
+
+    this.dealHoleCards();
+    this.enterStreet('preflop', true);
+  }
+
+  dealHoleCards() {
     let seat = this.seatAfter(this.buttonSeat);
     for (let i = 0; i < this.players.length; i++) {
       const p = this.bySeat.get(seat);
       p.holeCards = this.draw(this.variant.holeCards);
       seat = this.seatAfter(seat);
     }
+    this.pushEvent({ type: 'deal', cards: this.variant.holeCards });
+  }
 
-    this.enterStreet('preflop', true);
+  // Everyone antes and the flop comes straight out. The antes go through
+  // betting.pay so they land in totalCommitted and therefore in the pot —
+  // moving chips any other way would break chip conservation.
+  startBombPot() {
+    for (const p of this.players) betting.pay(p, this.ante);
+    this.sbSeat = null;
+    this.bbSeat = null;
+    this.pushEvent({ type: 'bombPot', amount: this.ante });
+    this.ctx.log(`Bomb pot — everyone antes ${this.ante}, straight to the flop`);
+    this.dealHoleCards();
+    // Zero betThisRound/hasActed but keep totalCommitted, then let the normal
+    // street machinery handle the pineapple discard and any all-in run-out.
+    betting.resetStreet(this);
+    this.street = 'preflop';
+    this.phase = PHASES.PREFLOP;
+    this.afterStreetComplete();
   }
 
   pushEvent(event) {
@@ -151,10 +211,15 @@ export class Hand {
     const dealt = BOARD_CARDS[street];
     if (dealt) {
       this.board.push(...this.draw(dealt));
-      this.ctx.log(`${cap(street)}: ${this.board.join(' ')}`);
-    }
-    if (dealt) {
-      this.pushEvent({ type: 'board', cards: this.board.slice(-dealt), board: [...this.board] });
+      if (this.runItTwice) this.board2.push(...this.draw(dealt));
+      this.ctx.log(
+        `${cap(street)}: ${this.board.join(' ')}` +
+        (this.runItTwice ? ` | ${this.board2.join(' ')}` : '')
+      );
+      this.pushEvent({
+        type: 'board', cards: this.board.slice(-dealt), board: [...this.board],
+        board2: this.runItTwice ? [...this.board2] : null,
+      });
     }
     if (street === 'flop') {
       for (const p of this.livePlayers()) {
@@ -170,9 +235,49 @@ export class Hand {
     this.toActSeat = betting.firstToActSeat(this, street === 'preflop');
     if (this.toActSeat === null) {
       this.afterStreetComplete();
-    } else {
+    } else if (this.armOrAutoAct()) {
+      this.afterAction();
+    }
+  }
+
+  // Either a queued pre-action fires immediately (return true, so the caller
+  // keeps advancing) or the turn is armed normally (return false).
+  // Doing it this way instead of calling beginTurn recursively keeps a chain
+  // of pre-actions to a single broadcast and out of the call stack.
+  armOrAutoAct() {
+    const player = this.bySeat.get(this.toActSeat);
+    const choice = this.takePreAction(player);
+    if (choice === null) {
       this.beginTurn();
       this.ctx.changed();
+      return false;
+    }
+    this.noteActionStats(player, choice);
+    betting.applyAction(this, player, choice, null);
+    if (this.street === 'preflop' && (choice === 'bet' || choice === 'raise')) this.preflopRaises++;
+    this.lastAction = { seat: player.seatIndex, action: choice, amount: player.betThisRound };
+    this.pushEvent({
+      type: 'action', seat: player.seatIndex, action: choice,
+      amount: player.betThisRound, preSelected: true, pot: betting.potTotal(this),
+    });
+    this.ctx.log(`${player.nickname} ${VERBS[choice]} (pre-selected)`);
+    return true;
+  }
+
+  // Pre-actions are resolved against live state at the moment they fire, not
+  // eagerly when someone bets. That is what makes "Check" cancel harmlessly
+  // when a bet appears, while "Check/Fold" folds.
+  takePreAction(player) {
+    const pre = player.preAction;
+    player.preAction = null; // always one-shot
+    if (!pre || pre.street !== this.street || this.finished) return null;
+    const toCall = this.currentBet - player.betThisRound;
+    switch (pre.kind) {
+      case 'fold': return 'fold';
+      case 'checkFold': return toCall > 0 ? 'fold' : 'check';
+      case 'check': return toCall > 0 ? null : 'check';
+      case 'callAny': return 'call';
+      default: return null;
     }
   }
 
@@ -183,18 +288,46 @@ export class Hand {
     else if (this.actionTime > 0) ms = this.actionTime * 1000;
     else if (!player.connected) ms = TIMINGS.DISCONNECT_GRACE; // no-limit timer can't wait forever for a gone player
     if (ms !== null) {
+      this.timeBankEngaged = false;
       this.ctx.setTimer('action', ms, () => this.handleTimeout());
     } else {
       this.ctx.clearTimer();
     }
   }
 
-  handleTimeout() {
+  canUseTimeBank(player) {
+    return (
+      this.actionTime > 0 &&
+      (player.timeBank || 0) > 0 &&
+      !player.sittingOut &&
+      player.connected
+    );
+  }
+
+  // markAway is false when the host forces a decision — nudging someone who
+  // is present shouldn't also sit them out.
+  handleTimeout({ markAway = true } = {}) {
     const player = this.bySeat.get(this.toActSeat);
     if (!player || this.finished) return;
+
+    // The clock runs out into the time bank first, sequentially, so the
+    // game still only ever has one pending timer.
+    if (!this.timeBankEngaged && this.canUseTimeBank(player)) {
+      this.timeBankEngaged = true;
+      this.timeBankStartedAt = Date.now();
+      this.ctx.log(`${player.nickname} is into their time bank`);
+      this.ctx.setTimer('timebank', player.timeBank, () => this.handleTimeout({ markAway }));
+      this.ctx.changed();
+      return;
+    }
+    if (this.timeBankEngaged) {
+      player.timeBank = 0;
+      this.timeBankEngaged = false;
+    }
+
     const av = betting.availableActionsFor(this, player);
     const action = av.canCheck ? 'check' : 'fold';
-    if (!player.sittingOut) {
+    if (!player.sittingOut && markAway) {
       this.ctx.markAway(player);
       this.ctx.log(`${player.nickname} didn't act in time and is now away`);
     }
@@ -208,11 +341,31 @@ export class Hand {
     this.afterAction();
   }
 
+  // Queue an action to fire automatically when the turn reaches this player.
+  setPreAction(player, kind) {
+    if (this.finished || !this.isBettingPhase()) return { ok: false, error: 'no betting right now' };
+    if (player.folded || player.allIn) return { ok: false, error: 'you are not acting in this hand' };
+    if (player.seatIndex === this.toActSeat) return { ok: false, error: "it's your turn — just act" };
+    if (kind === null) {
+      player.preAction = null;
+      return { ok: true };
+    }
+    if (!PRE_ACTIONS.includes(kind)) return { ok: false, error: 'unknown pre-action' };
+    player.preAction = { kind, street: this.street };
+    return { ok: true };
+  }
+
   // Entry point from sockets. Returns { ok, error? }.
   handleAction(player, action, amount) {
     if (this.finished) return { ok: false, error: 'hand is over' };
     if (!this.isBettingPhase()) return { ok: false, error: 'no betting right now' };
     if (player.seatIndex !== this.toActSeat) return { ok: false, error: 'not your turn' };
+
+    // Time spent in the bank is deducted on use, not granted up front.
+    if (this.timeBankEngaged) {
+      player.timeBank = Math.max(0, player.timeBank - (Date.now() - this.timeBankStartedAt));
+      this.timeBankEngaged = false;
+    }
 
     const before = this.currentBet;
     this.noteActionStats(player, action);
@@ -261,25 +414,28 @@ export class Hand {
     }
   }
 
+  // A loop rather than recursion, so a run of queued pre-actions resolves in
+  // one pass and produces a single broadcast at the end.
   afterAction() {
-    const live = this.livePlayers();
-    if (live.length === 1) {
-      this.finishByFold(live[0]);
-      return;
+    for (;;) {
+      const live = this.livePlayers();
+      if (live.length === 1) {
+        this.finishByFold(live[0]);
+        return;
+      }
+      if (betting.isRoundComplete(this)) {
+        this.toActSeat = null;
+        this.afterStreetComplete();
+        return;
+      }
+      this.toActSeat = betting.nextActorSeat(this, this.toActSeat);
+      if (this.toActSeat === null) {
+        // Nobody left who can act (everyone remaining is all-in).
+        this.afterStreetComplete();
+        return;
+      }
+      if (!this.armOrAutoAct()) return;
     }
-    if (betting.isRoundComplete(this)) {
-      this.toActSeat = null;
-      this.afterStreetComplete();
-      return;
-    }
-    this.toActSeat = betting.nextActorSeat(this, this.toActSeat);
-    if (this.toActSeat === null) {
-      // Nobody left who can act (everyone remaining is all-in).
-      this.afterStreetComplete();
-      return;
-    }
-    this.beginTurn();
-    this.ctx.changed();
   }
 
   isBettingPhase() {
@@ -300,6 +456,13 @@ export class Hand {
     const actors = live.filter((p) => !p.allIn);
     if (!this.runOut && live.length >= 2 && actors.length <= 1) {
       this.runOut = true;
+      // Run it twice: both boards share every card dealt before the all-in,
+      // and draw from the same cursor so they can never duplicate a card.
+      if (this.runItTwiceEnabled && NEXT_STREET[this.street] !== 'showdown') {
+        this.runItTwice = true;
+        this.board2 = [...this.board];
+        this.ctx.log('Running it twice');
+      }
       // Snapshot the odds at the moment the chips went in — that is what
       // makes a later loss a bad beat rather than just a loss.
       try {
@@ -346,12 +509,15 @@ export class Hand {
       this.proceedFromStreet();
       return;
     }
+    // Untimed tables still need a fallback here: the discard phase has no
+    // seat to act, so nothing else can rescue a table whose player vanished.
+    const ms = this.actionTime > 0 ? TIMINGS.DISCARD_TIME : TIMINGS.DISCARD_NO_CLOCK;
     this.phase = this.variant.discardAfter === 'preflop'
       ? PHASES.DISCARD_PREFLOP
       : PHASES.DISCARD_POSTFLOP;
     this.toActSeat = null;
     this.ctx.log('Discard: each player throws away one card');
-    this.ctx.setTimer('discard', TIMINGS.DISCARD_TIME, () => this.discardTimeout());
+    this.ctx.setTimer('discard', ms, () => this.discardTimeout());
     this.ctx.changed();
   }
 
@@ -383,12 +549,22 @@ export class Hand {
   }
 
   discardTimeout() {
-    for (const p of this.discardPending()) {
+    // Untimed tables only auto-discard for people who aren't there; everyone
+    // else keeps thinking, and the fallback re-arms.
+    const targets = this.actionTime > 0
+      ? this.discardPending()
+      : this.discardPending().filter((p) => !p.connected || p.sittingOut);
+    for (const p of targets) {
       p.holeCards.pop();
       p.hasDiscarded = true;
-      this.ctx.log(`${p.nickname} auto-discards (time)`);
+      this.ctx.log(`${p.nickname} auto-discards (${this.actionTime > 0 ? 'time' : 'away'})`);
     }
-    this.finishDiscard();
+    if (this.discardPending().length === 0) {
+      this.finishDiscard();
+      return;
+    }
+    this.ctx.setTimer('discard', TIMINGS.DISCARD_NO_CLOCK, () => this.discardTimeout());
+    this.ctx.changed();
   }
 
   finishDiscard() {
@@ -428,6 +604,7 @@ export class Hand {
       byFold: true,
     };
     winner.handResult = { desc: null, won: pot };
+    this.results.bounty = this.applySevenDeuce(winner);
     this.pushEvent({ type: 'payout', seat: winner.seatIndex, amount: pot, byFold: true });
     this.ctx.log(`${winner.nickname} wins ${pot}`);
     this.ctx.changed();
@@ -439,26 +616,54 @@ export class Hand {
     const uncalledReturn = this.returnUncalledBet();
     const live = this.livePlayers();
 
-    const scores = new Map();
-    for (const p of live) {
-      const { score } = this.variant.omaha
-        ? bestOmaha(p.holeCards, this.board)
-        : best7([...p.holeCards, ...this.board]);
-      scores.set(p.seatIndex, score);
+    const pots = buildPots(this.players);
+    const boards = this.runItTwice ? [this.board, this.board2] : [this.board];
+    const potSets = this.runItTwice ? splitPotsForBoards(pots, 2) : [pots];
+
+    const totals = new Map();
+    const boardResults = [];
+    let firstBoardScores = null;
+
+    for (let b = 0; b < boards.length; b++) {
+      const scores = new Map();
+      for (const p of live) {
+        const { score } = this.variant.omaha
+          ? bestOmaha(p.holeCards, boards[b])
+          : best7([...p.holeCards, ...boards[b]]);
+        scores.set(p.seatIndex, score);
+      }
+      if (b === 0) firstBoardScores = scores;
+      const { winnings } = payoutPots(potSets[b], scores, this.buttonSeat);
+      for (const [seat, amount] of winnings) {
+        totals.set(seat, (totals.get(seat) || 0) + amount);
+      }
+      boardResults.push({
+        index: b,
+        board: [...boards[b]],
+        winners: [...winnings].map(([seat, amount]) => ({ seat, amount })),
+        descs: Object.fromEntries(live.map((p) => [p.seatIndex, describe(scores.get(p.seatIndex))])),
+      });
     }
 
-    const pots = buildPots(this.players);
-    const { winnings } = payoutPots(pots, scores, this.buttonSeat);
+    // Chip conservation across boards. A mismatch voids the hand and pauses
+    // the table rather than silently corrupting the ledger.
+    const paid = [...totals.values()].reduce((a, b) => a + b, 0);
+    const owed = pots.reduce((a, p) => a + p.amount, 0);
+    if (paid !== owed) throw new Error(`showdown payout mismatch: paid ${paid}, pots ${owed}`);
 
     const winners = [];
-    for (const [seat, amount] of winnings) {
-      const p = this.bySeat.get(seat);
-      p.stack += amount;
+    for (const [seat, amount] of totals) {
+      this.bySeat.get(seat).stack += amount;
       winners.push({ seat, amount });
     }
+    const scores = firstBoardScores;
     for (const p of live) {
-      const won = winnings.get(p.seatIndex) || 0;
-      p.handResult = { desc: describe(scores.get(p.seatIndex)), won };
+      const won = totals.get(p.seatIndex) || 0;
+      p.handResult = {
+        desc: describe(scores.get(p.seatIndex)),
+        descs: boardResults.map((r) => r.descs[p.seatIndex]),
+        won,
+      };
       if (p.handStats) {
         // Only a contested showdown counts — an all-in run-out still shows
         // cards down, which is exactly what "went to showdown" means.
@@ -492,7 +697,13 @@ export class Hand {
     this.phase = PHASES.SHOWDOWN;
     this.toActSeat = null;
     this.finished = true;
-    this.results = { pots, winners, uncalledReturn, byFold: false, cooler };
+    const outrightWinner = winners.length === 1 ? this.bySeat.get(winners[0].seat) : null;
+    const bounty = this.applySevenDeuce(outrightWinner);
+    this.results = {
+      pots, winners, uncalledReturn, byFold: false, cooler, bounty,
+      runItTwice: this.runItTwice,
+      boards: this.runItTwice ? boardResults : null,
+    };
     if (cooler) this.ctx.log(`${cooler.headline}: ${cooler.detail}`);
 
     for (const p of live) {
@@ -509,6 +720,48 @@ export class Hand {
     }
     this.ctx.changed();
     this.ctx.finished();
+  }
+
+  // Seven-deuce bounty: winning with the worst starting hand collects from
+  // everyone else. Strictly zero-sum and capped at each payer's stack — a
+  // flat payout would mint chips against a short stack and break the ledger.
+  applySevenDeuce(winner) {
+    if (!this.sevenDeuceBounty || !winner || !hasSevenDeuce(winner.holeCards)) return null;
+    const transfers = [];
+    let collected = 0;
+    for (const p of this.players) {
+      if (p === winner) continue;
+      const paid = Math.min(this.sevenDeuceBounty, p.stack);
+      if (paid <= 0) continue;
+      p.stack -= paid;
+      collected += paid;
+      transfers.push({ seat: p.seatIndex, amount: -paid });
+    }
+    if (collected === 0) return null;
+    winner.stack += collected;
+    // The table is owed an explanation for the transfer, so the winning
+    // hand is turned face up.
+    winner.showedCards = true;
+    this.pushEvent({ type: 'bounty', seat: winner.seatIndex, amount: collected });
+    this.ctx.log(`${winner.nickname} wins the 7-2 bounty: ${collected}`);
+    return { winnerSeat: winner.seatIndex, total: collected, transfers };
+  }
+
+  // Rabbit hunt: after a hand ends early, show what would have come. Only
+  // ever legal once the hand is over — dealing these out mid-hand would
+  // expose the deck to live players.
+  handleRabbitHunt(player) {
+    if (!this.rabbitHuntEnabled) return { ok: false, error: 'rabbit hunting is off at this table' };
+    if (!this.finished || !this.results?.byFold) return { ok: false, error: 'nothing to hunt' };
+    if (this.board.length >= 5) return { ok: false, error: 'the board already ran out' };
+    if (this.rabbit) return { ok: false, error: 'already revealed' };
+    if (this.bySeat.get(player.seatIndex) !== player) {
+      return { ok: false, error: 'you were not in this hand' };
+    }
+    this.rabbit = this.draw(5 - this.board.length);
+    this.ctx.log(`${player.nickname} rabbit hunts: ${this.rabbit.join(' ')}`);
+    this.ctx.changed();
+    return { ok: true };
   }
 
   // Voluntary reveal after winning by fold.
@@ -538,4 +791,11 @@ export class Hand {
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
+}
+
+// Qualifies on the cards still held — for the pineapple variants that is
+// correctly the hand after the discard.
+function hasSevenDeuce(cards) {
+  const ranks = new Set(cards.map((c) => c[0]));
+  return ranks.has('7') && ranks.has('2');
 }

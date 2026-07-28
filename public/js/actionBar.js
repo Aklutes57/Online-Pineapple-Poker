@@ -97,6 +97,7 @@ export function renderActionBar(client) {
 
   // Reset the tray whenever a new decision starts.
   const turnKey = av ? `${hand.handId}:${hand.phase}:${hand.toActSeat}:${hand.currentBet}` : '';
+  void turnKey;
   if (turnKey !== lastTurnKey) {
     lastTurnKey = turnKey;
     trayOpen = false;
@@ -143,9 +144,29 @@ export function renderActionBar(client) {
     html = `
       <span class="ab-note">You're sitting out.</span>
       <button class="btn btn-green" data-act="sit-in">I'm back</button>`;
+  } else if (you.canPreAct) {
+    // Pre-action buttons deliberately use data-pre, never data-act: sharing
+    // the action selectors would make them indistinguishable from a real
+    // check or call, both to scripts and to a mis-click.
+    const facingBet = hand.currentBet > (state.seats[you.seatIndex]?.betThisRound ?? 0);
+    const opts = facingBet
+      ? [['fold', 'Fold'], ['callAny', 'Call any']]
+      : [['checkFold', 'Check/Fold'], ['check', 'Check']];
+    html = `
+      <span class="ab-note">${waitingText(client)}</span>
+      <div class="pre-actions">
+        ${opts
+          .map(
+            ([kind, label]) =>
+              `<button class="btn pre-btn ${you.preAction === kind ? 'armed' : ''}" data-pre="${kind}">${label}</button>`
+          )
+          .join('')}
+      </div>
+      <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
   } else if (state.status === GAME_STATUS.RUNNING || state.status === GAME_STATUS.PAUSED) {
     html = `
       <span class="ab-note">${waitingText(client)}</span>
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">🐇 Rabbit hunt</button>' : ''}
       <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
   } else {
     html = `<span class="ab-note">Seated with ${you.stack} — waiting for the game to start.</span>`;
@@ -220,6 +241,14 @@ function bindBarEvents(client, av) {
   const el = bar();
   el.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', () => handleAct(client, btn.dataset.act, av));
+  });
+  el.querySelectorAll('[data-pre]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.pre;
+      // Clicking the armed one disarms it.
+      const next = client.you?.preAction === kind ? null : kind;
+      client.send(EVENTS.SET_PREACTION, { handId: client.state.hand.handId, kind: next });
+    });
   });
   el.querySelectorAll('.preset').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -304,6 +333,9 @@ function handleAct(client, act, av) {
       break;
     case 'sit-in':
       client.send(EVENTS.SIT_IN, {});
+      break;
+    case 'rabbit':
+      client.send(EVENTS.RABBIT_HUNT, { handId: hand.handId });
       break;
   }
 }

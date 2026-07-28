@@ -16,6 +16,11 @@ export const EVENTS = {
   STAND_UP: 'standUp',
   CHAT: 'chat',
   REACT: 'react',
+  SET_PREACTION: 'setPreAction',
+  RABBIT_HUNT: 'rabbitHunt',
+  LEAVE_WAITLIST: 'leaveWaitlist',
+  HOST_NUDGE: 'host:nudge',
+  HOST_APPROVE_WAITLIST: 'host:approveWaitlist',
   HOST_APPROVE_SEAT: 'host:approveSeat',
   HOST_START_GAME: 'host:startGame',
   HOST_PAUSE: 'host:pause',
@@ -91,7 +96,13 @@ export const DEFAULT_SETTINGS = {
   defaultBuyIn: 200,
   minBuyIn: 40,
   maxBuyIn: 1000,
-  actionTime: 30, // seconds; 0 = no limit
+  actionTime: 30, // seconds; 0 = untimed ("no clock")
+  timeBank: 0, // seconds of reserve per player; 0 = off
+  straddle: false, // UTG posts 2x the big blind before the deal
+  rabbitHunt: false, // show what would have come after a hand ends early
+  runItTwice: false, // deal two boards when everyone is all-in
+  bombPotEvery: 0, // every N hands: everyone antes, straight to the flop
+  sevenDeuceBounty: 0, // chips each opponent pays for a win with 7-2
 };
 
 export const SETTINGS_LIMITS = {
@@ -105,6 +116,8 @@ export const SETTINGS_LIMITS = {
 
 export const TIMINGS = {
   DISCARD_TIME: 15000, // ms for the pineapple discard decision
+  DISCARD_NO_CLOCK: 300000, // untimed tables still need a stall fallback
+  NUDGE_GRACE: 15000, // ms a nudged player gets before the host's prod lands
   NEXT_HAND_DELAY: 4000, // ms between hands
   RUNOUT_STREET_DELAY: 1500, // ms between streets on an all-in run-out
   AWAY_GRACE: 1000, // ms before auto-acting for a sitting-out player

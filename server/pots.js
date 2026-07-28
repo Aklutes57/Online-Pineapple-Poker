@@ -94,3 +94,20 @@ export function payoutPots(pots, scores, buttonSeat, seatCount = 10) {
 function seatDistance(fromSeat, toSeat, seatCount) {
   return ((toSeat - fromSeat + seatCount - 1) % seatCount) + 1;
 }
+
+// Splits each pot across n boards for run-it-twice. Integer division with an
+// explicit remainder, so the split is exact by construction: the amounts for
+// a pot always sum back to that pot, and no chip is created or lost.
+export function splitPotsForBoards(pots, n) {
+  const boards = Array.from({ length: n }, () => []);
+  for (const pot of pots) {
+    const base = Math.floor(pot.amount / n);
+    let remainder = pot.amount - base * n;
+    for (let b = 0; b < n; b++) {
+      const amount = base + (remainder > 0 ? 1 : 0);
+      if (remainder > 0) remainder--;
+      if (amount > 0) boards[b].push({ amount, eligibleSeats: [...pot.eligibleSeats] });
+    }
+  }
+  return boards;
+}

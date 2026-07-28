@@ -279,7 +279,39 @@ export function attachSockets(io) {
       }
     }));
 
+    socket.on(EVENTS.SET_PREACTION, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'That hand is over');
+        return;
+      }
+      const r = hand.setPreAction(player, payload.kind ?? null);
+      if (!r.ok) {
+        sendError(socket, ERRORS.BAD_ACTION, r.error);
+        return;
+      }
+      broadcast(game);
+    }));
+
+    socket.on(EVENTS.RABBIT_HUNT, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId) return;
+      result(game, hand.handleRabbitHunt(player), ERRORS.BAD_ACTION);
+    }));
+
+    socket.on(EVENTS.LEAVE_WAITLIST, withGame((game, player) => {
+      result(game, game.leaveWaitlist(player));
+    }));
+
     // ---- host controls ----
+
+    socket.on(EVENTS.HOST_NUDGE, withHost((game, _player, payload) => {
+      result(game, game.nudgePlayer(payload.playerId, !!payload.immediate));
+    }));
+
+    socket.on(EVENTS.HOST_APPROVE_WAITLIST, withHost((game, _player, payload) => {
+      result(game, game.approveWaitlist(payload.playerId, !!payload.approve));
+    }));
 
     socket.on(EVENTS.HOST_APPROVE_SEAT, withHost((game, _player, payload) => {
       result(game, game.approveSeat(payload.playerId, !!payload.approve));

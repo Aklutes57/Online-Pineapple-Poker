@@ -34,6 +34,9 @@ export function buildViews(game) {
       isDealer: !!hand && hand.buttonSeat === i,
       isSB: !!hand && hand.sbSeat === i,
       isBB: !!hand && hand.bbSeat === i,
+      isStraddle: !!hand && hand.straddleSeat === i,
+      // Public on every real site, and it makes the countdown honest.
+      timeBank: Math.round((p.timeBank || 0) / 1000),
       handResult: inHand && hand.finished ? p.handResult : null,
     });
   }
@@ -47,12 +50,24 @@ export function buildViews(game) {
       seatIndex: p.requestedSeat,
     }));
 
+  const waitlist = game.waitlist
+    .map((entry, index) => {
+      const p = game.players.get(entry.playerId);
+      return p
+        ? { playerId: p.id, nickname: p.nickname, buyIn: entry.buyIn, approved: entry.approved, position: index + 1 }
+        : null;
+    })
+    .filter(Boolean);
+
   const handView = hand
     ? {
         handId: hand.handId,
         handNo: hand.handNo,
         phase: hand.phase,
         board: [...hand.board],
+        board2: hand.board2 ? [...hand.board2] : null,
+        rabbit: hand.rabbit ? [...hand.rabbit] : null,
+        bombPot: !!hand.bombPot,
         collectedPot: hand.collectedPot(),
         potTotal: hand.finished
           ? (hand.results?.pots.reduce((a, p) => a + p.amount, 0) ?? 0)
@@ -65,6 +80,8 @@ export function buildViews(game) {
         lastAction: hand.lastAction,
         winners: hand.finished ? hand.results?.winners ?? null : null,
         cooler: hand.finished ? hand.results?.cooler ?? null : null,
+        bounty: hand.finished ? hand.results?.bounty ?? null : null,
+        boards: hand.finished ? hand.results?.boards ?? null : null,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
       }
@@ -79,6 +96,7 @@ export function buildViews(game) {
     hostId: game.hostId,
     seats,
     seatRequests,
+    waitlist,
     hand: handView,
     lastHandRecordId: game.lastHandRecordId || null,
     chatTail: game.chat.slice(-30),
@@ -108,6 +126,18 @@ export function buildViews(game) {
       hasDiscarded: inHand ? p.hasDiscarded : false,
       canDiscard: inHand && isDiscardPhase && !p.folded && !p.hasDiscarded && p.holeCards.length === 3,
       availableActions: myTurn ? availableActionsFor(hand, p) : null,
+      timeBank: Math.round((p.timeBank || 0) / 1000),
+      // Private: broadcasting that a seat has Check/Fold armed would be a
+      // genuine tell, worse than anything available at a live table.
+      preAction: inHand ? p.preAction?.kind ?? null : null,
+      canPreAct:
+        inHand && !hand.finished && hand.isBettingPhase() &&
+        hand.toActSeat !== p.seatIndex && !p.folded && !p.allIn,
+      waitlistPosition:
+        game.waitlist.findIndex((e) => e.playerId === p.id) + 1 || null,
+      canRabbitHunt:
+        inHand && !!hand.finished && !!hand.results?.byFold &&
+        hand.rabbitHuntEnabled && !hand.rabbit && hand.board.length < 5,
       canShow:
         inHand &&
         !!hand.finished &&

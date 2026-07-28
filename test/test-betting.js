@@ -41,11 +41,11 @@ function makeCtx() {
   };
 }
 
-function makeHand({ players, deck, variantKey = 'holdem', sb = 1, bb = 2, buttonSeat = 0, actionTime = 30 }) {
+function makeHand({ players, deck, variantKey = 'holdem', sb = 1, bb = 2, buttonSeat = 0, actionTime = 30, options = {} }) {
   const ctx = makeCtx();
   const hand = new Hand({
     handNo: 1, variantKey, smallBlind: sb, bigBlind: bb, actionTime,
-    buttonSeat, players, deck, ctx,
+    buttonSeat, players, deck, ctx, options,
   });
   return { hand, ctx };
 }
@@ -357,6 +357,216 @@ function totalChips(players, hand) {
   act(hand, 0, 'check');
   check('multi-street: reaches showdown', hand.phase === PHASES.SHOWDOWN);
   check('multi-street: chips conserved', players.reduce((a, p) => a + p.stack, 0) === 900);
+}
+
+// ============ home-game options ============
+
+// --- Pre-actions ---
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  // Seat 1 arms Check/Fold while seat 0 is still to act.
+  check('pre-action accepted out of turn', hand.setPreAction(hand.bySeat.get(1), 'checkFold').ok);
+  check('pre-action rejected on your own turn', !hand.setPreAction(hand.bySeat.get(0), 'check').ok);
+  check('unknown pre-action rejected', !hand.setPreAction(hand.bySeat.get(1), 'shove').ok);
+  // Seat 0 raises: seat 1's Check/Fold must fold when the turn arrives.
+  act(hand, 0, 'raise', 10);
+  check('checkFold folds when facing a bet', hand.bySeat.get(1).folded === true);
+  check('pre-action is consumed once used', hand.bySeat.get(1).preAction === null);
+}
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  hand.setPreAction(hand.bySeat.get(1), 'check');
+  act(hand, 0, 'raise', 10);
+  // A plain "Check" facing a bet must cancel, NOT fold.
+  check('plain check does not fold when a bet appears', hand.bySeat.get(1).folded === false);
+  check('plain check hands back a normal turn', hand.toActSeat === 1);
+  check('cancelled pre-action is cleared', hand.bySeat.get(1).preAction === null);
+}
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  hand.setPreAction(hand.bySeat.get(1), 'callAny');
+  hand.setPreAction(hand.bySeat.get(2), 'callAny');
+  act(hand, 0, 'raise', 30);
+  // Both queued calls fire in the same pass, which closes preflop outright.
+  check('callAny pays the raise',
+    hand.bySeat.get(1).totalCommitted === 30 && hand.bySeat.get(2).totalCommitted === 30);
+  check('a chain of pre-actions resolves in one pass and closes the street',
+    hand.phase === PHASES.FLOP && hand.toActSeat === 1);
+  check('chip conservation with pre-actions', totalChips(players, hand) === 600);
+}
+
+// --- Time bank ---
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  players[0].timeBank = 10000;
+  players[0].connected = true;
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  check('action timer armed', ctx.timer?.name === 'action');
+  ctx.fire();
+  check('timing out drops into the time bank', ctx.timer?.name === 'timebank');
+  check('not folded yet', hand.finished === false);
+  ctx.fire();
+  check('exhausting the time bank folds', hand.finished === true);
+  check('time bank spent', players[0].timeBank === 0);
+}
+{
+  // With no time bank the old behaviour is byte-for-byte unchanged.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  ctx.fire();
+  check('no time bank still folds on the first timeout', hand.finished === true);
+}
+
+// --- Straddle ---
+{
+  const players = [makePlayer(0, 500, 'btn'), makePlayer(1, 500, 'sb'), makePlayer(2, 500, 'bb')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('straddle posted by UTG', hand.straddleSeat === 0);
+  check('straddle is twice the big blind', hand.bySeat.get(0).betThisRound === 4);
+  check('current bet is the straddle', hand.currentBet === 4);
+  check('action starts left of the straddle', hand.toActSeat === 1);
+  check('min raise doubles the straddle', av(hand, 1).minRaiseTo === 8);
+  act(hand, 1, 'call');
+  act(hand, 2, 'call');
+  check('the straddler gets the option', hand.toActSeat === 0);
+  check('the straddler can check or raise', av(hand, 0).canCheck && av(hand, 0).canRaise);
+  act(hand, 0, 'check');
+  check('checking the option ends preflop', hand.phase === PHASES.FLOP);
+  check('straddle chips conserved', totalChips(players, hand) === 1500);
+}
+{
+  // Heads-up must not straddle: the button already posts the small blind.
+  const players = [makePlayer(0, 500, 'a'), makePlayer(1, 500, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('no straddle heads-up', hand.straddleSeat === null);
+}
+
+// --- Bomb pot ---
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck, options: { bombPot: true, ante: 10 } });
+  hand.start();
+  check('bomb pot skips straight to the flop', hand.phase === PHASES.FLOP);
+  check('bomb pot deals a flop', hand.board.length === 3);
+  check('bomb pot posts no blinds', hand.sbSeat === null && hand.bbSeat === null);
+  check('everyone anted', players.every((p) => p.stack === 190));
+  check('antes are in the pot', hand.collectedPot() === 30);
+  check('bomb pot chips conserved', totalChips(players, hand) === 600);
+  check('first to act is left of the button', hand.toActSeat === 1);
+  act(hand, 1, 'check'); act(hand, 2, 'check'); act(hand, 0, 'check');
+  check('bomb pot advances to the turn', hand.phase === PHASES.TURN);
+}
+{
+  // A player whose whole stack is the ante goes all-in rather than negative.
+  const players = [makePlayer(0, 5, 'short'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck, options: { bombPot: true, ante: 10 } });
+  hand.start();
+  check('short stack antes only what it has', players[0].stack === 0 && players[0].allIn === true);
+  check('short ante chips conserved', totalChips(players, hand) === 405);
+}
+
+// --- Seven-deuce bounty ---
+{
+  // Seat 0 wins by fold holding 7-2 and collects from everyone dealt in.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah', 'Ad', 'Kh', 'Kd', '7c', '2s', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck, options: { sevenDeuceBounty: 25 } });
+  hand.start();
+  check('seat 0 holds seven-deuce', hand.bySeat.get(0).holeCards.join('') === '7c2s');
+  act(hand, 0, 'raise', 20);
+  act(hand, 1, 'fold');
+  act(hand, 2, 'fold');
+  check('bounty paid', hand.results.bounty?.total === 50);
+  check('bounty collected from both opponents', players[1].stack === 174 && players[2].stack === 173);
+  check('bounty chips conserved', players.reduce((a, p) => a + p.stack, 0) === 600);
+  check('bounty forces the winning hand face up', players[0].showedCards === true);
+}
+{
+  // A payer shorter than the bounty pays only what they have — never more.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 6, 'short')];
+  const deck = ['Kh', 'Kd', '7c', '2s', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck, options: { sevenDeuceBounty: 500 } });
+  hand.start();
+  check('short payer holds seven-deuce opponent', hand.bySeat.get(0).holeCards.join('') === '7c2s');
+  act(hand, 0, 'raise', 6);
+  act(hand, 1, 'fold');
+  check('short payer never goes negative', players[1].stack >= 0);
+  check('bounty is zero-sum against a short stack',
+    players.reduce((a, p) => a + p.stack, 0) === 206);
+}
+
+// --- Run it twice ---
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = [
+    '2h', '7d', 'Ah', 'Kc',            // hole cards
+    '3s', '4d', 'Jh',                   // board 1 flop
+    '8c', '5s', '9d',                   // board 2 flop
+    'Ts', 'Qh', '6c', '2c',             // turns and rivers for both
+  ];
+  const { hand, ctx } = makeHand({ players, deck, options: { runItTwice: true } });
+  hand.start();
+  act(hand, 0, 'raise', 100);
+  act(hand, 1, 'call');
+  check('run it twice engaged', hand.runItTwice === true);
+  ctx.fireAll();
+  check('two boards dealt', hand.board.length === 5 && hand.board2.length === 5);
+  check('boards share no cards', !hand.board.some((c) => hand.board2.includes(c)));
+  check('run it twice chips conserved', players.reduce((a, p) => a + p.stack, 0) === 200);
+  check('per-board results recorded', hand.results.boards?.length === 2);
+}
+{
+  // An odd pot must still split exactly across two boards.
+  const players = [makePlayer(0, 51, 'a'), makePlayer(1, 51, 'b')];
+  const deck = [
+    '2h', '7d', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s', '9d', 'Ts', 'Qh', '6c', '2c',
+  ];
+  const { hand, ctx } = makeHand({ players, deck, options: { runItTwice: true } });
+  hand.start();
+  act(hand, 0, 'raise', 51);
+  act(hand, 1, 'call');
+  ctx.fireAll();
+  check('odd run-it-twice pot conserved', players.reduce((a, p) => a + p.stack, 0) === 102);
+}
+
+// --- Rabbit hunt ---
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand } = makeHand({ players, deck, options: { rabbitHunt: true } });
+  hand.start();
+  check('rabbit hunt refused during a live hand', !hand.handleRabbitHunt(hand.bySeat.get(0)).ok);
+  act(hand, 0, 'fold');
+  check('rabbit hunt allowed after a fold win', hand.handleRabbitHunt(hand.bySeat.get(1)).ok);
+  check('rabbit cards revealed', hand.rabbit.length === 5);
+  check('rabbit hunt only once', !hand.handleRabbitHunt(hand.bySeat.get(1)).ok);
+}
+{
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand } = makeHand({ players, deck, options: { rabbitHunt: false } });
+  hand.start();
+  act(hand, 0, 'fold');
+  check('rabbit hunt refused when the table has it off', !hand.handleRabbitHunt(hand.bySeat.get(1)).ok);
 }
 
 console.log(`betting: ${passes} passed, ${failures} failed`);

@@ -1,4 +1,4 @@
-import { buildPots, payoutPots } from '../server/pots.js';
+import { buildPots, payoutPots, splitPotsForBoards } from '../server/pots.js';
 
 let failures = 0;
 let passes = 0;
@@ -142,6 +142,53 @@ function potTotal(pots) {
     }
   }
   check('1000 randomized cases conserve chips', ok);
+}
+
+// --- Splitting pots across two boards (run it twice) ---
+{
+  const boards = splitPotsForBoards([{ amount: 100, eligibleSeats: [0, 1] }], 2);
+  check('even pot splits evenly', boards[0][0].amount === 50 && boards[1][0].amount === 50);
+  check('both boards keep the eligibility', boards.every((b) => b[0].eligibleSeats.length === 2));
+}
+{
+  const boards = splitPotsForBoards([{ amount: 101, eligibleSeats: [0, 1] }], 2);
+  check('odd pot conserves every chip', boards[0][0].amount + boards[1][0].amount === 101);
+  check('odd chip goes to the first board', boards[0][0].amount === 51);
+}
+{
+  // A one-chip pot cannot be split two ways, so the second board gets nothing
+  // rather than an empty zero-value pot.
+  const boards = splitPotsForBoards([{ amount: 1, eligibleSeats: [0, 1] }], 2);
+  check('one-chip pot goes entirely to one board', boards[0][0].amount === 1);
+  check('the other board gets no pot at all', boards[1].length === 0);
+}
+{
+  // Layered side pots each split independently and conserve in total.
+  const pots = buildPots([player(0, 20), player(1, 60), player(2, 150), player(3, 150)]);
+  const boards = splitPotsForBoards(pots, 2);
+  const before = potTotal(pots);
+  const after = boards.reduce((a, b) => a + potTotal(b), 0);
+  check('layered pots conserve across two boards', before === after);
+  check('each board keeps every layer', boards.every((b) => b.length === pots.length));
+}
+{
+  // Randomised: whatever the amounts, splitting must never create or lose a chip.
+  let ok = true;
+  let seed = 24680;
+  const rnd = (n) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  for (let i = 0; i < 500 && ok; i++) {
+    const pots = Array.from({ length: 1 + rnd(4) }, () => ({
+      amount: 1 + rnd(997),
+      eligibleSeats: [0, 1, 2],
+    }));
+    const n = 2 + rnd(2);
+    const boards = splitPotsForBoards(pots, n);
+    if (potTotal(pots) !== boards.reduce((a, b) => a + potTotal(b), 0)) ok = false;
+  }
+  check('500 randomized board splits conserve chips', ok);
 }
 
 console.log(`pots: ${passes} passed, ${failures} failed`);

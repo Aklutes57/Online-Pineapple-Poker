@@ -110,7 +110,36 @@
           </select>
         </div>
       </div>
-      <p class="hint">Blind and timer changes apply from the next hand.</p>
+      <div class="row">
+        <div class="field">
+          <label for="h-timebank">Time bank</label>
+          <select id="h-timebank">
+            <option value="0">Off</option>
+            <option value="15">15s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="h-bomb">Bomb pot</label>
+          <select id="h-bomb">
+            <option value="0">Off</option>
+            <option value="5">Every 5 hands</option>
+            <option value="10">Every 10 hands</option>
+            <option value="20">Every 20 hands</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="h-72">7-2 bounty</label>
+          <input id="h-72" type="number" min="0" step="1">
+        </div>
+      </div>
+      <div class="option-toggles">
+        <label class="toggle"><input type="checkbox" id="h-straddle"><span>Straddle</span></label>
+        <label class="toggle"><input type="checkbox" id="h-rabbit"><span>Rabbit hunt</span></label>
+        <label class="toggle"><input type="checkbox" id="h-rit"><span>Run it twice</span></label>
+      </div>
+      <p class="hint">All table changes apply from the next hand. "No limit" on the timer makes the table untimed.</p>
       <div class="actions" style="justify-content: flex-start">
         <button class="btn btn-primary" id="h-save">Save settings</button>
         <button class="btn btn-ghost" id="h-pause">Pause</button>

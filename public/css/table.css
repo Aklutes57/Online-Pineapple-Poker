@@ -138,16 +138,40 @@ body.disconnected::after {
 
 #board {
   display: flex;
-  justify-content: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   min-height: var(--board-card-h);
   margin-bottom: 10px;
+}
+
+.board-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Two boards means half the vertical room each. */
+#board.two-boards .card {
+  width: calc(var(--board-card-w) * 0.74);
+  height: calc(var(--board-card-h) * 0.74);
+  font-size: calc(var(--board-card-w) * 0.32);
+}
+
+.card.rabbit {
+  opacity: 0.5;
+  filter: grayscale(0.4);
+  outline: 1px dashed rgba(255, 255, 255, 0.35);
 }
 
 #board .card {
   width: var(--board-card-w);
   height: var(--board-card-h);
   font-size: calc(var(--board-card-w) * 0.42);
+}
+
+#board.two-boards .board-row:nth-child(2) {
+  opacity: 0.92;
 }
 
 #pot-line {
@@ -834,6 +858,39 @@ td.dim { color: var(--text-dim); }
   font-size: 13px;
 }
 
+.pre-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pre-btn {
+  padding: 8px 16px;
+  font-size: 13.5px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.pre-btn:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.pre-btn.armed {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.pre-btn.armed::before {
+  content: '✓ ';
+}
+
+.timer-fill.timebank {
+  background: var(--blue);
+}
+
 .bet-tray {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -930,6 +987,29 @@ td.dim { color: var(--text-dim); }
 
 .hp-kick {
   color: var(--red);
+}
+
+.option-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.option-toggles .toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+  margin: 0;
+  cursor: pointer;
+}
+
+.option-toggles .toggle input {
+  width: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* ---- responsive ---- */

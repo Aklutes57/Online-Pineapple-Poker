@@ -241,11 +241,34 @@ function renderBoard(client) {
   const potLine = document.getElementById('pot-line');
 
   const cards = hand ? hand.board : [];
-  const sig = cards.join(',');
+  const second = hand?.board2 || null;
+  const rabbit = hand?.rabbit || null;
+  const sig = `${cards.join(',')}|${(second || []).join(',')}|${(rabbit || []).join(',')}`;
   if (board.dataset.sig !== sig) {
     board.dataset.sig = sig;
     board.innerHTML = '';
-    for (const c of cards) board.appendChild(makeCardEl(c, { dealt: true }));
+    board.classList.toggle('two-boards', !!second);
+
+    const firstRow = document.createElement('div');
+    firstRow.className = 'board-row';
+    for (const c of cards) firstRow.appendChild(makeCardEl(c, { dealt: true }));
+    // Rabbit hunt cards are the run-out that never happened — shown dimmed
+    // so they can't be mistaken for the real board.
+    if (rabbit) {
+      for (const c of rabbit) {
+        const el = makeCardEl(c, { dealt: true });
+        el.classList.add('rabbit');
+        firstRow.appendChild(el);
+      }
+    }
+    board.appendChild(firstRow);
+
+    if (second) {
+      const secondRow = document.createElement('div');
+      secondRow.className = 'board-row';
+      for (const c of second) secondRow.appendChild(makeCardEl(c, { dealt: true }));
+      board.appendChild(secondRow);
+    }
   }
 
   if (hand && (hand.collectedPot > 0 || hand.potTotal > 0)) {
@@ -334,7 +357,8 @@ export function startTimerLoop(client) {
       if (!bar) continue;
       const seatIndex = parseInt(pod.dataset.seat, 10);
       let show = false;
-      if (deadline && hand.timerName === 'action' && hand.toActSeat === seatIndex) show = true;
+      const clockNames = hand.timerName === 'action' || hand.timerName === 'timebank' || hand.timerName === 'nudge';
+      if (deadline && clockNames && hand.toActSeat === seatIndex) show = true;
       if (deadline && hand.timerName === 'discard') {
         const seat = client.state.seats[seatIndex];
         if (seat && seat.inHand && !seat.folded && seat.cardCount === 3) show = true;
@@ -346,7 +370,8 @@ export function startTimerLoop(client) {
         const frac = Math.min(1, left / total);
         const fill = bar.querySelector('.timer-fill');
         fill.style.width = (frac * 100).toFixed(1) + '%';
-        fill.classList.toggle('urgent', left < 6000);
+        fill.classList.toggle('timebank', hand.timerName === 'timebank');
+        fill.classList.toggle('urgent', left < 6000 && hand.timerName !== 'timebank');
       }
     }
     requestAnimationFrame(tick);
