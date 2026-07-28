@@ -113,15 +113,15 @@ export const TIMINGS = {
 // Index 0 is bottom-center; clockwise when viewed on screen.
 export const SEAT_COORDS = [
   { left: 50, top: 97 },
-  { left: 22, top: 90 },
-  { left: 4, top: 66 },
-  { left: 4, top: 32 },
-  { left: 22, top: 8 },
+  { left: 23, top: 90 },
+  { left: 7, top: 66 },
+  { left: 7, top: 32 },
+  { left: 23, top: 8 },
   { left: 50, top: 1 },
-  { left: 78, top: 8 },
-  { left: 96, top: 32 },
-  { left: 96, top: 66 },
-  { left: 78, top: 90 },
+  { left: 77, top: 8 },
+  { left: 93, top: 32 },
+  { left: 93, top: 66 },
+  { left: 77, top: 90 },
 ];
 
 // Where each seat's bet chips render, pulled toward the table center.

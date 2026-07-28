@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pineapple Poker — Play Poker with Friends</title>
+  <meta name="description" content="Free private poker tables for you and your friends. No downloads, no sign-ups, no real money. Texas Hold'em, Pineapple, Crazy Pineapple, and Pot Limit Omaha.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍍</text></svg>">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/landing.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <span class="pineapple-mark">🍍 <span class="pine">Pineapple</span> Poker</span>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#games">Games</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <h1>Play poker with your friends.<br><span class="accent">Right now. Right here.</span></h1>
+        <p class="sub">
+          Spin up a private table in seconds and send your friends the link.
+          No downloads, no accounts, no real money — just cards.
+        </p>
+        <button class="btn btn-primary btn-xl" id="start-btn">Start a New Game</button>
+        <p class="fine">Free play-money poker · works on phones and laptops</p>
+      </div>
+      <div class="hero-cards" aria-hidden="true">
+        <div class="hcard c1"><span>A<b>♠</b></span></div>
+        <div class="hcard c2 red"><span>K<b>♥</b></span></div>
+        <div class="hcard c3"><span>Q<b>♣</b></span></div>
+      </div>
+    </section>
+
+    <section id="how" class="features">
+      <div class="wrap grid">
+        <div class="feature">
+          <div class="ico">🔗</div>
+          <h3>Instant private tables</h3>
+          <p>Create a table, copy the link, and share it anywhere. Friends click, pick a name, and ask for a seat — you approve who plays.</p>
+        </div>
+        <div class="feature">
+          <div class="ico">🃏</div>
+          <h3>Four ways to play</h3>
+          <p>Texas Hold'em, Pineapple, Crazy Pineapple, and Pot Limit Omaha — with real rules: side pots, min-raises, the works.</p>
+        </div>
+        <div class="feature">
+          <div class="ico">📱</div>
+          <h3>Nothing to install</h3>
+          <p>Runs entirely in the browser on any phone, tablet, or computer. Refresh mid-hand and you're right back in your seat.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="games" class="variants">
+      <div class="wrap">
+        <h2>Pick your game</h2>
+        <div class="grid">
+          <div class="variant"><h4>Texas Hold'em</h4><p>The classic. Two hole cards, no-limit betting.</p></div>
+          <div class="variant"><h4>Pineapple</h4><p>Three hole cards — throw one away before the flop.</p></div>
+          <div class="variant"><h4>Crazy Pineapple</h4><p>Keep all three through the flop, then discard one.</p></div>
+          <div class="variant"><h4>Pot Limit Omaha</h4><p>Four hole cards, use exactly two. Pot-limit bets.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="faq">
+      <div class="wrap">
+        <h2>Questions</h2>
+        <details>
+          <summary>Is this real-money poker?</summary>
+          <p>No. Everything here is play money. Chips have no value; the built-in ledger just helps you track who's up and who's down for bragging rights.</p>
+        </details>
+        <details>
+          <summary>Do my friends need accounts?</summary>
+          <p>No. They open your table link, type a nickname, and request a seat. As the host you approve each player and their buy-in.</p>
+        </details>
+        <details>
+          <summary>What can the host control?</summary>
+          <p>Blinds, action timer, pausing between hands, approving seats, topping up stacks, removing players, and closing the table.</p>
+        </details>
+        <details>
+          <summary>What happens if I get disconnected?</summary>
+          <p>Reopen the same link on the same device and you're back in your seat, cards intact. If it's your turn and the timer runs out, you auto-check or auto-fold and sit out until you're back.</p>
+        </details>
+        <details>
+          <summary>How long does a table live?</summary>
+          <p>Tables are kept in memory while people are playing and cleaned up after an hour of inactivity. When the host closes the table, the session ledger is the final word.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span class="pineapple-mark">🍍 <span class="pine">Pineapple</span> Poker</span>
+      <p>Play-money poker for friends. No gambling, no real currency, just fun.</p>
+    </div>
+  </footer>
+
+  <!-- Create game modal -->
+  <div class="modal-backdrop hidden" id="create-modal">
+    <div class="modal">
+      <h2>Start a new game</h2>
+      <div class="field">
+        <label for="c-nickname">Your nickname</label>
+        <input id="c-nickname" maxlength="20" placeholder="e.g. AceHigh" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="c-variant">Game</label>
+        <select id="c-variant">
+          <option value="holdem">Texas Hold'em</option>
+          <option value="pineapple">Pineapple (discard before the flop)</option>
+          <option value="crazyPineapple">Crazy Pineapple (discard after the flop)</option>
+          <option value="plo">Pot Limit Omaha</option>
+        </select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="c-sb">Small blind</label>
+          <input id="c-sb" type="number" min="1" value="1">
+        </div>
+        <div class="field">
+          <label for="c-bb">Big blind</label>
+          <input id="c-bb" type="number" min="2" value="2">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="c-buyin">Default buy-in</label>
+          <input id="c-buyin" type="number" min="1" value="200">
+        </div>
+        <div class="field">
+          <label for="c-timer">Action timer</label>
+          <select id="c-timer">
+            <option value="15">15 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="0">No limit</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" id="c-cancel">Cancel</button>
+        <button class="btn btn-primary" id="c-create">Create table</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script type="module" src="/js/landing.js"></script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Pineapple Poker — Table</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍍</text></svg>">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/table.css">
+</head>
+<body class="table-page">
+  <div id="app">
+    <header id="top-bar">
+      <span class="pineapple-mark">🍍 <span class="pine">Pineapple</span> Poker</span>
+      <span id="game-badge"></span>
+      <div class="top-actions">
+        <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">🔗 Invite</button>
+        <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on/off">🔊</button>
+        <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">⚙️ Host</button>
+        <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
+        <button id="panel-toggle" class="btn-ghost btn top-btn" title="Chat and logs">💬<span id="unread-badge" class="hidden"></span></button>
+      </div>
+    </header>
+
+    <main id="table-area">
+      <div id="table">
+        <div id="table-center">
+          <div id="board"></div>
+          <div id="pot-line" class="hidden"></div>
+          <div id="center-message"></div>
+        </div>
+        <div id="bets-layer"></div>
+        <div id="seats-layer"></div>
+      </div>
+      <div id="rotate-hint" class="hidden">Rotate your phone for the best view <button id="rotate-dismiss">✕</button></div>
+    </main>
+
+    <aside id="side-panel" class="collapsed">
+      <div id="seat-requests" class="hidden"></div>
+      <div class="tabs">
+        <button data-tab="chat" class="tab active">Chat</button>
+        <button data-tab="log" class="tab">Log</button>
+        <button data-tab="ledger" class="tab">Ledger</button>
+        <button id="panel-close" class="tab tab-close">✕</button>
+      </div>
+      <div id="tab-chat" class="tab-body">
+        <div id="chat-list" class="scroll-list"></div>
+        <form id="chat-form">
+          <input id="chat-input" maxlength="300" placeholder="Say something…" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Send</button>
+        </form>
+      </div>
+      <div id="tab-log" class="tab-body hidden">
+        <div id="log-list" class="scroll-list"></div>
+      </div>
+      <div id="tab-ledger" class="tab-body hidden">
+        <div id="ledger-table" class="scroll-list"></div>
+      </div>
+    </aside>
+
+    <footer id="action-bar"></footer>
+  </div>
+
+  <!-- Seat request modal -->
+  <div class="modal-backdrop hidden" id="join-modal">
+    <div class="modal">
+      <h2 id="join-title">Take a seat</h2>
+      <div class="field">
+        <label for="j-nickname">Nickname</label>
+        <input id="j-nickname" maxlength="20" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="j-buyin">Buy-in <span id="j-buyin-range"></span></label>
+        <input id="j-buyin" type="number">
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" id="j-cancel">Cancel</button>
+        <button class="btn btn-primary" id="j-request">Request seat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Host settings modal -->
+  <div class="modal-backdrop hidden" id="host-modal">
+    <div class="modal">
+      <h2>Host controls</h2>
+      <div class="row">
+        <div class="field">
+          <label for="h-sb">Small blind</label>
+          <input id="h-sb" type="number" min="1">
+        </div>
+        <div class="field">
+          <label for="h-bb">Big blind</label>
+          <input id="h-bb" type="number" min="1">
+        </div>
+        <div class="field">
+          <label for="h-timer">Timer</label>
+          <select id="h-timer">
+            <option value="15">15s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+            <option value="0">Off</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint">Blind and timer changes apply from the next hand.</p>
+      <div class="actions" style="justify-content: flex-start">
+        <button class="btn btn-primary" id="h-save">Save settings</button>
+        <button class="btn btn-ghost" id="h-pause">Pause</button>
+      </div>
+      <h2 style="margin-top:22px">Players</h2>
+      <div id="h-players"></div>
+      <div class="actions" style="justify-content: space-between; margin-top: 26px">
+        <button class="btn btn-red" id="h-close-table">Close table</button>
+        <button class="btn btn-ghost" id="h-done">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Closed overlay -->
+  <div class="modal-backdrop hidden" id="closed-overlay">
+    <div class="modal" style="text-align:center">
+      <h2>Table closed</h2>
+      <p id="closed-reason" style="color:var(--text-dim); margin-bottom:18px"></p>
+      <div id="closed-ledger"></div>
+      <a class="btn btn-primary" href="/" style="margin-top:18px; text-decoration:none">Back to home</a>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/game.js"></script>
+</body>
+</html>
