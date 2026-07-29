@@ -14,6 +14,16 @@ npm install
 npm start          # http://localhost:3000
 ```
 
+## Play it online / install it as an app
+
+See **[DEPLOY.md](DEPLOY.md)** for putting it on the internet (Fly.io
+config, Dockerfile and a step-by-step guide are included). Once it's
+hosted, the site is an installable web app: use the **📲 Install the app**
+button on the landing page (desktop Chrome/Edge and Android show a real
+install prompt; iPhone uses Share → Add to Home Screen). Installed, it
+opens fullscreen like any app, and the 🔔 at the table turns on "it's your
+turn" notifications that arrive even with the app closed.
+
 Open the site, click **Start a New Game**, pick your settings, and share the
 table URL. Friends request seats; the host approves each one with their
 buy-in. Works on phones (landscape recommended).

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline — Pineapple Poker</title>
+  <style>
+    /* Self-contained on purpose: this page must render with zero other requests. */
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #10131c;
+      color: #e8ebf4;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      text-align: center;
+    }
+    .card {
+      max-width: 420px;
+      padding: 40px 32px;
+      background: #151927;
+      border: 1px solid #2a3146;
+      border-radius: 16px;
+    }
+    .mark { font-size: 52px; }
+    h1 { font-size: 22px; margin: 14px 0 8px; }
+    p { color: #9aa3ba; font-size: 15px; line-height: 1.5; margin: 0 0 22px; }
+    button {
+      font: inherit;
+      font-weight: 600;
+      background: #f5c542;
+      color: #1a1405;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 26px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">🍍</div>
+    <h1>You're offline</h1>
+    <p>Poker needs a live connection — your table is still running on the server,
+       and your seat and chips are safe. Reconnect and you'll land right back in it.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>

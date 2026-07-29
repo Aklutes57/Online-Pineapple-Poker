@@ -2,6 +2,7 @@
 // replaying events from the start, so stepping backwards is exact rather
 // than an attempt to undo.
 
+import '/js/pwa.js'; // registers the service worker on replay pages too
 import { SEAT_COUNT, SEAT_COORDS, BET_COORDS, REACTIONS, VARIANTS } from '/shared/constants.js';
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { showToast, escapeHtml } from '/js/ui.js';

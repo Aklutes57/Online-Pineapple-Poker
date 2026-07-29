@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Your profile — Pineapple Poker</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍍</text></svg>">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#10131c">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/landing.css">
   <link rel="stylesheet" href="/css/profile.css">
@@ -41,6 +44,15 @@
       <section class="profile-section">
         <h2>Poker stats</h2>
         <div id="stats-block"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Notifications on this device</h2>
+        <p class="section-note">
+          Get a ping when it's your turn or your seat is approved while the app is
+          closed. Works on desktop, Android, and iPhones with the app installed (iOS 16.4+).
+        </p>
+        <button class="btn btn-primary" id="push-toggle">Turn on notifications</button>
       </section>
 
       <section class="profile-section">

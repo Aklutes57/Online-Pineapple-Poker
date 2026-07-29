@@ -73,6 +73,32 @@ const alive = await fetch(`${url}/api/games/${gameId}`).then((r) => r.ok).catch(
 check('server survives malformed payloads on every event', alive);
 check('prototype pollution attempt did not stick', {}.evil === undefined);
 
+// ---- garbage push endpoints in JOIN are ignored, never fatal ----
+
+for (const bad of [42, 'javascript:alert(1)', 'x'.repeat(50000), {}, [], 'http://not-https']) {
+  await new Promise((resolve) => {
+    guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token, pushEndpoint: bad }, () => resolve());
+  });
+}
+check('server survives garbage pushEndpoint values',
+  await fetch(`${url}/api/games/${gameId}`).then((r) => r.ok).catch(() => false));
+
+// ---- garbage bodies to the push endpoints get 400s, not crashes ----
+
+for (const body of [null, [], 'str', { endpoint: 'http://evil', keys: {} }, { endpoint: 'https://x', keys: { p256dh: '!!', auth: '' } }]) {
+  const res = await fetch(`${url}/api/push/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.status !== 400) {
+    check(`push subscribe rejects ${JSON.stringify(body)?.slice(0, 40)}`, false);
+  }
+}
+check('push subscribe rejects garbage bodies', true);
+check('server alive after push endpoint abuse',
+  await fetch(`${url}/healthz`).then((r) => r.ok).catch(() => false));
+
 // ---- invalid buy-ins are rejected, valid one works ----
 
 guest.socket.emit(EVENTS.REQUEST_SEAT, { nickname: 'guest', buyIn: -50 });

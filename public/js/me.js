@@ -5,6 +5,36 @@
 import { loadAccount, currentAccount, signout, updateAccount, authHeaders } from '/js/auth.js';
 import { openAuthModal } from '/js/authModal.js';
 import { showToast, escapeHtml } from '/js/ui.js';
+import { pushSupported, currentPushSubscription, enablePush, disablePush } from '/js/pwa.js';
+
+// ---- notifications on this device ----
+
+async function syncPushToggle() {
+  const btn = document.getElementById('push-toggle');
+  if (!pushSupported()) {
+    btn.disabled = true;
+    btn.textContent = 'Not supported in this browser';
+    return;
+  }
+  const subscription = await currentPushSubscription();
+  btn.textContent = subscription ? 'Turn off notifications' : 'Turn on notifications';
+}
+
+document.getElementById('push-toggle').addEventListener('click', async () => {
+  const subscription = await currentPushSubscription();
+  if (subscription) {
+    await disablePush();
+    showToast('Notifications off on this device');
+  } else {
+    // Signed in: the subscription is tied to the account, so alerts follow
+    // you to any table you sit at.
+    const result = await enablePush(authHeaders());
+    showToast(result.ok ? 'Notifications on' : result.error);
+  }
+  syncPushToggle();
+});
+
+syncPushToggle();
 
 const signedOut = document.getElementById('signed-out');
 const signedIn = document.getElementById('signed-in');

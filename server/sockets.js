@@ -68,7 +68,7 @@ export function attachSockets(io) {
 
     socket.on(EVENTS.JOIN, (payload, ack) => {
       if (typeof ack !== 'function') return;
-      const { gameId, token, nickname, accountToken } = asObject(payload);
+      const { gameId, token, nickname, accountToken, pushEndpoint } = asObject(payload);
       const game = getGame(typeof gameId === 'string' ? gameId : '');
       if (!game || game.closed) {
         ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
@@ -103,6 +103,18 @@ export function attachSockets(io) {
         player.accountId = account.id;
       }
       if (account) player.accountName = account.displayName;
+
+      // This browser's push subscription, so turn alerts reach guests too.
+      // Anything malformed is silently ignored.
+      if (
+        typeof pushEndpoint === 'string' &&
+        pushEndpoint.length <= 1024 &&
+        pushEndpoint.startsWith('https://')
+      ) {
+        player.pushEndpoint = pushEndpoint;
+      } else if (pushEndpoint === null) {
+        player.pushEndpoint = null; // explicit opt-out from this device
+      }
 
       // Bind this socket to the player (multiple tabs allowed).
       socket.data.gameId = game.id;

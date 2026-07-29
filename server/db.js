@@ -184,6 +184,24 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_uploads_account ON uploads(account_id, kind);
   `,
+
+  // 4 — web push subscriptions + persisted server config (VAPID keys)
+  `
+  CREATE TABLE push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    keys_json TEXT NOT NULL,
+    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL
+  );
+  CREATE INDEX idx_push_subs_account ON push_subscriptions(account_id);
+
+  CREATE TABLE server_config (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function initDb(dbPath = process.env.PP_DB_PATH || path.join(root, 'data', 'pineapple.db')) {

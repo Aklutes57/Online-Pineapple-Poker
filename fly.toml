@@ -1,0 +1,41 @@
+# Fly.io config for Pineapple Poker.
+#
+# Two rules matter more than everything else here:
+#  1. The machine must NEVER auto-stop — live tables exist only in this
+#     process's memory, and "your turn" pushes must come from a machine
+#     that still holds the hand.
+#  2. Run exactly ONE machine (deploy with --ha=false). Games and sockets
+#     are machine-local; a second machine would answer joins for tables it
+#     has never heard of. The single-attach volume also enforces this.
+
+app = "pineapple-poker"
+primary_region = "ord"
+
+[build]
+
+[env]
+  PORT = "8080"
+  PP_DB_PATH = "/data/pineapple.db"
+  PP_UPLOAD_DIR = "/data/uploads"
+
+[[mounts]]
+  source = "pp_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

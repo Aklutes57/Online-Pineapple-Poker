@@ -26,6 +26,7 @@ import {
 } from './notify.js';
 import { VARIANTS, REACTIONS } from '../shared/constants.js';
 import { getHand, recentHandsForGame, addHandReaction } from './handStore.js';
+import { ensureVapid, saveSubscription, deleteSubscription } from './push.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -57,9 +58,38 @@ export function buildServer() {
   purgeExpiredSessions();
 
   const app = express();
+  // Behind a reverse proxy (Fly, Caddy, nginx) this keeps req.protocol
+  // https for invite links and req.ip per-visitor for the rate limiter.
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '100kb' }));
   app.use('/shared', express.static(path.join(root, 'shared')));
   app.use(express.static(path.join(root, 'public')));
+
+  app.get('/healthz', (req, res) => {
+    res.json({ ok: true });
+  });
+
+  // ---- web push ----
+
+  app.get('/api/push/vapid-key', (req, res) => {
+    res.json({ key: ensureVapid().publicKey });
+  });
+
+  app.post('/api/push/subscribe', (req, res) => {
+    const account = accountForRequest(req);
+    const { endpoint, keys } = req.body || {};
+    const result = saveSubscription({ endpoint, keys }, account?.id ?? null);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.post('/api/push/unsubscribe', (req, res) => {
+    deleteSubscription((req.body || {}).endpoint);
+    res.json({ ok: true });
+  });
 
   // ---- accounts (optional: everything below still works signed out) ----
 

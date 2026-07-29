@@ -44,6 +44,9 @@ export class Hand {
     this.rabbit = null;
     this.timeBankEngaged = false;
     this.timeBankStartedAt = 0;
+    // One turn push per decision point: beginTurn is re-entered by reconnect
+    // re-arms and host nudges, and none of those should re-notify.
+    this.turnPushSent = new Set();
     this.players = players;
     this.bySeat = new Map(players.map((p) => [p.seatIndex, p]));
     this.seatOrder = players.map((p) => p.seatIndex).sort((a, b) => a - b);
@@ -292,6 +295,15 @@ export class Hand {
       this.ctx.setTimer('action', ms, () => this.handleTimeout());
     } else {
       this.ctx.clearTimer();
+    }
+
+    // Push "it's your turn" to a player who isn't here to see it.
+    if (!player.connected && this.ctx.notifyTurn) {
+      const key = `${this.toActSeat}:${this.street}:${this.currentBet}`;
+      if (!this.turnPushSent.has(key)) {
+        this.turnPushSent.add(key);
+        this.ctx.notifyTurn(player);
+      }
     }
   }
 

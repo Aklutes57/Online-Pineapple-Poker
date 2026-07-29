@@ -294,6 +294,31 @@ try {
   await dana.waitForSelector('#auth-error:not(.hidden)');
   await check('wrong password shows an error and does not sign in', true);
 
+  // ---- PWA: manifest, service worker, offline assets, push surface ----
+  const swActive = await anna.evaluate(() =>
+    navigator.serviceWorker.ready.then((r) => !!r.active).catch(() => false)
+  );
+  await check('service worker registers and activates', swActive);
+
+  const manifest = await anna.evaluate(() =>
+    fetch('/manifest.webmanifest').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  );
+  await check('manifest is served and parses', !!manifest);
+  await check('manifest declares name, start_url and icons',
+    manifest.name === 'Pineapple Poker' && manifest.start_url === '/' && manifest.icons.length >= 2);
+  await check('manifest is linked from the page',
+    await anna.locator('link[rel="manifest"]').count() === 1);
+  await check('app icon is reachable',
+    await anna.evaluate(() => fetch('/icons/icon-192.png').then((r) => r.ok).catch(() => false)));
+  await check('offline page is reachable',
+    await anna.evaluate(() => fetch('/offline.html').then((r) => r.ok).catch(() => false)));
+
+  const vapid = await anna.evaluate(() =>
+    fetch('/api/push/vapid-key').then((r) => r.json()).catch(() => ({}))
+  );
+  await check('vapid public key served', typeof vapid.key === 'string' && vapid.key.length > 80);
+  await check('push bell is present at the table', await anna.locator('#push-bell').count() === 1);
+
   console.log('smoke-ui: all checks passed');
 } catch (err) {
   await fail(`unexpected error: ${err.message}\n${err.stack}`);

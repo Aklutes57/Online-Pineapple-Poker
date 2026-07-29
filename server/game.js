@@ -6,6 +6,7 @@ import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PH
 import { Hand } from './hand.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
 import { saveHand } from './handStore.js';
+import { notifyTurn, notifySeatApproved } from './push.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 function shortId() {
@@ -218,6 +219,9 @@ export class Game {
     this.addLog(`${player.nickname} takes seat ${seat + 1} with ${player.stack}`);
     player.pendingBuyIn = 0;
     player.requestedSeat = null;
+    // An absent requester gets a push; the connected (including the host
+    // self-seat path) see it live.
+    if (!player.connected) notifySeatApproved(this, player);
     this.maybeStartHand();
     return { ok: true };
   }
@@ -539,6 +543,7 @@ export class Game {
         markAway: (player) => {
           player.sittingOut = true;
         },
+        notifyTurn: (player) => notifyTurn(this, player),
       },
     });
     this.currentHand.start();

@@ -5,6 +5,9 @@ import { showToast, escapeHtml } from '/js/ui.js';
 import { getAccountToken, loadAccount, currentAccount, authHeaders } from '/js/auth.js';
 import { initReactions, showReaction } from '/js/reactions.js';
 import { play as playSound, setCustomClips } from '/js/sounds.js';
+import {
+  pushSupported, savedPushEndpoint, currentPushSubscription, enablePush, disablePush,
+} from '/js/pwa.js';
 import { renderAll, startTimerLoop } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels } from '/js/panels.js';
@@ -35,7 +38,8 @@ function saved() {
 function join() {
   const { token, nickname } = saved();
   const accountToken = getAccountToken();
-  socket.emit(EVENTS.JOIN, { gameId, token, nickname, accountToken }, (res) => {
+  const pushEndpoint = savedPushEndpoint();
+  socket.emit(EVENTS.JOIN, { gameId, token, nickname, accountToken, pushEndpoint }, (res) => {
     if (!res?.ok) {
       location.href = '/?error=notfound';
       return;
@@ -150,6 +154,37 @@ document.getElementById('sound-toggle').addEventListener('click', (e) => {
   e.currentTarget.textContent = client.soundOn ? '🔊' : '🔇';
 });
 document.getElementById('sound-toggle').textContent = client.soundOn ? '🔊' : '🔇';
+
+// ---- turn alerts bell ----
+
+const bell = document.getElementById('push-bell');
+
+async function syncBell() {
+  if (!pushSupported()) {
+    bell.classList.add('hidden');
+    return;
+  }
+  const subscription = await currentPushSubscription();
+  bell.textContent = subscription ? '🔔' : '🔕';
+  bell.title = subscription
+    ? 'Turn alerts are on for this device'
+    : "Get a notification when it's your turn and you're away";
+}
+
+bell.addEventListener('click', async () => {
+  const subscription = await currentPushSubscription();
+  if (subscription) {
+    await disablePush();
+    showToast('Turn alerts off on this device');
+  } else {
+    const result = await enablePush();
+    showToast(result.ok ? "You'll get a ping when it's your turn" : result.error);
+  }
+  await syncBell();
+  join(); // re-JOIN carries the new pushEndpoint (or its removal) to the table
+});
+
+syncBell();
 
 document.getElementById('copy-link').addEventListener('click', async () => {
   try {

@@ -1,5 +1,8 @@
 import { loadAccount, currentAccount, signout, authHeaders } from '/js/auth.js';
 import { openAuthModal } from '/js/authModal.js';
+import { wireInstallButton } from '/js/pwa.js';
+
+wireInstallButton(document.getElementById('install-btn'));
 
 const modal = document.getElementById('create-modal');
 const toast = document.getElementById('toast');
