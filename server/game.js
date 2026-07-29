@@ -316,8 +316,12 @@ export class Game {
 
   applyStackAdjust(player, delta) {
     // Bounded below by the stack (can't go negative) and above by MAX_CHIPS
-    // (keeps every sum the ledger ever does in exact integers).
-    const applied = Math.max(Math.min(delta, MAX_CHIPS - player.stack), -player.stack);
+    // (keeps every sum the ledger ever does in exact integers). A stack that
+    // grew past MAX_CHIPS by winning pots must never make a top-up turn into
+    // a reduction — a positive delta can only ever add or do nothing.
+    const applied = delta > 0
+      ? Math.min(delta, Math.max(0, MAX_CHIPS - player.stack))
+      : Math.max(delta, -player.stack);
     if (applied === 0) return;
     player.stack += applied;
     if (applied > 0) this.creditLedger(player, applied);

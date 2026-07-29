@@ -149,6 +149,19 @@ check('chip amounts clamp at the integer-safety bound',
 check('a bounty of zero means the 7-2 game is off',
   sanitizeSettings({ sevenDeuceBounty: 0 }).sevenDeuceBounty === 0);
 
+// A stack that grew past MAX_CHIPS by winning pots must make a top-up a
+// no-op — never a silent reduction (the clamp is one-sided by direction).
+{
+  const { Game } = await import('../server/game.js');
+  const g = new Game('test-clamp');
+  const rich = { id: 'p1', nickname: 'Rich', seatIndex: 0, stack: 120_000_000_000_000, sittingOut: false };
+  g.players.set(rich.id, rich);
+  g.applyStackAdjust(rich, 500);
+  check('top-up past the bound is a no-op, not a reduction', rich.stack === 120_000_000_000_000);
+  g.applyStackAdjust(rich, -20_000_000_000_000);
+  check('reductions still work above the bound', rich.stack === 100_000_000_000_000);
+}
+
 // ---- soundboard ----
 
 const clip = uploads.storeUpload({ buffer: OGG, accountId: acct.id, wantKind: 'audio', originalName: 'groan.ogg' });

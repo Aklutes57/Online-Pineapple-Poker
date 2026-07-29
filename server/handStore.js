@@ -30,7 +30,9 @@ export function saveHand(game, hand) {
     net: p.stack - (p.handStartStack ?? p.stack),
     folded: p.folded,
     allIn: p.allIn,
-    shown: hand.revealed || p.showedCards,
+    // Same rule as the live view: a showdown reveals the hands still in it,
+    // never the folded ones — those only go public by their owner's choice.
+    shown: p.folded ? p.showedCards : hand.revealed || p.showedCards,
     cards: [...p.holeCards],
     desc: p.handResult?.desc ?? null,
     won: p.handResult?.won ?? 0,

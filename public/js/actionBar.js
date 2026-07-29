@@ -153,7 +153,8 @@ export function renderActionBar(client) {
     html = `
       <span class="ab-note">${iFolded ? 'Hand over — show what you folded?' : 'You took it down without a showdown.'}</span>
       <button class="btn btn-ghost" data-act="show-cards">Show your cards</button>
-      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">🐇 Rabbit hunt</button>' : ''}`;
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">🐇 Rabbit hunt</button>' : ''}
+      <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
   } else if (you.sittingOut) {
     html = `
       <span class="ab-note">You're sitting out.</span>

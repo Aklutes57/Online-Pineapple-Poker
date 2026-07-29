@@ -133,6 +133,35 @@ let showdownId = null;
   check('a winner is recorded', view.winners.length >= 1);
 }
 
+// ---- a fold before showdown stays private in the replay ----
+
+{
+  const players = [makePlayer(0, 'Eve', 200), makePlayer(1, 'Frank', 200), makePlayer(2, 'Gus', 200)];
+  const game = makeGame(players);
+  game.id = 'game-replay-3';
+  const c = ctx();
+  const hand = new Hand({
+    handNo: 3, variantKey: 'holdem', smallBlind: 1, bigBlind: 2, actionTime: 30,
+    buttonSeat: 0, players,
+    deck: ['As', 'Ad', 'Kh', 'Kc', 'Qs', 'Qd', '2c', '7d', '9s', '3h', '4d'], ctx: c,
+  });
+  hand.start();
+  hand.handleAction(hand.bySeat.get(0), 'fold', null);
+  hand.handleAction(hand.bySeat.get(1), 'call', null);
+  hand.handleAction(hand.bySeat.get(2), 'check', null);
+  for (let street = 0; street < 3; street++) {
+    hand.handleAction(hand.bySeat.get(hand.toActSeat), 'check', null);
+    hand.handleAction(hand.bySeat.get(hand.toActSeat), 'check', null);
+  }
+  check('fold-then-showdown: hand revealed', hand.finished && hand.revealed);
+  const id = handStore.saveHand(game, hand);
+  const view = handStore.getHand(id, null);
+  const eve = view.players.find((p) => p.nickname === 'Eve');
+  check('a folded hand stays hidden in the replay', eve.cards === null && eve.folded === true);
+  check('the showdown hands are still public',
+    view.players.filter((p) => !p.folded).every((p) => Array.isArray(p.cards)));
+}
+
 // ---- unknown ids ----
 
 check('unknown hand id returns null', handStore.getHand('does-not-exist') === null);
