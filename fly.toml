@@ -8,7 +8,7 @@
 #     are machine-local; a second machine would answer joins for tables it
 #     has never heard of. The single-attach volume also enforces this.
 
-app = "pineapple-poker"
+app = "pineapple-poker-now"
 primary_region = "ord"
 
 [build]
