@@ -32,12 +32,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 
 // Coarse per-IP limiter for the auth endpoints — enough to stop credential
-// stuffing from a script without any new dependency.
+// stuffing from a script without any new dependency. Entries are swept lazily
+// on access, so the map can't grow without bound from one-shot attackers.
 function makeRateLimiter({ windowMs, max }) {
   const hits = new Map();
   return (req, res, next) => {
     const key = req.ip || 'unknown';
     const nowMs = Date.now();
+    // Opportunistic sweep: once the map is large, drop everything expired so a
+    // flood of distinct source IPs can't grow it forever.
+    if (hits.size > 5000) {
+      for (const [k, v] of hits) if (nowMs > v.resetAt) hits.delete(k);
+    }
     const entry = hits.get(key);
     if (!entry || nowMs > entry.resetAt) {
       hits.set(key, { count: 1, resetAt: nowMs + windowMs });
@@ -53,6 +59,77 @@ function makeRateLimiter({ windowMs, max }) {
   };
 }
 
+// Response headers applied to every response. These are the app's outer shell
+// against an outside attacker: a strict Content-Security-Policy neutralises
+// injected markup (nothing runs but our own same-origin modules), and the
+// framing/sniffing/referrer headers close off clickjacking, MIME confusion,
+// and URL leakage. The /uploads route replaces the CSP with an even stricter
+// sandbox of its own — this is only the default for our first-party pages.
+const CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "img-src 'self' data: blob:",
+  // Inline style attributes are used throughout the table layout; they can't
+  // execute script, so 'unsafe-inline' here is low-risk. Scripts stay strict.
+  "style-src 'self' 'unsafe-inline'",
+  "script-src 'self'",
+  // Same-origin covers the Socket.IO wss upgrade and every /api fetch.
+  "connect-src 'self'",
+  "font-src 'self' data:",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+].join('; ');
+
+function securityHeaders(req, res, next) {
+  res.set({
+    'Content-Security-Policy': CSP,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+  });
+  next();
+}
+
+// A Socket.IO connection is a websocket a page opens back to us. A browser
+// stamps every one with an Origin header, so we can refuse sockets opened from
+// any site other than the one serving the game — no other website can drive a
+// visitor's browser into our tables. Self-configuring: an Origin whose host
+// matches the request Host is always allowed (works on localhost, the Fly
+// hostname, or any custom domain), plus anything in ALLOWED_ORIGINS. Requests
+// with no Origin (native clients, same-origin navigations) are allowed too —
+// they carry no ambient credentials to abuse.
+function makeAllowRequest() {
+  const extra = new Set(
+    (process.env.ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+  return (req, callback) => {
+    const origin = req.headers.origin;
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (extra.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    let host = null;
+    try {
+      host = new URL(origin).host;
+    } catch {
+      host = null;
+    }
+    callback(null, host !== null && host === req.headers.host);
+  };
+}
+
 export function buildServer() {
   initDb();
   purgeExpiredSessions();
@@ -61,9 +138,18 @@ export function buildServer() {
   // Behind a reverse proxy (Fly, Caddy, nginx) this keeps req.protocol
   // https for invite links and req.ip per-visitor for the rate limiter.
   app.set('trust proxy', 1);
+  app.disable('x-powered-by');
+  app.use(securityHeaders);
   app.use(express.json({ limit: '100kb' }));
   app.use('/shared', express.static(path.join(root, 'shared')));
   app.use(express.static(path.join(root, 'public')));
+
+  // Per-IP ceilings on the unauthenticated write endpoints. A guest hitting
+  // these at a human pace never notices; a script trying to exhaust game slots,
+  // flood the push table, or spam replay reactions is capped.
+  const createGameLimiter = makeRateLimiter({ windowMs: 60_000, max: 20 });
+  const pushLimiter = makeRateLimiter({ windowMs: 60_000, max: 30 });
+  const reactionLimiter = makeRateLimiter({ windowMs: 60_000, max: 60 });
 
   app.get('/healthz', (req, res) => {
     res.json({ ok: true });
@@ -75,7 +161,7 @@ export function buildServer() {
     res.json({ key: ensureVapid().publicKey });
   });
 
-  app.post('/api/push/subscribe', (req, res) => {
+  app.post('/api/push/subscribe', pushLimiter, (req, res) => {
     const account = accountForRequest(req);
     const { endpoint, keys } = req.body || {};
     const result = saveSubscription({ endpoint, keys }, account?.id ?? null);
@@ -353,7 +439,7 @@ export function buildServer() {
     res.json(accountSummary(account.id));
   });
 
-  app.post('/api/games', (req, res) => {
+  app.post('/api/games', createGameLimiter, (req, res) => {
     const { nickname, settings } = req.body || {};
     const account = accountForRequest(req);
     const rawNick = typeof nickname === 'string' && nickname.trim()
@@ -440,7 +526,7 @@ export function buildServer() {
     res.json({ hands: recentHandsForGame(req.params.id, 25) });
   });
 
-  app.post('/api/hands/:id/reactions', (req, res) => {
+  app.post('/api/hands/:id/reactions', reactionLimiter, (req, res) => {
     const account = accountForRequest(req);
     const { emoji, nickname } = req.body || {};
     if (!REACTIONS.includes(emoji)) {
@@ -463,7 +549,15 @@ export function buildServer() {
   });
 
   const httpServer = createServer(app);
-  const io = new Server(httpServer, { serveClient: true });
+  const io = new Server(httpServer, {
+    serveClient: true,
+    // Reject sockets opened from any origin other than the one serving the app.
+    allowRequest: makeAllowRequest(),
+    // Socket.IO's own CORS: never echo an allow-origin for a foreign site.
+    cors: { origin: false },
+    // A single frame is bounded so an oversized payload can't spike memory.
+    maxHttpBufferSize: 1e5,
+  });
   attachSockets(io);
   startIdleSweep();
 

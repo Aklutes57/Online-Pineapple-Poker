@@ -2,7 +2,7 @@
 // `you.availableActions` — the server computes all legality and bounds.
 
 import { EVENTS, GAME_STATUS, PHASES } from '/shared/constants.js';
-import { showToast } from '/js/ui.js';
+import { showToast, escapeHtml } from '/js/ui.js';
 
 const bar = () => document.getElementById('action-bar');
 
@@ -201,7 +201,9 @@ function waitingText(client) {
   if (!hand || hand.finished) return 'Next hand starting soon…';
   const toActSeat = hand.toActSeat;
   const seat = toActSeat !== null ? client.state.seats[toActSeat] : null;
-  return seat ? `Waiting for ${seat.nickname}…` : 'Waiting…';
+  // Escaped: this string is written via innerHTML, and a nickname is
+  // attacker-chosen text. Every other nickname sink escapes; this one must too.
+  return seat ? `Waiting for ${escapeHtml(seat.nickname)}…` : 'Waiting…';
 }
 
 function defaultRaiseAmount(av) {

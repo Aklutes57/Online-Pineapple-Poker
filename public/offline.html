@@ -27,7 +27,7 @@
     .mark { font-size: 52px; }
     h1 { font-size: 22px; margin: 14px 0 8px; }
     p { color: #9aa3ba; font-size: 15px; line-height: 1.5; margin: 0 0 22px; }
-    button {
+    .retry {
       font: inherit;
       font-weight: 600;
       background: #f5c542;
@@ -36,6 +36,8 @@
       border-radius: 10px;
       padding: 12px 26px;
       cursor: pointer;
+      display: inline-block;
+      text-decoration: none;
     }
   </style>
 </head>
@@ -45,7 +47,9 @@
     <h1>You're offline</h1>
     <p>Poker needs a live connection — your table is still running on the server,
        and your seat and chips are safe. Reconnect and you'll land right back in it.</p>
-    <button onclick="location.reload()">Try again</button>
+    <!-- An empty href retries the current URL — no inline script, so a strict
+         Content-Security-Policy (script-src 'self') can't break the offline page. -->
+    <a class="retry" href="">Try again</a>
   </div>
 </body>
 </html>

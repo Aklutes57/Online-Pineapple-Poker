@@ -31,6 +31,26 @@ function cleanNickname(raw) {
   return nick.length >= SETTINGS_LIMITS.nickname.min ? nick : null;
 }
 
+// A fresh joiner must not be able to claim the exact display name of someone
+// already at the table — that is how a guest would impersonate the host (or
+// another player) in chat and the action log. If the name collides with a
+// connected player, hand back a disambiguated variant ("Ayden (2)"); the
+// impostor is visibly not the original.
+function uniqueNickname(game, nick) {
+  const taken = new Set(
+    [...game.players.values()]
+      .filter((p) => p.connected)
+      .map((p) => p.nickname.toLowerCase())
+  );
+  if (!taken.has(nick.toLowerCase())) return nick;
+  const base = nick.slice(0, SETTINGS_LIMITS.nickname.max - 4);
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base} (${n})`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+  return `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
 // Clients control event payloads entirely — a null/string/array payload must
 // not be able to throw inside a handler and take the process down.
 function asObject(payload) {
@@ -62,9 +82,46 @@ function detachSocket(socket) {
   return game;
 }
 
+// Per-socket flood control. A human clicks a handful of times a second; these
+// ceilings are far above that but well below what it takes to burn CPU or
+// churn broadcasts. Each socket refills BUCKET_REFILL tokens/sec up to
+// BUCKET_MAX; a packet with no token is dropped, and a socket that stays
+// empty long enough to rack up FLOOD_LIMIT drops in one window is cut loose.
+const BUCKET_MAX = 40;
+const BUCKET_REFILL = 25; // tokens per second
+const FLOOD_LIMIT = 200;
+
+function installFloodGuard(socket) {
+  let tokens = BUCKET_MAX;
+  let last = Date.now();
+  let dropped = 0;
+  socket.use((_packet, next) => {
+    const nowMs = Date.now();
+    tokens = Math.min(BUCKET_MAX, tokens + ((nowMs - last) / 1000) * BUCKET_REFILL);
+    last = nowMs;
+    if (tokens >= 1) {
+      tokens -= 1;
+      dropped = 0;
+      next();
+      return;
+    }
+    // Out of tokens: drop this packet. A socket that keeps hammering while
+    // empty is a flood, not a fast human — disconnect it.
+    if (++dropped > FLOOD_LIMIT) {
+      socket.disconnect(true);
+      return;
+    }
+    next(new Error('rate_limited'));
+  });
+  // socket.use rejections surface as an 'error' event; swallow it so a dropped
+  // packet never bubbles into an unhandled error.
+  socket.on('error', () => {});
+}
+
 export function attachSockets(io) {
   io.on('connection', (socket) => {
     socket.data = { gameId: null, playerId: null };
+    installFloodGuard(socket);
 
     socket.on(EVENTS.JOIN, (payload, ack) => {
       if (typeof ack !== 'function') return;
@@ -93,10 +150,12 @@ export function attachSockets(io) {
           ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
           return;
         }
-        const nick =
+        const nick = uniqueNickname(
+          game,
           cleanNickname(nickname) ||
-          cleanNickname(account?.displayName) ||
-          `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
+            cleanNickname(account?.displayName) ||
+            `Guest-${Math.floor(1000 + Math.random() * 9000)}`
+        );
         player = game.addPlayer(nick, account?.id ?? null);
       } else if (account && !player.accountId) {
         // Signed in after joining as a guest — adopt the account.

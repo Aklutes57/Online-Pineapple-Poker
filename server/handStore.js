@@ -120,9 +120,17 @@ export function recentHandsForGame(gameId, limit = 20) {
 
 // ---- reactions on saved hands ----
 
+// A single hand never needs more than a handful of reactions; this ceiling
+// stops a guest cycling arbitrary nicknames from writing unbounded rows.
+const MAX_REACTIONS_PER_HAND = 200;
+
 export function addHandReaction(handId, { emoji, accountId, nickname }) {
   if (!get('SELECT id FROM hands WHERE id = ?', handId)) {
     return { ok: false, error: 'no such hand' };
+  }
+  const { n } = get('SELECT COUNT(*) AS n FROM hand_reactions WHERE hand_id = ?', handId);
+  if (n >= MAX_REACTIONS_PER_HAND) {
+    return { ok: true, reactions: listReactions(handId) };
   }
   // One of each emoji per person per hand.
   const existing = get(
