@@ -63,6 +63,7 @@ export function buildViews(game) {
     ? {
         handId: hand.handId,
         handNo: hand.handNo,
+        variant: hand.variant.key,
         phase: hand.phase,
         board: [...hand.board],
         board2: hand.board2 ? [...hand.board2] : null,

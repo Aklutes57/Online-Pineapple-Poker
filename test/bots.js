@@ -159,6 +159,7 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
 
   let handsFinished = 0;
   let lastFinishedHandNo = 0;
+  let lastVariantSwitch = 0;
   let lastEventAt = Date.now();
   let started = false;
   let done = false;
@@ -205,6 +206,21 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
     if (!started && state.status === 'lobby' && seated === BOTS + 1) {
       started = true;
       bot.socket.emit(EVENTS.HOST_START_GAME, {});
+    }
+
+    // Rotate the game mid-session every few hands (option passes only) —
+    // the variant must switch cleanly between hands with chips conserved.
+    if (
+      extraSettings.rotateVariants &&
+      started &&
+      state.hand?.finished &&
+      state.hand.handNo > lastVariantSwitch &&
+      state.hand.handNo % 6 === 0
+    ) {
+      lastVariantSwitch = state.hand.handNo;
+      const rotation = ['holdem', 'pineapple', 'crazyPineapple', 'plo'];
+      const next = rotation[(rotation.indexOf(state.settings.variant) + 1) % rotation.length];
+      bot.socket.emit(EVENTS.HOST_UPDATE_SETTINGS, { variant: next });
     }
 
     // Top up busted bots so the game never dies (host behavior).
@@ -271,9 +287,9 @@ for (const variantKey of VARIANT_KEYS) {
 // Every chip-moving home-game option at once. Antes, bounties and two-board
 // payouts all have to keep `sum of stacks === buy-ins - cash-outs` exact.
 const OPTION_PASSES = [
-  ['holdem', { straddle: true, runItTwice: true, bombPotEvery: 4, sevenDeuceBounty: 15, rabbitHunt: true }, 'holdem+options'],
-  ['plo', { straddle: true, runItTwice: true, bombPotEvery: 5, sevenDeuceBounty: 10 }, 'plo+options'],
-  ['crazyPineapple', { bombPotEvery: 3, sevenDeuceBounty: 20, runItTwice: true }, 'crazyPineapple+options'],
+  ['holdem', { straddle: true, runItTwice: true, bombPotEvery: 4, sevenDeuceBounty: 15, rabbitHunt: true, rotateVariants: true }, 'holdem+options'],
+  ['plo', { straddle: true, runItTwice: true, bombPotEvery: 5, sevenDeuceBounty: 10, rotateVariants: true }, 'plo+options'],
+  ['crazyPineapple', { bombPotEvery: 3, sevenDeuceBounty: 20, runItTwice: true, rotateVariants: true }, 'crazyPineapple+options'],
 ];
 for (const [variantKey, settings, label] of OPTION_PASSES) {
   console.log(`Soaking ${label}…`);

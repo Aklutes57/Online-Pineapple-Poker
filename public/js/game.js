@@ -148,6 +148,27 @@ function renderClosedLedger() {
     </table>`;
 }
 
+// ---- four-color deck (per-player display preference) ----
+
+function applyDeckPref() {
+  const on = localStorage.getItem('pp:fourColor') === 'on';
+  document.body.classList.toggle('four-color', on);
+  const btn = document.getElementById('deck-toggle');
+  btn.title = on ? 'Four-color deck is on' : 'Four-color deck: diamonds blue, clubs green';
+  btn.style.opacity = on ? '1' : '0.6';
+}
+
+document.getElementById('deck-toggle').addEventListener('click', () => {
+  const on = localStorage.getItem('pp:fourColor') === 'on';
+  try {
+    localStorage.setItem('pp:fourColor', on ? 'off' : 'on');
+  } catch { /* private browsing */ }
+  applyDeckPref();
+  showToast(on ? 'Standard deck colors' : 'Four-color deck on');
+});
+
+applyDeckPref();
+
 document.getElementById('sound-toggle').addEventListener('click', (e) => {
   client.soundOn = !client.soundOn;
   localStorage.setItem('pp:sound', client.soundOn ? 'on' : 'off');

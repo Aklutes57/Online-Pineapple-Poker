@@ -26,6 +26,7 @@
           <div id="react-picker" class="hidden"></div>
         </span>
         <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on/off">🔊</button>
+        <button id="deck-toggle" class="btn-ghost btn top-btn" title="Four-color deck on/off">🃏</button>
         <button id="push-bell" class="btn-ghost btn top-btn" title="Turn alerts when you're away">🔕</button>
         <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">⚙️ Host</button>
         <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
@@ -97,6 +98,10 @@
   <div class="modal-backdrop hidden" id="host-modal">
     <div class="modal">
       <h2>Host controls</h2>
+      <div class="field">
+        <label for="h-variant">Game (changes from the next hand)</label>
+        <select id="h-variant"></select>
+      </div>
       <div class="row">
         <div class="field">
           <label for="h-sb">Small blind</label>

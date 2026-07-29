@@ -50,10 +50,13 @@ function renderTheme(client) {
 
 function renderHeader(client) {
   const { state } = client;
-  const v = VARIANTS[state.settings.variant];
+  // A live hand always shows the game it was dealt as, even if the host has
+  // already switched the table's game for the next hand.
+  const variantKey = state.hand?.variant || state.settings.variant;
+  const v = VARIANTS[variantKey];
   const badge = document.getElementById('game-badge');
   const handNo = state.hand ? ` · Hand #${state.hand.handNo}` : '';
-  badge.textContent = `${v ? v.label : state.settings.variant} · Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}${handNo}`;
+  badge.textContent = `${v ? v.label : variantKey} · Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}${handNo}`;
 }
 
 // ---- seats ----

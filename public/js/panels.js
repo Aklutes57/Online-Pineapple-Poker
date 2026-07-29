@@ -1,6 +1,6 @@
 // Side panel (Chat / Log / Ledger tabs), seat-request queue, and host modal.
 
-import { EVENTS, GAME_STATUS } from '/shared/constants.js';
+import { EVENTS, GAME_STATUS, VARIANTS } from '/shared/constants.js';
 import { settleUp } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
 
@@ -52,6 +52,9 @@ export function initPanels(client) {
   window.addEventListener('resize', updateRotateHint);
 
   // Host modal.
+  document.getElementById('h-variant').innerHTML = Object.values(VARIANTS)
+    .map((v) => `<option value="${v.key}">${escapeHtml(v.label)}</option>`)
+    .join('');
   document.getElementById('host-menu-btn').addEventListener('click', () => openHostModal(client));
   document.getElementById('h-done').addEventListener('click', closeHostModal);
   document.getElementById('host-modal').addEventListener('click', (e) => {
@@ -59,6 +62,7 @@ export function initPanels(client) {
   });
   document.getElementById('h-save').addEventListener('click', () => {
     client.send(EVENTS.HOST_UPDATE_SETTINGS, {
+      variant: document.getElementById('h-variant').value,
       smallBlind: parseInt(document.getElementById('h-sb').value, 10),
       bigBlind: parseInt(document.getElementById('h-bb').value, 10),
       actionTime: parseInt(document.getElementById('h-timer').value, 10),
@@ -342,6 +346,7 @@ function renderSeatRequests(client) {
 
 function openHostModal(client) {
   const s = client.state.settings;
+  document.getElementById('h-variant').value = s.variant;
   document.getElementById('h-sb').value = s.smallBlind;
   document.getElementById('h-bb').value = s.bigBlind;
   document.getElementById('h-timer').value = String(s.actionTime);

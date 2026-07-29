@@ -446,6 +446,16 @@ body.disconnected::after {
   font-size: 0.82em;
 }
 
+/* Four-color deck: spades stay black, hearts red, diamonds go blue and
+   clubs green. A per-player display preference toggled on <body>. */
+.four-color .card.suit-d {
+  color: #2b6fd4;
+}
+
+.four-color .card.suit-c {
+  color: #1d8a48;
+}
+
 .card.red {
   color: #c0392b;
 }

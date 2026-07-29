@@ -112,6 +112,28 @@ const stateAfter = await new Promise((resolve) => {
 });
 check('bad buy-ins did not seat the guest', stateAfter.seats.every((s) => !s || s.nickname !== 'guest'));
 
+// ---- mid-session variant changes: valid switches apply, garbage is ignored ----
+
+async function currentSettings() {
+  return new Promise((resolve) => {
+    host.socket.emit(EVENTS.JOIN, { gameId, token }, (r) => resolve(r.state.settings));
+  });
+}
+
+host.socket.emit(EVENTS.HOST_UPDATE_SETTINGS, { variant: 'plo' });
+await new Promise((r) => setTimeout(r, 150));
+check('host can change the game mid-session', (await currentSettings()).variant === 'plo');
+
+for (const bad of ['blackjack', 42, null, {}, ['plo'], 'PLO']) {
+  host.socket.emit(EVENTS.HOST_UPDATE_SETTINGS, { variant: bad });
+}
+await new Promise((r) => setTimeout(r, 200));
+check('garbage variants leave the game unchanged', (await currentSettings()).variant === 'plo');
+
+host.socket.emit(EVENTS.HOST_UPDATE_SETTINGS, { variant: 'holdem' });
+await new Promise((r) => setTimeout(r, 150));
+check('and it can change back', (await currentSettings()).variant === 'holdem');
+
 // ---- non-host cannot use host controls ----
 
 guest.socket.emit(EVENTS.HOST_ADJUST_STACK, { playerId: guest.res.playerId, delta: 100000 });

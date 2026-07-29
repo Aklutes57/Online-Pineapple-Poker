@@ -9,6 +9,11 @@ import { showToast, escapeHtml } from '/js/ui.js';
 import { authHeaders, loadAccount, currentAccount } from '/js/auth.js';
 
 const handId = location.pathname.split('/').pop();
+
+// Honor the player's four-color deck preference on replays too.
+try {
+  document.body.classList.toggle('four-color', localStorage.getItem('pp:fourColor') === 'on');
+} catch { /* private browsing */ }
 let hand = null;
 let step = 0;
 let playing = null;

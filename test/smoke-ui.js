@@ -294,6 +294,30 @@ try {
   await dana.waitForSelector('#auth-error:not(.hidden)');
   await check('wrong password shows an error and does not sign in', true);
 
+  // ---- four-color deck toggle ----
+  await anna.click('#deck-toggle');
+  await check('four-color deck toggles on',
+    await anna.evaluate(() => document.body.classList.contains('four-color')));
+  await anna.reload();
+  await anna.waitForSelector('.seat.me .nameplate');
+  await check('four-color preference survives a reload',
+    await anna.evaluate(() => document.body.classList.contains('four-color')));
+  await check('cards carry per-suit classes',
+    (await anna.locator('.card[class*="suit-"]').count()) > 0);
+
+  // ---- host can change the game mid-session ----
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  await check('host modal offers a game selector',
+    (await anna.locator('#h-variant option').count()) === 4);
+  await anna.selectOption('#h-variant', 'plo');
+  await anna.click('#h-save');
+  await anna.click('#h-done');
+  await anna.waitForFunction(() =>
+    document.getElementById('log-list')?.textContent.includes('Game changes to Pot Limit Omaha')
+  );
+  await check('game change is announced in the log', true);
+
   // ---- PWA: manifest, service worker, offline assets, push surface ----
   const swActive = await anna.evaluate(() =>
     navigator.serviceWorker.ready.then((r) => !!r.active).catch(() => false)

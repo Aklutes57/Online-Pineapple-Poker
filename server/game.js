@@ -2,7 +2,7 @@
 // Owns the single pending flow timer (action / discard / run-out / next-hand).
 // The sockets layer sets game.onChanged and calls the public methods here.
 
-import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES } from '../shared/constants.js';
+import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
 import { saveHand } from './handStore.js';
@@ -458,14 +458,27 @@ export class Game {
     for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery', 'sevenDeuceBounty']) {
       if (patch[key] !== undefined) next[key] = patch[key];
     }
+    // The game can change mid-session; an unknown variant keeps the current
+    // one rather than falling back to sanitizeSettings' default. Each Hand
+    // snapshots its variant at start, so a live hand always finishes under
+    // the rules it was dealt with.
+    const variantChanged =
+      typeof patch.variant === 'string' &&
+      VARIANTS[patch.variant] !== undefined &&
+      patch.variant !== this.settings.variant;
+    next.variant = variantChanged ? patch.variant : this.settings.variant;
     const clean = sanitizeSettings(next);
-    // Variant is fixed at creation.
-    clean.variant = this.settings.variant;
     this.settings = clean;
     this.addLog(
       `Settings updated: blinds ${clean.smallBlind}/${clean.bigBlind}, ` +
       `timer ${clean.actionTime ? clean.actionTime + 's' : 'off'}`
     );
+    if (variantChanged) {
+      const inHand = this.currentHand && !this.currentHand.finished;
+      this.addLog(
+        `Game changes to ${VARIANTS[clean.variant].label}${inHand ? ' after this hand' : ' next hand'}`
+      );
+    }
     return { ok: true };
   }
 
