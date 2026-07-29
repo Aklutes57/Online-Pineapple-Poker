@@ -124,11 +124,17 @@ export const DEFAULT_SETTINGS = {
   sevenDeuceBounty: 0, // chips each opponent pays for a win with 7-2
 };
 
+// Not a gameplay cap — blinds and buy-ins are host's choice, uncapped. This
+// only bounds chip amounts so a full table's pot always sums in exact
+// integers (10 × MAX_CHIPS is still well inside Number.MAX_SAFE_INTEGER);
+// past that, conservation checks would rot from float rounding.
+export const MAX_CHIPS = 100_000_000_000_000;
+
 export const SETTINGS_LIMITS = {
   nickname: { min: 1, max: 20 },
-  smallBlind: { min: 1, max: 1000000 },
-  bigBlind: { min: 2, max: 2000000 },
-  buyIn: { min: 1, max: 100000000 },
+  smallBlind: { min: 1, max: MAX_CHIPS },
+  bigBlind: { min: 2, max: MAX_CHIPS },
+  buyIn: { min: 1, max: MAX_CHIPS },
   actionTimes: [0, 15, 30, 60],
   chatLength: 300,
 };

@@ -569,5 +569,97 @@ function totalChips(players, hand) {
   check('rabbit hunt refused when the table has it off', !hand.handleRabbitHunt(hand.bySeat.get(1)).ok);
 }
 
+// --- Show cards after the hand: folders may always show, face-up hands may not ---
+{
+  // Showdown: the folded player can flash the fold; live hands are already up.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah', 'Ad', 'Kh', 'Kd', '9c', '3d', '7s', '8h', 'Jh', 'Tc', '5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'fold');
+  act(hand, 1, 'call');
+  act(hand, 2, 'check');
+  for (let street = 0; street < 3; street++) {
+    act(hand, 1, 'check');
+    act(hand, 2, 'check');
+  }
+  check('show-after-showdown: hand went to showdown', hand.finished && !hand.results.byFold);
+  check('show-after-showdown: folded player may show', hand.handleShowCards(hand.bySeat.get(0)).ok);
+  check('show-after-showdown: folded cards marked shown', hand.bySeat.get(0).showedCards === true);
+  check('show-after-showdown: face-up hand refused', !hand.handleShowCards(hand.bySeat.get(1)).ok);
+  check('show-after-showdown: double show refused', !hand.handleShowCards(hand.bySeat.get(0)).ok);
+}
+{
+  // Fold-win: both the winner and the folder can show.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'fold');
+  check('show-after-fold: winner may show', hand.handleShowCards(hand.bySeat.get(1)).ok);
+  check('show-after-fold: folder may show too', hand.handleShowCards(hand.bySeat.get(0)).ok);
+}
+
+// --- 6-2 gets announced when it wins in the open ---
+{
+  // Showdown scoop with 6-2 announces itself.
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = ['Ah', 'Kd', '6h', '2s', '6c', '2d', '9h', 'Ts', '3c'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  check('six-deuce: seat 0 holds it', hand.bySeat.get(0).holeCards.join('') === '6h2s');
+  act(hand, 0, 'raise', 100);
+  act(hand, 1, 'call');
+  ctx.fireAll();
+  check('six-deuce: showdown reached', hand.finished && !hand.results.byFold);
+  check('six-deuce: winner announced', hand.results.sixTwo?.seat === 0);
+  check('six-deuce: log carries the callout', ctx.logs.some((l) => l.includes('wins with the 6-2')));
+  check('six-deuce: no chips moved by the callout', players.reduce((a, p) => a + p.stack, 0) === 200);
+}
+{
+  // A split pot is nobody's glory — no announcement.
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = ['6d', '2c', '6h', '2s', '6c', '2h', 'Ah', 'Ks', 'Qd'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 100);
+  act(hand, 1, 'call');
+  ctx.fireAll();
+  check('six-deuce split: pot chopped', hand.results.winners.length === 2);
+  check('six-deuce split: no announcement', !hand.results.sixTwo);
+}
+{
+  // A fold-win with 6-2 stays private — until the winner shows the bluff.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  const deck = ['Ah', 'Kd', '6h', '2s', '9c', 'Ts', '3c', '4d', 'Jh'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  check('six-deuce fold-win: seat 0 holds it', hand.bySeat.get(0).holeCards.join('') === '6h2s');
+  act(hand, 0, 'raise', 20);
+  act(hand, 1, 'fold');
+  check('six-deuce fold-win: hidden cards stay unannounced', !hand.results.sixTwo);
+  check('six-deuce fold-win: showing earns the callout',
+    hand.handleShowCards(hand.bySeat.get(0)).ok && hand.results.sixTwo?.seat === 0);
+  check('six-deuce fold-win: log carries the late callout',
+    ctx.logs.some((l) => l.includes('wins with the 6-2')));
+}
+
+// --- Uncapped stakes: chip math must stay exact at nosebleed sizes ---
+{
+  const TRILLION = 1_000_000_000_000;
+  const players = [makePlayer(0, 10 * TRILLION, 'a'), makePlayer(1, 10 * TRILLION, 'b')];
+  const deck = ['Ah', 'Kd', 'Qh', 'Js', '6c', '2d', '9h', 'Ts', '3c'];
+  const { hand, ctx } = makeHand({ players, deck, sb: TRILLION, bb: 2 * TRILLION });
+  hand.start();
+  act(hand, 0, 'raise', 10 * TRILLION);
+  act(hand, 1, 'call');
+  ctx.fireAll();
+  check('nosebleed: hand completes', hand.finished);
+  check('nosebleed: chips conserved exactly',
+    players.reduce((a, p) => a + p.stack, 0) === 20 * TRILLION);
+  check('nosebleed: every stack is a safe integer',
+    players.every((p) => Number.isSafeInteger(p.stack)));
+}
+
 console.log(`betting: ${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

@@ -145,10 +145,14 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     + (!seat.connected ? ' disconnected' : '')
     + (won ? ' winner' : '');
 
-  // Cards fan.
+  // Cards fan. A folded seat normally shows nothing, but a folder who
+  // voluntarily shows (seat.cards set) gets their cards rendered — the
+  // pod's folded styling keeps them visibly dead.
   const fan = document.createElement('div');
   fan.className = 'cards-fan' + (isMe ? ' mine' : '');
-  if (seat.inHand && !seat.folded) {
+  if (seat.inHand && seat.folded && seat.cards) {
+    for (const c of seat.cards) fan.appendChild(makeCardEl(c, { dealt: true }));
+  } else if (seat.inHand && !seat.folded) {
     if (shownCards) {
       for (let ci = 0; ci < shownCards.length; ci++) {
         const card = makeCardEl(shownCards[ci], {
@@ -377,9 +381,12 @@ function renderCenter(client) {
     // The number itself ticks in the timer loop between broadcasts.
     html = '<div class="countdown-747" id="cd747-num">3</div>';
   } else if (state.hand?.finished) {
-    const natural = state.hand.naturalSevenSeats?.length
+    let natural = state.hand.naturalSevenSeats?.length
       ? '<p class="natural-banner">🎉 NATURAL SEVEN! 🎉</p>'
       : '';
+    if (state.hand.sixTwo) {
+      natural += `<p class="natural-banner">🎉 ${escapeHtml(state.hand.sixTwo.nickname)} wins with the 6-2! 🎉</p>`;
+    }
     const wl = winnersLine(state);
     if (wl) {
       html = `${natural}<p class="win-line">${wl}</p>`;

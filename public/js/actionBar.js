@@ -149,9 +149,11 @@ export function renderActionBar(client) {
   } else if (you.hasDiscarded && hand && (hand.phase === PHASES.DISCARD_PREFLOP || hand.phase === PHASES.DISCARD_POSTFLOP)) {
     html = `<span class="ab-note">Discarded — waiting for the others…</span>`;
   } else if (you.canShow) {
+    const iFolded = state.seats[you.seatIndex]?.folded;
     html = `
-      <span class="ab-note">You took it down without a showdown.</span>
-      <button class="btn btn-ghost" data-act="show-cards">Show your cards</button>`;
+      <span class="ab-note">${iFolded ? 'Hand over — show what you folded?' : 'You took it down without a showdown.'}</span>
+      <button class="btn btn-ghost" data-act="show-cards">Show your cards</button>
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">🐇 Rabbit hunt</button>' : ''}`;
   } else if (you.sittingOut) {
     html = `
       <span class="ab-note">You're sitting out.</span>

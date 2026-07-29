@@ -2,7 +2,7 @@
 // Owns the single pending flow timer (action / discard / run-out / next-hand).
 // The sockets layer sets game.onChanged and calls the public methods here.
 
-import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS } from '../shared/constants.js';
+import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS, MAX_CHIPS } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
 import { payoutPots } from './pots.js';
@@ -301,7 +301,9 @@ export class Game {
   adjustStack(playerId, delta) {
     const player = this.players.get(playerId);
     if (!player || player.status !== 'seated') return { ok: false, error: 'not seated' };
-    if (!Number.isInteger(delta) || delta === 0) return { ok: false, error: 'bad amount' };
+    if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > MAX_CHIPS) {
+      return { ok: false, error: 'bad amount' };
+    }
     if (this.playerInLiveHand(player)) {
       this.queueOp({ type: 'adjustStack', playerId, delta });
       this.addLog(`Stack change for ${player.nickname} queued for next hand`);
@@ -313,7 +315,10 @@ export class Game {
   }
 
   applyStackAdjust(player, delta) {
-    const applied = Math.max(delta, -player.stack);
+    // Bounded below by the stack (can't go negative) and above by MAX_CHIPS
+    // (keeps every sum the ledger ever does in exact integers).
+    const applied = Math.max(Math.min(delta, MAX_CHIPS - player.stack), -player.stack);
+    if (applied === 0) return;
     player.stack += applied;
     if (applied > 0) this.creditLedger(player, applied);
     else this.cashOutLedger(player, -applied);
@@ -858,10 +863,12 @@ export function sanitizeSettings(s) {
     const n = Number.isInteger(v) ? v : dflt;
     return Math.max(min, Math.min(max, n));
   };
-  const smallBlind = clamp(s.smallBlind, 1, 1000000, DEFAULT_SETTINGS.smallBlind);
-  const bigBlind = clamp(s.bigBlind, smallBlind, 2000000, Math.max(smallBlind, DEFAULT_SETTINGS.bigBlind));
-  const minBuyIn = clamp(s.minBuyIn, 1, 100000000, bigBlind * 20);
-  const maxBuyIn = clamp(s.maxBuyIn, minBuyIn, 100000000, Math.max(minBuyIn, bigBlind * 500));
+  // Blinds and buy-ins are uncapped by design — MAX_CHIPS only keeps chip
+  // arithmetic in exact integers (see shared/constants.js).
+  const smallBlind = clamp(s.smallBlind, 1, MAX_CHIPS, DEFAULT_SETTINGS.smallBlind);
+  const bigBlind = clamp(s.bigBlind, smallBlind, MAX_CHIPS, Math.max(smallBlind, DEFAULT_SETTINGS.bigBlind));
+  const minBuyIn = clamp(s.minBuyIn, 1, MAX_CHIPS, Math.min(bigBlind * 20, MAX_CHIPS));
+  const maxBuyIn = clamp(s.maxBuyIn, minBuyIn, MAX_CHIPS, Math.max(minBuyIn, Math.min(bigBlind * 500, MAX_CHIPS)));
   const defaultBuyIn = clamp(s.defaultBuyIn, minBuyIn, maxBuyIn, Math.min(Math.max(bigBlind * 100, minBuyIn), maxBuyIn));
   const actionTime = SETTINGS_LIMITS.actionTimes.includes(s.actionTime)
     ? s.actionTime
@@ -877,7 +884,7 @@ export function sanitizeSettings(s) {
     rabbitHunt: !!s.rabbitHunt,
     runItTwice: !!s.runItTwice,
     bombPotEvery: bounded(s.bombPotEvery, 0, 100, 0),
-    sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, 100000, 0),
+    sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, MAX_CHIPS, 0),
   };
 }
 

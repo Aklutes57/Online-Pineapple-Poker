@@ -274,3 +274,18 @@ label {
   text-decoration: underline;
   padding: 0;
 }
+
+/* Checkbox-with-label rows inside modals (e.g. the 7-2 bounty toggle). */
+.modal .check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding-top: 26px;
+}
+
+.modal .check-label input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent, #f0b43c);
+}

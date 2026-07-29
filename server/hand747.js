@@ -350,8 +350,19 @@ export class Hand747 {
     return { ok: false, error: 'there is no discard in 747' };
   }
 
-  handleShowCards() {
-    return { ok: false, error: 'hands are shown automatically in 747' };
+  // Stayers' hands reveal automatically; the only voluntary show left is a
+  // folder proving what they threw away, once the hand is over.
+  handleShowCards(player) {
+    if (!this.finished) return { ok: false, error: 'the hand is not over' };
+    if (this.bySeat.get(player.seatIndex) !== player) {
+      return { ok: false, error: 'you were not in this hand' };
+    }
+    if (!player.folded) return { ok: false, error: 'your hand was shown automatically' };
+    if (player.showedCards) return { ok: false, error: 'already shown' };
+    player.showedCards = true;
+    this.ctx.log(`${player.nickname} shows ${player.holeCards.join(' ')}`);
+    this.ctx.changed();
+    return { ok: true };
   }
 
   handleRabbitHunt() {

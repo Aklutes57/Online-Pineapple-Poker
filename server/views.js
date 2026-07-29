@@ -47,7 +47,9 @@ export function buildViews(game) {
     }
     const p = game.players.get(id);
     const inHand = !!hand && hand.bySeat.get(i) === p;
-    const showCards = inHand && !p.folded && (hand.revealed || p.showedCards);
+    // Face-up when revealed by the hand itself, or voluntarily shown — a
+    // folded player's cards go public ONLY on their own explicit show.
+    const showCards = inHand && (p.folded ? p.showedCards : hand.revealed || p.showedCards);
     seats.push({
       playerId: p.id,
       nickname: p.nickname,
@@ -117,6 +119,7 @@ export function buildViews(game) {
         boards: hand.finished ? hand.results?.boards ?? null : null,
         dealer: hand.variant.engine === '747' ? hand.dealerView() : null,
         naturalSevenSeats: hand.finished ? hand.results?.naturalSevenSeats ?? null : null,
+        sixTwo: hand.finished ? hand.results?.sixTwo ?? null : null,
         carryOut: hand.finished ? hand.results?.carryOut ?? 0 : 0,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
@@ -179,12 +182,14 @@ export function buildViews(game) {
       canRabbitHunt:
         inHand && !!hand.finished && !!hand.results?.byFold &&
         hand.rabbitHuntEnabled && !hand.rabbit && hand.board.length < 5,
+      // Show is offered whenever the hand is over and these cards are still
+      // face down: any folded player, or the winner of an uncalled pot.
+      // (Showdown non-folders are already face up; 747 stayers auto-reveal.)
       canShow:
         inHand &&
         !!hand.finished &&
-        !!hand.results?.byFold &&
-        !p.folded &&
-        !p.showedCards,
+        !p.showedCards &&
+        (p.folded || !!hand.results?.byFold),
     };
   }
 

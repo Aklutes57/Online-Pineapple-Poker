@@ -60,6 +60,9 @@ export function initPanels(client) {
   document.getElementById('host-modal').addEventListener('click', (e) => {
     if (e.target.id === 'host-modal') closeHostModal();
   });
+  document.getElementById('h-72-on').addEventListener('change', (e) => {
+    document.getElementById('h-72').disabled = !e.target.checked;
+  });
   document.getElementById('h-save').addEventListener('click', () => {
     client.send(EVENTS.HOST_UPDATE_SETTINGS, {
       variant: document.getElementById('h-variant').value,
@@ -68,7 +71,9 @@ export function initPanels(client) {
       actionTime: parseInt(document.getElementById('h-timer').value, 10),
       timeBank: parseInt(document.getElementById('h-timebank').value, 10),
       bombPotEvery: parseInt(document.getElementById('h-bomb').value, 10),
-      sevenDeuceBounty: parseInt(document.getElementById('h-72').value, 10) || 0,
+      sevenDeuceBounty: document.getElementById('h-72-on').checked
+        ? parseInt(document.getElementById('h-72').value, 10) || 0
+        : 0,
       straddle: document.getElementById('h-straddle').checked,
       rabbitHunt: document.getElementById('h-rabbit').checked,
       runItTwice: document.getElementById('h-rit').checked,
@@ -352,7 +357,11 @@ function openHostModal(client) {
   document.getElementById('h-timer').value = String(s.actionTime);
   document.getElementById('h-timebank').value = String(s.timeBank ?? 0);
   document.getElementById('h-bomb').value = String(s.bombPotEvery ?? 0);
-  document.getElementById('h-72').value = String(s.sevenDeuceBounty ?? 0);
+  const bountyOn = (s.sevenDeuceBounty ?? 0) > 0;
+  document.getElementById('h-72-on').checked = bountyOn;
+  document.getElementById('h-72').disabled = !bountyOn;
+  // Keep a sensible amount staged even while the toggle is off.
+  document.getElementById('h-72').value = String(bountyOn ? s.sevenDeuceBounty : Math.max(s.bigBlind * 5, 1));
   document.getElementById('h-straddle').checked = !!s.straddle;
   document.getElementById('h-rabbit').checked = !!s.rabbitHunt;
   document.getElementById('h-rit').checked = !!s.runItTwice;

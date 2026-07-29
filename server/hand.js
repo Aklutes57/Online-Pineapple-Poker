@@ -617,6 +617,10 @@ export class Hand {
     };
     winner.handResult = { desc: null, won: pot };
     this.results.bounty = this.applySevenDeuce(winner);
+    // The bounty turns the winning hand face up — if that reveal shows a
+    // 6-2 as well, it gets its moment too. An unshown fold-win stays
+    // private until the winner chooses to show (see handleShowCards).
+    if (winner.showedCards) this.announceSixTwo(winner);
     this.pushEvent({ type: 'payout', seat: winner.seatIndex, amount: pot, byFold: true });
     this.ctx.log(`${winner.nickname} wins ${pot}`);
     this.ctx.changed();
@@ -716,6 +720,8 @@ export class Hand {
       runItTwice: this.runItTwice,
       boards: this.runItTwice ? boardResults : null,
     };
+    // Showdown cards are public, so a 6-2 scoop announces itself.
+    this.announceSixTwo(outrightWinner);
     if (cooler) this.ctx.log(`${cooler.headline}: ${cooler.detail}`);
 
     for (const p of live) {
@@ -759,6 +765,18 @@ export class Hand {
     return { winnerSeat: winner.seatIndex, total: collected, transfers };
   }
 
+  // The 6-2 gets glory instead of chips: whenever the whole pot goes to a
+  // hand holding a six and a deuce — and those cards are face up — the
+  // table hears about it. Never fires on hidden cards: a fold-win only
+  // qualifies once the winner chooses to show.
+  announceSixTwo(winner) {
+    if (!winner || !hasSixDeuce(winner.holeCards)) return;
+    if (this.results && !this.results.sixTwo) {
+      this.results.sixTwo = { seat: winner.seatIndex, nickname: winner.nickname };
+      this.ctx.log(`🎉 ${winner.nickname} wins with the 6-2!`);
+    }
+  }
+
   // Rabbit hunt: after a hand ends early, show what would have come. Only
   // ever legal once the hand is over — dealing these out mid-hand would
   // expose the deck to live players.
@@ -776,15 +794,24 @@ export class Hand {
     return { ok: true };
   }
 
-  // Voluntary reveal after winning by fold.
+  // Voluntary reveal once the hand is over: a fold-winner showing the
+  // bluff, or any folded player showing what they let go. Refused only
+  // when the cards are already public (a showdown reveals non-folders).
   handleShowCards(player) {
-    if (!this.finished || !this.results?.byFold) return { ok: false, error: 'nothing to show' };
+    if (!this.finished) return { ok: false, error: 'the hand is not over' };
     if (this.bySeat.get(player.seatIndex) !== player) {
       return { ok: false, error: 'you were not in this hand' };
     }
-    if (player.folded) return { ok: false, error: 'you folded' };
+    if (player.showedCards) return { ok: false, error: 'already shown' };
+    if (!player.folded && !this.results?.byFold) {
+      return { ok: false, error: 'your cards are already face up' };
+    }
     player.showedCards = true;
     this.ctx.log(`${player.nickname} shows ${player.holeCards.join(' ')}`);
+    // A fold-winner who shows a 6-2 earns the callout after the fact.
+    if (this.results?.byFold && this.results.winners?.[0]?.seat === player.seatIndex) {
+      this.announceSixTwo(player);
+    }
     this.ctx.changed();
     return { ok: true };
   }
@@ -810,4 +837,9 @@ function cap(s) {
 function hasSevenDeuce(cards) {
   const ranks = new Set(cards.map((c) => c[0]));
   return ranks.has('7') && ranks.has('2');
+}
+
+function hasSixDeuce(cards) {
+  const ranks = new Set(cards.map((c) => c[0]));
+  return ranks.has('6') && ranks.has('2');
 }

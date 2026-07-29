@@ -68,6 +68,9 @@ document.getElementById('c-create').addEventListener('click', createGame);
 document.getElementById('c-nickname').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') createGame();
 });
+document.getElementById('c-72').addEventListener('change', (e) => {
+  document.getElementById('c-72-amount').disabled = !e.target.checked;
+});
 
 async function createGame() {
   const nickname = document.getElementById('c-nickname').value.trim();
@@ -86,6 +89,9 @@ async function createGame() {
     minBuyIn: Math.max(1, Math.floor(defaultBuyIn / 5)),
     maxBuyIn: defaultBuyIn * 5,
     actionTime: parseInt(document.getElementById('c-timer').value, 10),
+    sevenDeuceBounty: document.getElementById('c-72').checked
+      ? parseInt(document.getElementById('c-72-amount').value, 10) || 0
+      : 0,
   };
   const btn = document.getElementById('c-create');
   btn.disabled = true;

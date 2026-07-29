@@ -110,6 +110,18 @@ class Bot {
       return;
     }
 
+    // Sometimes show cards after the hand (folders flashing the fold, or a
+    // fold-winner showing the bluff) — the reveal must never move chips.
+    if (you.canShow) {
+      const key = `show:${hand.handId}`;
+      if (!this.actedKeys.has(key)) {
+        this.actedKeys.add(key);
+        if (rnd() < 0.35) {
+          setTimeout(() => this.socket.emit(EVENTS.SHOW_CARDS, { handId: hand.handId }), randInt(0, 10));
+        }
+      }
+    }
+
     if (you.canDiscard) {
       const key = `discard:${hand.handId}`;
       if (this.actedKeys.has(key)) return;

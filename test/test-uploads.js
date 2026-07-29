@@ -130,6 +130,25 @@ check('settings keep a valid theme', sanitizeSettings({
 }).tableTheme.feltColor === '#1f6b43');
 check('settings default to no theme', sanitizeSettings({}).tableTheme === null);
 
+// Blinds, buy-ins and the bounty are uncapped by design — bounded only at
+// MAX_CHIPS, where chip sums would stop being exact integers.
+const big = sanitizeSettings({
+  smallBlind: 5_000_000_000,
+  bigBlind: 10_000_000_000,
+  minBuyIn: 1_000_000_000_000,
+  maxBuyIn: 70_000_000_000_000,
+  defaultBuyIn: 5_000_000_000_000,
+  sevenDeuceBounty: 1_000_000_000,
+});
+check('blinds are uncapped', big.smallBlind === 5_000_000_000 && big.bigBlind === 10_000_000_000);
+check('buy-ins are uncapped', big.minBuyIn === 1_000_000_000_000 && big.maxBuyIn === 70_000_000_000_000);
+check('default buy-in follows', big.defaultBuyIn === 5_000_000_000_000);
+check('the 7-2 bounty payout is uncapped', big.sevenDeuceBounty === 1_000_000_000);
+check('chip amounts clamp at the integer-safety bound',
+  sanitizeSettings({ smallBlind: Number.MAX_SAFE_INTEGER }).smallBlind === 100_000_000_000_000);
+check('a bounty of zero means the 7-2 game is off',
+  sanitizeSettings({ sevenDeuceBounty: 0 }).sevenDeuceBounty === 0);
+
 // ---- soundboard ----
 
 const clip = uploads.storeUpload({ buffer: OGG, accountId: acct.id, wantKind: 'audio', originalName: 'groan.ogg' });

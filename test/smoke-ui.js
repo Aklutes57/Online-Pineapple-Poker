@@ -76,6 +76,12 @@ try {
   await anna.click('#start-btn');
   await anna.fill('#c-nickname', 'Anna');
   await anna.selectOption('#c-variant', 'holdem');
+  // The 7-2 bounty is a toggle with a custom payout; leave it off for this
+  // run but prove the control gates the amount field.
+  await check('7-2 payout starts disabled', await anna.locator('#c-72-amount').isDisabled());
+  await anna.check('#c-72');
+  await check('7-2 toggle enables the payout', !(await anna.locator('#c-72-amount').isDisabled()));
+  await anna.uncheck('#c-72');
   await anna.click('#c-create');
   await anna.waitForURL('**/games/**');
   const gameUrl = anna.url();
@@ -180,6 +186,13 @@ try {
   await check('dealer hand revealed with its description', true);
   await check('747 stayers hold five cards',
     (await anna.locator('.seat.me .card').count()) === 5);
+
+  // Cara folded — after the hand she can still show what she threw away.
+  await cara.click('[data-act="show-cards"]');
+  await anna.waitForFunction(() =>
+    document.getElementById('log-list')?.textContent.includes('Cara shows')
+  );
+  await check('a folder can show their cards after the hand', true);
 
   // Back to hold'em for the rest of the run — and the riding pot (if the
   // dealer swept) must liquidate without breaking anything.

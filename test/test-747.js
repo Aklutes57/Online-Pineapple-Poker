@@ -208,6 +208,8 @@ function conserve(name, players, before, hand, carryIn = 0) {
   check('tied pot rides', hand.results.carryOut === 20);
   check('the ride is handed to the game before the broadcast', ctx.carried === 20);
   check('no winners on a sweep', hand.results.winners.length === 0);
+  check('a 747 folder may show after the hand', hand.handleShowCards(players[0]).ok);
+  check('a 747 stayer may not re-show', !hand.handleShowCards(players[1]).ok);
   conserve('tie sweep', players, before, hand);
 }
 
