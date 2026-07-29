@@ -70,7 +70,9 @@ function stateAt(index) {
           seat.bet = event.amount;
         }
         pot += event.amount;
-        lines.push(`${seat?.nickname ?? '?'} posts the ${event.kind === 'sb' ? 'small' : 'big'} blind (${event.amount})`);
+        lines.push(`${seat?.nickname ?? '?'} posts the ${
+          event.kind === 'ante' ? 'ante' : event.kind === 'sb' ? 'small blind' : 'big blind'
+        } (${event.amount})`);
         break;
       case 'board':
         board = event.board;
@@ -91,6 +93,11 @@ function stateAt(index) {
       }
       case 'discard':
         lines.push(`${seat?.nickname ?? '?'} discards a card`);
+        break;
+      // 747: the simultaneous stay/fold reveal.
+      case 'decision':
+        if (seat && !event.stay) seat.folded = true;
+        lines.push(`${seat?.nickname ?? '?'} ${event.stay ? 'stays' : 'folds'}`);
         break;
       case 'reveal':
         if (seat) {

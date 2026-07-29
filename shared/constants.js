@@ -18,6 +18,7 @@ export const EVENTS = {
   REACT: 'react',
   SET_PREACTION: 'setPreAction',
   RABBIT_HUNT: 'rabbitHunt',
+  DECISION_747: 'decision747',
   LEAVE_WAITLIST: 'leaveWaitlist',
   HOST_NUDGE: 'host:nudge',
   HOST_APPROVE_WAITLIST: 'host:approveWaitlist',
@@ -53,10 +54,15 @@ export const PHASES = {
   RIVER: 'river',
   SHOWDOWN: 'showdown',
   COMPLETE: 'complete',
+  // 747 engine phases
+  DECISION_747: 'decision747',
+  COUNTDOWN_747: 'countdown747',
 };
 
-// Each variant declares: hole cards dealt, where the discard phase slots in
-// (null = no discard), and betting style.
+// Each variant declares: which engine runs the hand ('community' is the
+// betting-rounds engine, '747' the dealer-vs-players engine), hole cards
+// dealt, where the discard phase slots in (null = no discard), and betting
+// style.
 export const VARIANTS = {
   holdem: {
     key: 'holdem',
@@ -86,6 +92,19 @@ export const VARIANTS = {
     discardAfter: null,
     potLimit: true,
     omaha: true, // must use exactly 2 hole cards
+  },
+  '747': {
+    key: '747',
+    label: '747 Poker',
+    engine: '747',
+    holeCards: 4, // plus a fifth card for players who stay
+    discardAfter: null,
+    potLimit: false,
+    // Ante-based dealer game: no blinds, no betting rounds. The ante is the
+    // table's big-blind setting, everyone plays the house dealer hand,
+    // fours are wild, and two natural sevens in the first four cards win
+    // outright. If the dealer beats everyone, the pot rides to the next
+    // 747 hand.
   },
 };
 
@@ -118,6 +137,7 @@ export const TIMINGS = {
   DISCARD_TIME: 15000, // ms for the pineapple discard decision
   DISCARD_NO_CLOCK: 300000, // untimed tables still need a stall fallback
   NUDGE_GRACE: 15000, // ms a nudged player gets before the host's prod lands
+  COUNTDOWN_747: 3200, // the 3-2-1 before stay/fold choices are revealed
   NEXT_HAND_DELAY: 4000, // ms between hands
   RUNOUT_STREET_DELAY: 1500, // ms between streets on an all-in run-out
   AWAY_GRACE: 1000, // ms before auto-acting for a sitting-out player

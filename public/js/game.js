@@ -81,14 +81,15 @@ let lastResultHandId = null;
 function applyState(state) {
   if (!state || state.seq <= client.lastSeq) return;
   client.lastSeq = state.seq;
-  const wasMyTurn = !!client.you?.availableActions;
+  // 747's stay/fold decision counts as "your turn" for the chime.
+  const wasMyTurn = !!client.you?.availableActions || !!client.you?.canDecide747;
   const previousStack = client.you?.stack;
   client.state = state;
   client.you = state.you;
   renderAll(client);
   notifyStateForPanels(client);
 
-  if (!wasMyTurn && client.you?.availableActions) {
+  if (!wasMyTurn && (client.you?.availableActions || client.you?.canDecide747)) {
     playSound('yourTurn', { enabled: client.soundOn });
   }
 

@@ -7,7 +7,7 @@
 // best7 picks the best 5 of 7; bestOmaha enforces exactly-2-hole-cards
 // structurally by enumerating C(4,2) x C(5,3) combinations.
 
-import { toInt, rankOf, suitOf } from './deck.js';
+import { toInt, rankOf, suitOf, RANK_CHARS } from './deck.js';
 
 export const CATEGORY = {
   HIGH_CARD: 0,
@@ -122,7 +122,59 @@ const COMBOS_5C3 = (() => {
   return out;
 })();
 
-// cards7: array of 7 card strings (2 hole + 5 board).
+// Best five-card hand from any 5-7 cards (the live "what do I have" readout
+// mid-hand, where the board may only be partial).
+export function bestAny(cards) {
+  if (cards.length === 5) return { score: rank5(cards), bestFive: [...cards] };
+  if (cards.length === 7) return best7(cards);
+  let best = -1;
+  let bestFive = null;
+  const n = cards.length;
+  for (let a = 0; a < n - 4; a++)
+    for (let b = a + 1; b < n - 3; b++)
+      for (let c = b + 1; c < n - 2; c++)
+        for (let d = c + 1; d < n - 1; d++)
+          for (let e = d + 1; e < n; e++) {
+            const five = [cards[a], cards[b], cards[c], cards[d], cards[e]];
+            const score = rank5(five);
+            if (score > best) {
+              best = score;
+              bestFive = five;
+            }
+          }
+  return { score: best, bestFive };
+}
+
+// Made-hand description for FEWER than five cards (preflop readouts):
+// only pairs and better exist that early — straights and flushes can't.
+export function describePartial(cards) {
+  const counts = new Map();
+  for (const c of cards) {
+    const r = RANK_CHARS.indexOf(c[0]);
+    counts.set(r, (counts.get(r) || 0) + 1);
+  }
+  let bestRank = -1;
+  let bestCount = 0;
+  let pairs = 0;
+  for (const [rank, count] of counts) {
+    if (count >= 2) pairs++;
+    if (count > bestCount || (count === bestCount && rank > bestRank)) {
+      bestCount = count;
+      bestRank = rank;
+    }
+  }
+  if (bestCount >= 4) return `Four of a Kind, ${RANK_PLURALS[bestRank]}`;
+  if (bestCount === 3) return `Three of a Kind, ${RANK_PLURALS[bestRank]}`;
+  if (bestCount === 2 && pairs >= 2) {
+    const pairRanks = [...counts.entries()].filter(([, n]) => n >= 2).map(([r]) => r).sort((a, b) => b - a);
+    return `Two Pair, ${RANK_PLURALS[pairRanks[0]]} and ${RANK_PLURALS[pairRanks[1]]}`;
+  }
+  if (bestCount === 2) return `Pair of ${RANK_PLURALS[bestRank]}`;
+  const high = Math.max(...[...counts.keys()]);
+  return `${RANK_NAMES[high]} High`;
+}
+
+// cards7: array of 7 cards. Returns { score, bestFive }.
 export function best7(cards7) {
   let best = -1;
   let bestFive = null;

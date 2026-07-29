@@ -5,7 +5,9 @@ share the link, approve who sits down, and play — no downloads, no accounts,
 no real money.
 
 **Games:** Texas Hold'em · Pineapple (discard before the flop) ·
-Crazy Pineapple (discard after the flop) · Pot Limit Omaha
+Crazy Pineapple (discard after the flop) · Pot Limit Omaha ·
+747 Poker (everyone antes and plays the dealer's hand — fours are wild,
+two natural sevens win outright, and an unbeaten dealer's pot rides)
 
 ## Run it
 
@@ -47,7 +49,9 @@ Data lives in a SQLite file at `data/pineapple.db` (override with
   that don't reopen action, side pots with odd-chip distribution, all-in
   run-outs with revealed hands, split pots
 - Pot-limit bet sizing for Omaha; simultaneous discard phase for the
-  pineapple variants
+  pineapple variants; a second engine for 747 Poker (simultaneous
+  stay/fold with a 3-2-1 reveal, wildcard evaluation, riding pots)
+- A live readout under your cards telling you what your hand currently is
 - Host controls: approve seats, pause, change blinds/timer, top up or reduce
   stacks, kick players, close the table
 - Chat, emoji reactions, hand-by-hand log, and a session ledger with

@@ -132,6 +132,18 @@ export function renderActionBar(client) {
           : ''}
       </div>
       ${trayOpen && av.canRaise ? trayHtml(av, client) : ''}`;
+  } else if (you.canDecide747) {
+    // 747: one secret, simultaneous choice. Big buttons, no tray.
+    html = `
+      <div class="ab-actions">
+        <button class="btn btn-red ab-btn" data-act="fold-747">Fold</button>
+        <button class="btn btn-green ab-btn" data-act="stay-747">Stay</button>
+      </div>
+      <span class="ab-note">Beat the dealer's hand to win the pot — choices reveal together.</span>`;
+  } else if (you.decided747 && hand && hand.phase === PHASES.DECISION_747) {
+    html = `<span class="ab-note">Locked in — waiting for the others…</span>`;
+  } else if (hand && hand.phase === PHASES.COUNTDOWN_747 && !hand.finished) {
+    html = `<span class="ab-note ab-highlight">Revealing…</span>`;
   } else if (you.canDiscard) {
     html = `<span class="ab-note ab-highlight">🍍 Tap one of your cards to throw it away</span>`;
   } else if (you.hasDiscarded && hand && (hand.phase === PHASES.DISCARD_PREFLOP || hand.phase === PHASES.DISCARD_POSTFLOP)) {
@@ -325,6 +337,12 @@ function handleAct(client, act, av) {
       trayOpen = false;
       break;
     }
+    case 'stay-747':
+      client.send(EVENTS.DECISION_747, { handId: hand.handId, stay: true });
+      break;
+    case 'fold-747':
+      client.send(EVENTS.DECISION_747, { handId: hand.handId, stay: false });
+      break;
     case 'show-cards':
       client.send(EVENTS.SHOW_CARDS, { handId: hand.handId });
       break;

@@ -18,9 +18,10 @@ TIMINGS.NEXT_HAND_DELAY = 40;
 TIMINGS.RUNOUT_STREET_DELAY = 5;
 TIMINGS.DISCARD_TIME = 3000;
 TIMINGS.AWAY_GRACE = 20;
+TIMINGS.COUNTDOWN_747 = 10;
 
 const HANDS_PER_VARIANT = parseInt(process.argv[2], 10) || 60;
-const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo'];
+const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo', '747'];
 const BOTS = 5; // plus the host = 6 seats
 const BUY_IN = 200;
 
@@ -96,6 +97,19 @@ class Bot {
       return;
     }
 
+    // 747: the simultaneous stay/fold decision. Mostly stay, so the pot
+    // usually pays out, but enough folds to hit the everyone-folds sweep.
+    if (you.canDecide747) {
+      const key = `decide747:${hand.handId}`;
+      if (this.actedKeys.has(key)) return;
+      this.actedKeys.add(key);
+      setTimeout(
+        () => this.socket.emit(EVENTS.DECISION_747, { handId: hand.handId, stay: rnd() < 0.6 }),
+        randInt(0, 10)
+      );
+      return;
+    }
+
     if (you.canDiscard) {
       const key = `discard:${hand.handId}`;
       if (this.actedKeys.has(key)) return;
@@ -158,6 +172,7 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
   for (let i = 0; i < BOTS; i++) bots.push(new Bot(url, gameId, `bot${i + 1}`));
 
   let handsFinished = 0;
+  const variantsSeen = new Set(); // guards against a silent fallback variant
   let lastFinishedHandNo = 0;
   let lastVariantSwitch = 0;
   let lastEventAt = Date.now();
@@ -177,12 +192,14 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
       if (s.stack < 0) fail(`${label}: negative stack for ${s.nickname}`, state);
     }
     if (state.hand?.finished) {
-      const sumStacks = seats.reduce((a, s) => a + s.stack, 0);
+      // A riding 747 pot is chips in flight — part of the books until it
+      // pays out or is liquidated back into stacks.
+      const sumStacks = seats.reduce((a, s) => a + s.stack, 0) + (state.carryPot || 0);
       const buyIns = state.ledger.reduce((a, r) => a + r.buyIns, 0);
       const cashOuts = state.ledger.reduce((a, r) => a + r.cashOuts, 0);
       if (sumStacks !== buyIns - cashOuts) {
         fail(
-          `${variantKey}: chips not conserved after hand #${state.hand.handNo}: stacks ${sumStacks}, expected ${buyIns - cashOuts}`,
+          `${variantKey}: chips not conserved after hand #${state.hand.handNo}: stacks+carry ${sumStacks}, expected ${buyIns - cashOuts}`,
           state
         );
       }
@@ -218,16 +235,20 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
       state.hand.handNo % 6 === 0
     ) {
       lastVariantSwitch = state.hand.handNo;
-      const rotation = ['holdem', 'pineapple', 'crazyPineapple', 'plo'];
+      // 747 in the rotation exercises switching a dealer game in and out
+      // mid-session (including carry-pot liquidation on the way out).
+      const rotation = ['holdem', 'pineapple', '747', 'crazyPineapple', 'plo'];
       const next = rotation[(rotation.indexOf(state.settings.variant) + 1) % rotation.length];
       bot.socket.emit(EVENTS.HOST_UPDATE_SETTINGS, { variant: next });
     }
 
-    // Top up busted bots so the game never dies (host behavior).
-    if (started && state.hand?.finished) {
+    // Top up short bots so the game never dies (host behavior). Below the
+    // big blind covers busted stacks and 747's you-must-cover-the-ante rule.
+    if (started && (state.hand?.finished || !state.hand)) {
+      const handNo = state.hand?.handNo ?? -1;
       for (const s of state.seats) {
-        if (s && s.stack === 0 && toppedUpAt.get(s.playerId) !== state.hand.handNo) {
-          toppedUpAt.set(s.playerId, state.hand.handNo);
+        if (s && s.stack < state.settings.bigBlind && toppedUpAt.get(s.playerId) !== handNo) {
+          toppedUpAt.set(s.playerId, handNo);
           bot.socket.emit(EVENTS.HOST_ADJUST_STACK, { playerId: s.playerId, delta: BUY_IN });
         }
       }
@@ -236,6 +257,7 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
     // Count finished hands.
     if (state.hand?.finished && state.hand.handNo > lastFinishedHandNo) {
       lastFinishedHandNo = state.hand.handNo;
+      variantsSeen.add(state.hand.variant);
       handsFinished++;
       if (handsFinished % 20 === 0) {
         process.stdout.write(`  ${label}: ${handsFinished}/${HANDS_PER_VARIANT} hands\r`);
@@ -274,9 +296,15 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
 
   clearInterval(watchdog);
   clearTimeout(timeout);
+  if (!variantsSeen.has(variantKey)) {
+    fail(`${label}: no hand was actually dealt as ${variantKey} (saw: ${[...variantsSeen].join(', ')})`);
+  }
+  if (extraSettings.rotateVariants && variantsSeen.size < 2) {
+    fail(`${label}: rotation never switched the variant (saw: ${[...variantsSeen].join(', ')})`);
+  }
   for (const bot of bots) bot.disconnect();
   await new Promise((resolve) => httpServer.close(resolve));
-  console.log(`  ${label}: ${handsFinished} hands OK                    `);
+  console.log(`  ${label}: ${handsFinished} hands OK (${[...variantsSeen].join(', ')})`);
 }
 
 for (const variantKey of VARIANT_KEYS) {
@@ -290,6 +318,9 @@ const OPTION_PASSES = [
   ['holdem', { straddle: true, runItTwice: true, bombPotEvery: 4, sevenDeuceBounty: 15, rabbitHunt: true, rotateVariants: true }, 'holdem+options'],
   ['plo', { straddle: true, runItTwice: true, bombPotEvery: 5, sevenDeuceBounty: 10, rotateVariants: true }, 'plo+options'],
   ['crazyPineapple', { bombPotEvery: 3, sevenDeuceBounty: 20, runItTwice: true, rotateVariants: true }, 'crazyPineapple+options'],
+  // Starts as the dealer game and rotates out of (and back into) it —
+  // the carry pot must liquidate cleanly at every switch.
+  ['747', { rotateVariants: true }, '747+rotation'],
 ];
 for (const [variantKey, settings, label] of OPTION_PASSES) {
   console.log(`Soaking ${label}…`);

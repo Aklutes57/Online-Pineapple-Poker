@@ -115,6 +115,12 @@ try {
   await anna.waitForSelector('.cards-fan.mine .card');
   await check('hole cards visible to host', true);
 
+  // The live hand readout under your own cards (preflop it always has
+  // something to say — at worst "<rank> High").
+  await anna.waitForSelector('.seat.me .hand-now');
+  const readout = await anna.textContent('.seat.me .hand-now');
+  await check('live hand readout shows under your cards', readout.trim().length > 0);
+
   // ---- play hands by checking/calling until a winner shows ----
   let winnerSeen = false;
   for (let i = 0; i < 80 && !winnerSeen; i++) {
@@ -132,6 +138,56 @@ try {
     await anna.waitForTimeout(120);
   }
   await check('a hand played to a finish (winner shown)', winnerSeen);
+
+  // ---- 747 Poker: switch the game mid-session and play a dealer hand ----
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  await anna.selectOption('#h-variant', '747');
+  await anna.click('#h-save');
+  await anna.click('#h-done');
+
+  // Play out whatever community hand may still be live, until the 747
+  // decision buttons appear.
+  let sawDecision = false;
+  for (let i = 0; i < 100 && !sawDecision; i++) {
+    for (const page of [anna, ben, cara]) {
+      try {
+        const btn = page.locator('[data-act="check"], [data-act="call"]').first();
+        if (await btn.isVisible({ timeout: 50 })) await btn.click({ timeout: 500 });
+      } catch {
+        /* fine */
+      }
+    }
+    if (await anna.locator('[data-act="stay-747"]').isVisible({ timeout: 50 }).catch(() => false)) {
+      sawDecision = true;
+    }
+    await anna.waitForTimeout(150);
+  }
+  await check('747 deals and offers Stay / Fold', sawDecision);
+  await check('747 header shows the ante', (await anna.textContent('#game-badge')).includes('Ante'));
+  await check('747 dealer cards are face down in the middle',
+    (await anna.locator('#board .card.back').count()) === 4);
+
+  await anna.click('[data-act="stay-747"]');
+  await anna.waitForSelector('.seat.me .np-status:has-text("locked in")');
+  await check('locking in is shown on the seat', true);
+  await ben.click('[data-act="stay-747"]');
+  await cara.click('[data-act="fold-747"]');
+
+  await ben.waitForSelector('.countdown-747', { timeout: 5000 });
+  await check('3-2-1 countdown appears once everyone locks in', true);
+  await anna.waitForSelector('.dealer-title:has-text("Dealer —")', { timeout: 15000 });
+  await check('dealer hand revealed with its description', true);
+  await check('747 stayers hold five cards',
+    (await anna.locator('.seat.me .card').count()) === 5);
+
+  // Back to hold'em for the rest of the run — and the riding pot (if the
+  // dealer swept) must liquidate without breaking anything.
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  await anna.selectOption('#h-variant', 'holdem');
+  await anna.click('#h-save');
+  await anna.click('#h-done');
 
   // ---- emoji reactions reach the other players ----
   await ben.click('#react-btn');
@@ -309,7 +365,7 @@ try {
   await anna.click('#host-menu-btn');
   await anna.waitForSelector('#host-modal:not(.hidden)');
   await check('host modal offers a game selector',
-    (await anna.locator('#h-variant option').count()) === 4);
+    (await anna.locator('#h-variant option').count()) === 5);
   await anna.selectOption('#h-variant', 'plo');
   await anna.click('#h-save');
   await anna.click('#h-done');

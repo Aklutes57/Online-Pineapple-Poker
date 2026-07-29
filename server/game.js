@@ -4,6 +4,8 @@
 
 import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS } from '../shared/constants.js';
 import { Hand } from './hand.js';
+import { Hand747 } from './hand747.js';
+import { payoutPots } from './pots.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
 import { saveHand } from './handStore.js';
 import { notifyTurn, notifySeatApproved } from './push.js';
@@ -27,6 +29,8 @@ export class Game {
     this.currentHand = null;
     this.handNo = 0;
     this.buttonSeat = null;
+    // 747: when the dealer beats everyone, the pot rides here between hands.
+    this.carryPot = 0;
     this.chat = [];
     this.logs = [];
     this.ledger = new Map(); // playerId -> { nickname, buyIns, cashOuts }
@@ -81,6 +85,11 @@ export class Game {
           p.stack += p.totalCommitted;
           p.totalCommitted = 0;
           p.betThisRound = 0;
+        }
+        // A voided 747 hand hands its riding pot back to the game.
+        if (hand.carryIn > 0) {
+          this.carryPot += hand.carryIn;
+          hand.carryIn = 0;
         }
         hand.finished = true;
         hand.phase = PHASES.COMPLETE;
@@ -478,6 +487,12 @@ export class Game {
       this.addLog(
         `Game changes to ${VARIANTS[clean.variant].label}${inHand ? ' after this hand' : ' next hand'}`
       );
+      // A pot can only ride between 747 hands; switching away cashes it out.
+      if (VARIANTS[clean.variant].engine !== '747' && !inHand) {
+        this.liquidateCarryPot('game change');
+      } else if (VARIANTS[clean.variant].engine !== '747') {
+        this.queueOp({ type: 'liquidateCarry' });
+      }
     }
     return { ok: true };
   }
@@ -496,6 +511,10 @@ export class Game {
         this.unseatNow(player, op.reason);
       } else if (op.type === 'adjustStack' && player.status === 'seated') {
         this.applyStackAdjust(player, op.delta);
+      } else if (op.type === 'liquidateCarry') {
+        if (VARIANTS[this.settings.variant].engine !== '747') {
+          this.liquidateCarryPot('game change');
+        }
       }
     }
     // After unseats have freed any seats, pull people off the queue.
@@ -515,22 +534,66 @@ export class Game {
   startHand() {
     if (this.status !== GAME_STATUS.RUNNING || this.closed) return;
     if (this.currentHand && !this.currentHand.finished) return;
-    const players = this.eligiblePlayers();
+    const s = this.settings;
+    const is747 = VARIANTS[s.variant]?.engine === '747';
+
+    let players = this.eligiblePlayers();
+    // 747: you must cover the ante to be dealt in, and the deck fits at
+    // most 9 players plus the dealer — the overflow seat is skipped this
+    // hand and picked up as the button moves.
+    if (is747) {
+      players = players.filter((p) => p.stack >= s.bigBlind);
+    }
     if (players.length < 2) {
       this.currentHand = null;
-      this.addLog('Waiting for at least 2 players with chips…');
+      this.addLog(
+        is747
+          ? 'Waiting for at least 2 players who can cover the ante…'
+          : 'Waiting for at least 2 players with chips…'
+      );
       this.emitChanged();
       return;
     }
     this.buttonSeat = this.nextButtonSeat();
     this.handNo++;
-    const s = this.settings;
-    const bombPot = s.bombPotEvery > 0 && this.handNo % s.bombPotEvery === 0;
-    // Top the time bank back up each hand so it is a per-decision reserve
-    // rather than a per-session one.
     for (const p of players) {
       p.timeBank = s.timeBank > 0 ? s.timeBank * 1000 : 0;
     }
+
+    if (is747) {
+      if (players.length > 9) {
+        players.sort((a, b) => a.seatIndex - b.seatIndex);
+        const ordered = [];
+        let seat = this.buttonSeat;
+        for (let i = 0; i < SEAT_COUNT && ordered.length < 9; i++) {
+          seat = (seat + 1) % SEAT_COUNT;
+          const p = players.find((x) => x.seatIndex === seat);
+          if (p) ordered.push(p);
+        }
+        const skipped = players.find((p) => !ordered.includes(p));
+        if (skipped) this.addLog(`${skipped.nickname} sits this 747 hand out (nine-player deal)`);
+        players = ordered;
+      }
+      const carryIn = this.carryPot;
+      this.carryPot = 0;
+      this.currentHand = new Hand747({
+        handNo: this.handNo,
+        smallBlind: s.smallBlind,
+        bigBlind: s.bigBlind,
+        actionTime: s.actionTime,
+        buttonSeat: this.buttonSeat,
+        players: players.sort((a, b) => a.seatIndex - b.seatIndex),
+        carryIn,
+        ctx: this.handCtx(),
+      });
+      this.currentHand.start();
+      this.emitChanged();
+      return;
+    }
+
+    // Top the time bank back up each hand so it is a per-decision reserve
+    // rather than a per-session one.
+    const bombPot = s.bombPotEvery > 0 && this.handNo % s.bombPotEvery === 0;
     this.currentHand = new Hand({
       handNo: this.handNo,
       variantKey: s.variant,
@@ -547,20 +610,51 @@ export class Game {
         bombPot,
         ante: bombPot ? s.bigBlind : 0,
       },
-      ctx: {
-        log: (text) => this.addLog(text),
-        changed: () => this.emitChanged(),
-        finished: () => this.onHandFinished(),
-        setTimer: (name, ms, fn) => this.setTimer(name, ms, fn),
-        clearTimer: () => this.clearTimer(),
-        markAway: (player) => {
-          player.sittingOut = true;
-        },
-        notifyTurn: (player) => notifyTurn(this, player),
-      },
+      ctx: this.handCtx(),
     });
     this.currentHand.start();
     this.emitChanged();
+  }
+
+  // The single contract both hand engines run against.
+  handCtx() {
+    return {
+      log: (text) => this.addLog(text),
+      changed: () => this.emitChanged(),
+      finished: () => this.onHandFinished(),
+      setTimer: (name, ms, fn) => this.setTimer(name, ms, fn),
+      clearTimer: () => this.clearTimer(),
+      markAway: (player) => {
+        player.sittingOut = true;
+      },
+      notifyTurn: (player) => notifyTurn(this, player),
+      // 747: a swept pot rides at game level. Must land in carryPot BEFORE
+      // the finished-hand broadcast, or the books look short for one frame.
+      carryOut: (amount) => {
+        this.carryPot += amount;
+      },
+    };
+  }
+
+  // 747: split a riding pot evenly among seated players when it can no
+  // longer ride (game switched away, or the table is closing). Chips must
+  // always land back in stacks — they can never evaporate.
+  liquidateCarryPot(reason) {
+    if (this.carryPot <= 0) return;
+    const seats = this.seats
+      .map((id, i) => (id && this.players.get(id)?.status === 'seated' ? i : null))
+      .filter((i) => i !== null);
+    if (seats.length === 0) return; // stays parked until someone is seated
+    const amount = this.carryPot;
+    this.carryPot = 0;
+    const flat = new Map(seats.map((s) => [s, 1]));
+    const { winnings } = payoutPots(
+      [{ amount, eligibleSeats: seats }], flat, this.buttonSeat ?? seats[0]
+    );
+    for (const [seat, share] of winnings) {
+      this.players.get(this.seats[seat]).stack += share;
+    }
+    this.addLog(`The riding 747 pot (${amount}) was split among seated players (${reason})`);
   }
 
   onHandFinished() {
@@ -746,6 +840,9 @@ export class Game {
     this.closed = true;
     this.status = GAME_STATUS.CLOSED;
     this.clearTimer();
+    // A riding 747 pot can't outlive the table — hand it back before the
+    // session ledger is finalized.
+    this.liquidateCarryPot('table closed');
     clearTimeout(this.hostTransferTimeout);
     try {
       if (this.tableSessionId || this.handNo > 0) closeTableSession(this);
@@ -769,9 +866,7 @@ export function sanitizeSettings(s) {
   const actionTime = SETTINGS_LIMITS.actionTimes.includes(s.actionTime)
     ? s.actionTime
     : DEFAULT_SETTINGS.actionTime;
-  const variant = ['holdem', 'pineapple', 'crazyPineapple', 'plo'].includes(s.variant)
-    ? s.variant
-    : DEFAULT_SETTINGS.variant;
+  const variant = VARIANTS[s.variant] ? s.variant : DEFAULT_SETTINGS.variant;
   const bounded = (v, min, max, dflt) =>
     Number.isInteger(v) ? Math.max(min, Math.min(max, v)) : dflt;
   return {

@@ -1140,3 +1140,58 @@ td.dim { color: var(--text-dim); }
     padding: 6px 10px;
   }
 }
+
+/* ---- 747 Poker ---- */
+
+/* The dealer's hand sits where the community board normally goes. */
+.dealer-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffe9a8;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* Live readout of what your own cards currently make. */
+.hand-now {
+  margin-top: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 233, 168, 0.35);
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ffe9a8;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.hand-now.natural {
+  background: var(--green-dark);
+  border-color: var(--green);
+  color: #eafff2;
+  animation: natural-pulse 0.9s ease-in-out infinite alternate;
+}
+
+/* The simultaneous-reveal countdown. */
+.countdown-747 {
+  font-size: 64px;
+  font-weight: 800;
+  color: #ffe9a8;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
+  animation: natural-pulse 0.5s ease-in-out infinite alternate;
+}
+
+#center-message .natural-banner {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffd75e;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  animation: natural-pulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes natural-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.12); }
+}

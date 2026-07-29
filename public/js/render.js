@@ -56,7 +56,11 @@ function renderHeader(client) {
   const v = VARIANTS[variantKey];
   const badge = document.getElementById('game-badge');
   const handNo = state.hand ? ` · Hand #${state.hand.handNo}` : '';
-  badge.textContent = `${v ? v.label : variantKey} · Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}${handNo}`;
+  // 747 is an ante game — there are no blinds to advertise.
+  const stakes = v?.engine === '747'
+    ? `Ante ${state.settings.bigBlind}`
+    : `Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}`;
+  badge.textContent = `${v ? v.label : variantKey} · ${stakes}${handNo}`;
 }
 
 // ---- seats ----
@@ -119,11 +123,15 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   const shownCards = seat.cards || myCards;
   const won = seat.handResult && seat.handResult.won > 0;
 
+  const decisionPhase = hand && hand.phase === PHASES.DECISION_747;
+  const myHandNow = isMe && !seat.folded ? you?.handNow : null;
+
   const sig = JSON.stringify([
     seat.playerId, seat.nickname, seat.stack, seat.connected, seat.sittingOut,
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
     seat.isDealer, toAct, waitingDiscard, seat.handResult,
     isMe, you?.canDiscard, you?.hasDiscarded,
+    decisionPhase ? seat.decided : null, myHandNow,
     hand && !hand.finished ? hand.lastAction?.seat === seatIndex && JSON.stringify(hand.lastAction) : null,
   ]);
   if (pod.dataset.sig === sig) return;
@@ -165,6 +173,10 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   else if (seat.sittingOut) statusBits.push('away');
   if (seat.allIn) statusBits.push('all-in');
   if (waitingDiscard) statusBits.push('discarding…');
+  // 747 decision phase: THAT a player locked in is public, never which way.
+  if (decisionPhase && seat.inHand && !seat.folded) {
+    statusBits.push(seat.decided ? 'locked in ✓' : 'deciding…');
+  }
   plate.innerHTML = `
     <div class="np-row">
       <span class="np-name">${escapeHtml(seat.nickname)}</span>
@@ -193,6 +205,13 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
 
   pod.innerHTML = '';
   pod.appendChild(fan);
+  // Live "what do I have" readout — private, shown only under your own fan.
+  if (myHandNow) {
+    const now = document.createElement('div');
+    now.className = 'hand-now' + (myHandNow === 'NATURAL SEVEN' ? ' natural' : '');
+    now.textContent = myHandNow;
+    pod.appendChild(now);
+  }
   if (seat.isDealer) {
     const disc = document.createElement('div');
     disc.className = 'dealer-disc';
@@ -243,6 +262,15 @@ function renderBoard(client) {
   const board = document.getElementById('board');
   const potLine = document.getElementById('pot-line');
 
+  // 747: the center shows the dealer's hand, not a community board (the
+  // server reuses `board` for the revealed dealer cards, so skip it here).
+  if (hand?.dealer) {
+    renderDealer(board, hand);
+    renderPotLine(potLine, state, hand);
+    return;
+  }
+  board.classList.remove('dealer-area');
+
   const cards = hand ? hand.board : [];
   const second = hand?.board2 || null;
   const rabbit = hand?.rabbit || null;
@@ -274,19 +302,53 @@ function renderBoard(client) {
     }
   }
 
+  renderPotLine(potLine, state, hand);
+}
+
+function renderPotLine(potLine, state, hand) {
+  // A riding 747 pot only sits at game level BETWEEN hands (it becomes the
+  // next hand's carry-in), so both lines can never double-count.
+  const riding = state.carryPot > 0 ? `Riding pot: ${state.carryPot}` : '';
+  let potText = '';
   if (hand && (hand.collectedPot > 0 || hand.potTotal > 0)) {
-    potLine.classList.remove('hidden');
     if (hand.finished && hand.pots) {
       const total = hand.pots.reduce((a, p) => a + p.amount, 0);
-      potLine.textContent = hand.pots.length > 1
+      potText = hand.pots.length > 1
         ? `Pot: ${total} (${hand.pots.map((p) => p.amount).join(' + ')})`
         : `Pot: ${total}`;
     } else {
-      potLine.textContent = `Pot: ${hand.collectedPot}`;
+      potText = `Pot: ${hand.collectedPot}`;
     }
-  } else {
-    potLine.classList.add('hidden');
   }
+  const text = [potText, riding].filter(Boolean).join(' · ');
+  potLine.classList.toggle('hidden', !text);
+  potLine.textContent = text;
+}
+
+// The 747 dealer's hand in the middle of the table: card backs while the
+// hand is live, the revealed five (with its description) at showdown.
+function renderDealer(board, hand) {
+  const d = hand.dealer;
+  const sig = `dealer:${d.cardCount}:${(d.cards || []).join(',')}:${d.desc || ''}`;
+  if (board.dataset.sig === sig) return;
+  board.dataset.sig = sig;
+  board.classList.add('dealer-area');
+  board.classList.remove('two-boards');
+  board.innerHTML = '';
+
+  const label = document.createElement('div');
+  label.className = 'dealer-title';
+  label.textContent = d.desc ? `Dealer — ${d.desc}` : 'Dealer';
+  board.appendChild(label);
+
+  const row = document.createElement('div');
+  row.className = 'board-row';
+  if (d.cards) {
+    for (const c of d.cards) row.appendChild(makeCardEl(c, { dealt: true }));
+  } else {
+    for (let i = 0; i < d.cardCount; i++) row.appendChild(makeCardBack());
+  }
+  board.appendChild(row);
 }
 
 // ---- center message ----
@@ -311,10 +373,23 @@ function renderCenter(client) {
     html = `<p>Game paused${you?.isHost ? ' — resume from the Host menu' : ''}</p>`;
   } else if (state.pauseRequested) {
     html = '<p>Pausing after this hand…</p>';
-  } else if (state.status === GAME_STATUS.RUNNING && (!state.hand || (state.hand.finished && !winnersLine(state)))) {
-    html = state.hand ? '' : '<p>Waiting for players…</p>';
+  } else if (state.hand && !state.hand.finished && state.hand.phase === PHASES.COUNTDOWN_747) {
+    // The number itself ticks in the timer loop between broadcasts.
+    html = '<div class="countdown-747" id="cd747-num">3</div>';
   } else if (state.hand?.finished) {
-    html = `<p class="win-line">${winnersLine(state)}</p>`;
+    const natural = state.hand.naturalSevenSeats?.length
+      ? '<p class="natural-banner">🎉 NATURAL SEVEN! 🎉</p>'
+      : '';
+    const wl = winnersLine(state);
+    if (wl) {
+      html = `${natural}<p class="win-line">${wl}</p>`;
+    } else if (state.hand.carryOut > 0) {
+      html = `<p class="win-line">Nobody beat the dealer — ${state.hand.carryOut} rides to the next hand</p>`;
+    } else {
+      html = '';
+    }
+  } else if (state.status === GAME_STATUS.RUNNING && !state.hand) {
+    html = '<p>Waiting for players…</p>';
   }
 
   if (el.dataset.sig !== html) {
@@ -355,9 +430,16 @@ export function startTimerLoop(client) {
       timerMemo.startedAt = Date.now();
     }
 
+    // The 3-2-1 reveal countdown ticks here, between broadcasts.
+    const cdNum = document.getElementById('cd747-num');
+    if (cdNum && deadline && hand.timerName === 'countdown747') {
+      const left = Math.max(0, deadline - Date.now());
+      cdNum.textContent = String(Math.max(1, Math.ceil(left / 1000)));
+    }
+
     for (const pod of document.querySelectorAll('.seat.occupied')) {
       const bar = pod.querySelector('.timer-bar');
-      if (!bar) continue;
+      if (!bar || !hand) continue;
       const seatIndex = parseInt(pod.dataset.seat, 10);
       let show = false;
       const clockNames = hand.timerName === 'action' || hand.timerName === 'timebank' || hand.timerName === 'nudge';
@@ -365,6 +447,11 @@ export function startTimerLoop(client) {
       if (deadline && hand.timerName === 'discard') {
         const seat = client.state.seats[seatIndex];
         if (seat && seat.inHand && !seat.folded && seat.cardCount === 3) show = true;
+      }
+      // 747 decision clock: every live seat that hasn't locked in yet.
+      if (deadline && hand.timerName === 'decision747') {
+        const seat = client.state.seats[seatIndex];
+        if (seat && seat.inHand && !seat.folded && seat.decided === false) show = true;
       }
       bar.classList.toggle('hidden', !show);
       if (show) {

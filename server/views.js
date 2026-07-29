@@ -4,6 +4,36 @@
 
 import { SEAT_COUNT, PHASES } from '../shared/constants.js';
 import { availableActionsFor } from './betting.js';
+import { bestAny, bestOmaha, describe, describePartial } from './evaluator.js';
+import { evaluate747, describe747, describePartial747, isNaturalSeven, NATURAL_SEVEN_SCORE } from './evaluator747.js';
+
+// The live "what do I have" readout, computed ONLY for the player's own
+// cards inside the private view. Best-effort: any surprise shape returns
+// null rather than risking the broadcast.
+function handNowFor(hand, p) {
+  try {
+    if (hand.variant.engine === '747') {
+      if (p.holeCards.length === 4) return describePartial747(p.holeCards);
+      if (p.holeCards.length === 5) {
+        const score = isNaturalSeven(p.originalFour || p.holeCards.slice(0, 4))
+          ? NATURAL_SEVEN_SCORE
+          : evaluate747(p.holeCards);
+        return describe747(score);
+      }
+      return null;
+    }
+    const board = hand.board || [];
+    if (hand.variant.omaha) {
+      if (board.length >= 3) return describe(bestOmaha(p.holeCards, board).score);
+      return describePartial(p.holeCards);
+    }
+    const cards = [...p.holeCards, ...board];
+    if (cards.length < 5) return describePartial(cards);
+    return describe(bestAny(cards).score);
+  } catch {
+    return null;
+  }
+}
 
 export function buildViews(game) {
   const hand = game.currentHand;
@@ -35,6 +65,8 @@ export function buildViews(game) {
       isSB: !!hand && hand.sbSeat === i,
       isBB: !!hand && hand.bbSeat === i,
       isStraddle: !!hand && hand.straddleSeat === i,
+      // 747: only THAT a choice is locked is public — never which one.
+      decided: inHand && hand.phase === PHASES.DECISION_747 ? p.decision747 !== null : null,
       // Public on every real site, and it makes the countdown honest.
       timeBank: Math.round((p.timeBank || 0) / 1000),
       handResult: inHand && hand.finished ? p.handResult : null,
@@ -72,7 +104,7 @@ export function buildViews(game) {
         collectedPot: hand.collectedPot(),
         potTotal: hand.finished
           ? (hand.results?.pots.reduce((a, p) => a + p.amount, 0) ?? 0)
-          : hand.players.reduce((a, p) => a + p.totalCommitted, 0),
+          : hand.players.reduce((a, p) => a + p.totalCommitted, 0) + (hand.carryIn || 0),
         pots: hand.finished ? hand.results?.pots ?? null : null,
         toActSeat: hand.toActSeat,
         currentBet: hand.currentBet,
@@ -83,6 +115,9 @@ export function buildViews(game) {
         cooler: hand.finished ? hand.results?.cooler ?? null : null,
         bounty: hand.finished ? hand.results?.bounty ?? null : null,
         boards: hand.finished ? hand.results?.boards ?? null : null,
+        dealer: hand.variant.engine === '747' ? hand.dealerView() : null,
+        naturalSevenSeats: hand.finished ? hand.results?.naturalSevenSeats ?? null : null,
+        carryOut: hand.finished ? hand.results?.carryOut ?? 0 : 0,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
       }
@@ -99,6 +134,7 @@ export function buildViews(game) {
     seatRequests,
     waitlist,
     hand: handView,
+    carryPot: game.carryPot || 0,
     lastHandRecordId: game.lastHandRecordId || null,
     chatTail: game.chat.slice(-30),
     logTail: game.logs.slice(-80),
@@ -124,8 +160,12 @@ export function buildViews(game) {
       sittingOut: p.sittingOut,
       pendingBuyIn: p.status === 'requesting' ? p.pendingBuyIn : 0,
       holeCards: inHand ? [...p.holeCards] : null,
+      handNow: inHand && !p.folded && !hand.finished ? handNowFor(hand, p) : null,
       hasDiscarded: inHand ? p.hasDiscarded : false,
       canDiscard: inHand && isDiscardPhase && !p.folded && !p.hasDiscarded && p.holeCards.length === 3,
+      canDecide747:
+        inHand && hand.phase === PHASES.DECISION_747 && !p.folded && p.decision747 === null,
+      decided747: inHand && hand.variant.engine === '747' && p.decision747 != null,
       availableActions: myTurn ? availableActionsFor(hand, p) : null,
       timeBank: Math.round((p.timeBank || 0) / 1000),
       // Private: broadcasting that a seat has Check/Fold armed would be a

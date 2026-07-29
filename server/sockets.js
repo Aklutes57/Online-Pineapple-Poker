@@ -305,6 +305,21 @@ export function attachSockets(io) {
       broadcast(game);
     }));
 
+    // 747: the simultaneous stay/fold decision. Mirrors DISCARD's guards;
+    // the choice itself never appears in any broadcast until the countdown.
+    socket.on(EVENTS.DECISION_747, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'No decision to make right now');
+        return;
+      }
+      if (typeof hand.handleDecision !== 'function') {
+        sendError(socket, ERRORS.BAD_ACTION, 'This game has no stay/fold decision');
+        return;
+      }
+      result(game, hand.handleDecision(player, !!payload.stay), ERRORS.BAD_ACTION);
+    }));
+
     socket.on(EVENTS.RABBIT_HUNT, withGame((game, player, payload) => {
       const hand = game.currentHand;
       if (!hand || payload.handId !== hand.handId) return;
