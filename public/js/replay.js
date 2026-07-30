@@ -7,6 +7,7 @@ import { SEAT_COUNT, SEAT_COORDS, BET_COORDS, REACTIONS, VARIANTS } from '/share
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { authHeaders, loadAccount, currentAccount } from '/js/auth.js';
+import * as fair from '/shared/fairness.js';
 
 const handId = location.pathname.split('/').pop();
 
@@ -40,7 +41,75 @@ async function load() {
 
   renderReactionPicker();
   renderReactions(hand.reactions);
+  renderFairness(hand.fairness);
   goTo(hand.timeline.length); // open on the finished hand
+}
+
+// ---- provably-fair panel + independent, in-browser verifier ----
+
+const fmtFloat = (f) => (typeof f === 'number' ? f.toFixed(12) : '—');
+const short = (h) => (typeof h === 'string' && h.length > 20 ? `${h.slice(0, 10)}…${h.slice(-6)}` : h || '—');
+
+function renderFairness(f) {
+  const panel = document.getElementById('rp-fairness');
+  if (!panel) return;
+  if (!f) {
+    panel.innerHTML = '';
+    return;
+  }
+  const verifiable = !!(f.deckCommit && Array.isArray(f.slotCommits) && Array.isArray(f.openings));
+  panel.innerHTML = `
+    <h3>🔒 Provably fair</h3>
+    <p class="fp-float" title="A [0,1) fingerprint hashed from this hand's seeds">${fmtFloat(f.float)}</p>
+    <dl class="fp-list">
+      <dt>Server commit</dt><dd class="mono" title="${escapeHtml(f.serverCommit || '')}">${escapeHtml(short(f.serverCommit))}</dd>
+      <dt>Client seed</dt><dd class="mono">${escapeHtml(f.clientSeed || '—')}</dd>
+      <dt>Hand nonce</dt><dd class="mono">${escapeHtml(String(f.nonce ?? '—'))}</dd>
+      <dt>Deck commit</dt><dd class="mono" title="${escapeHtml(f.deckCommit || '')}">${escapeHtml(short(f.deckCommit))}</dd>
+    </dl>
+    ${verifiable
+      ? `<button class="btn btn-primary fp-verify" id="fp-verify">Verify this deal in your browser</button>
+         <div id="fp-result"></div>`
+      : `<p class="fp-note">No verification data was recorded for this hand.</p>`}
+    <p class="fp-note">The deck was committed before any card was dealt, so no card could change after the action. Folded hands stay sealed — only the board and cards shown down can be checked.</p>
+  `;
+
+  if (verifiable) {
+    document.getElementById('fp-verify').addEventListener('click', () => verifyInBrowser(f));
+  }
+}
+
+async function verifyInBrowser(f) {
+  const out = document.getElementById('fp-result');
+  out.innerHTML = '<p class="fp-note">Re-checking the commitment in your browser…</p>';
+
+  // The cards actually visible in this replay: the board plus any hand shown
+  // down. These are exactly what the openings should prove.
+  const publicCards = [...(hand.board || []).filter(Boolean)];
+  for (const p of hand.players) if (Array.isArray(p.cards)) for (const c of p.cards) publicCards.push(c);
+
+  let res;
+  try {
+    res = await fair.verifyReveal({
+      deckCommit: f.deckCommit,
+      slotCommits: f.slotCommits,
+      openings: f.openings,
+      publicCards,
+    });
+  } catch {
+    out.innerHTML = '<p class="fp-bad">✗ Verification could not run in this browser.</p>';
+    return;
+  }
+
+  out.innerHTML = `
+    <ul class="fp-checks">
+      <li class="${res.deckCommitOk ? 'fp-ok' : 'fp-bad'}">${res.deckCommitOk ? '✓' : '✗'} The 52 slot commitments hash to the deck commitment published during the hand</li>
+      <li class="${res.openingsOk ? 'fp-ok' : 'fp-bad'}">${res.openingsOk ? '✓' : '✗'} Every revealed card matches its committed slot</li>
+      <li class="${res.allPublicProven ? 'fp-ok' : 'fp-bad'}">${res.allPublicProven ? '✓' : '✗'} Every card shown this hand is proven against the commitment</li>
+    </ul>
+    <p class="${res.ok ? 'fp-ok' : 'fp-bad'}"><strong>${res.ok ? 'Verified — the deck was locked in before the deal and every shown card checks out.' : 'Verification failed — this deal does not match its commitment.'}</strong></p>
+    <p class="fp-note">${res.provenCards.length} card${res.provenCards.length === 1 ? '' : 's'} proven. Folded hands were never revealed and cannot be recovered.</p>
+  `;
 }
 
 // Rebuilds the whole state from event 0 to `index`.

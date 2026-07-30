@@ -131,3 +131,24 @@
     padding: 30px 30px 36px;
   }
 }
+
+/* ---- provably-fair panel ---- */
+.fairness-panel { margin-top: 22px; }
+.fairness-panel h3 { margin-bottom: 8px; }
+.fairness-panel .fp-float {
+  font-size: 26px; font-weight: 700; letter-spacing: 0.5px;
+  color: #f5c542; margin: 4px 0 12px; font-variant-numeric: tabular-nums;
+}
+.fp-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 0 12px; font-size: 13px; }
+.fp-list dt { color: var(--text-dim); }
+.fp-list dd { margin: 0; text-align: right; }
+.mono { font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.fp-note { color: var(--text-dim); font-size: 12.5px; line-height: 1.5; margin: 8px 0; }
+.fp-verify { width: 100%; margin-top: 4px; }
+.fp-checks { list-style: none; padding: 0; margin: 12px 0; font-size: 13px; line-height: 1.7; }
+.fp-ok { color: #57d977; }
+.fp-bad { color: #ff6b6b; }
+.fp-deck { margin-top: 10px; }
+.fp-deck summary { cursor: pointer; color: var(--text-dim); font-size: 13px; }
+.fp-deck-cards { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 8px; }
+.fp-deck-cards .mono { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; }

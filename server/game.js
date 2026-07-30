@@ -9,6 +9,10 @@ import { payoutPots } from './pots.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
 import { saveHand } from './handStore.js';
 import { notifyTurn, notifySeatApproved } from './push.js';
+import {
+  ALGO as FAIRNESS_ALGO, newServerSeed, newClientSeed, commitOf, seededShuffle,
+  handProof, floatFromHex, buildCommitment,
+} from './fairness.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 function shortId() {
@@ -42,6 +46,17 @@ export class Game {
     this.seq = 0;
     this.lastActivity = Date.now();
     this.closed = false;
+    // Provably-fair RNG. The server seed is committed up front and kept secret
+    // until the table closes; the client seed is public and any seated player
+    // can change it (taking effect the next hand). Persisted lazily by
+    // ensureTableSession so the record survives a restart.
+    const serverSeed = newServerSeed();
+    this.fairness = {
+      algo: FAIRNESS_ALGO,
+      serverSeed,
+      serverCommit: commitOf(serverSeed),
+      clientSeed: newClientSeed(),
+    };
     this.onChanged = null; // () => broadcast, set by sockets layer
     this.onClosed = null; // (reason) => notify + destroy, set by sockets layer
   }
@@ -585,6 +600,7 @@ export class Game {
       }
       const carryIn = this.carryPot;
       this.carryPot = 0;
+      const fair747 = this.fairnessForHand();
       this.currentHand = new Hand747({
         handNo: this.handNo,
         smallBlind: s.smallBlind,
@@ -593,6 +609,8 @@ export class Game {
         buttonSeat: this.buttonSeat,
         players: players.sort((a, b) => a.seatIndex - b.seatIndex),
         carryIn,
+        deck: fair747.deck,
+        fairness: fair747.meta,
         ctx: this.handCtx(),
       });
       this.currentHand.start();
@@ -603,6 +621,7 @@ export class Game {
     // Top the time bank back up each hand so it is a per-decision reserve
     // rather than a per-session one.
     const bombPot = s.bombPotEvery > 0 && this.handNo % s.bombPotEvery === 0;
+    const fair = this.fairnessForHand();
     this.currentHand = new Hand({
       handNo: this.handNo,
       variantKey: s.variant,
@@ -611,6 +630,8 @@ export class Game {
       actionTime: s.actionTime,
       buttonSeat: this.buttonSeat,
       players: players.sort((a, b) => a.seatIndex - b.seatIndex),
+      deck: fair.deck,
+      fairness: fair.meta,
       options: {
         straddle: s.straddle,
         rabbitHunt: s.rabbitHunt,
@@ -623,6 +644,36 @@ export class Game {
     });
     this.currentHand.start();
     this.emitChanged();
+  }
+
+  // Builds the deck and the public per-hand fairness proof for the hand about
+  // to start. The server seed never leaves this object — only the commitment
+  // (already public), the client seed, the nonce, and hashes of them do.
+  fairnessForHand() {
+    const nonce = this.handNo;
+    const { serverSeed, serverCommit, clientSeed, algo } = this.fairness;
+    const deck = seededShuffle(serverSeed, clientSeed, nonce);
+    const proof = handProof(serverSeed, clientSeed, nonce);
+    // deckCommit locks all 52 positions the instant the hand starts, so the
+    // server cannot change a card after seeing the action. It reveals nothing.
+    const { deckCommit } = buildCommitment(serverSeed, nonce, deck);
+    return {
+      deck,
+      meta: { algo, commit: serverCommit, clientSeed, nonce, proof, float: floatFromHex(proof), deckCommit },
+    };
+  }
+
+  // Any seated player can steer the client seed; the change is public and takes
+  // effect on the next hand (never mid-hand, so it can't be used to peek).
+  setClientSeed(player, raw) {
+    if (!player || player.status !== 'seated') return { ok: false, error: 'Take a seat to set the client seed' };
+    if (typeof raw !== 'string') return { ok: false, error: 'bad client seed' };
+    const seed = raw.trim().slice(0, 64).replace(/[^\x20-\x7E]/g, '');
+    if (seed.length < 1) return { ok: false, error: 'Client seed cannot be empty' };
+    if (seed === this.fairness.clientSeed) return { ok: true };
+    this.fairness.clientSeed = seed;
+    this.addLog(`${player.nickname} set the table's client seed to "${seed}" (applies next hand)`);
+    return { ok: true };
   }
 
   // The single contract both hand engines run against.

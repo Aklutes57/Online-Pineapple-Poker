@@ -123,6 +123,10 @@ export function buildViews(game) {
         carryOut: hand.finished ? hand.results?.carryOut ?? 0 : 0,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
+        // Provably-fair proof for this hand: the committed hash and a [0,1)
+        // float, visible while the hand is live. The server seed is NOT here —
+        // it is revealed only after the table closes.
+        fairness: hand.fairness ? { ...hand.fairness } : null,
       }
     : null;
 
@@ -137,6 +141,13 @@ export function buildViews(game) {
     seatRequests,
     waitlist,
     hand: handView,
+    // Table-level fairness: the session-long commitment (safe to show always)
+    // and the current client seed players can steer. Server seed stays secret.
+    fairness: {
+      algo: game.fairness.algo,
+      serverCommit: game.fairness.serverCommit,
+      clientSeed: game.fairness.clientSeed,
+    },
     carryPot: game.carryPot || 0,
     lastHandRecordId: game.lastHandRecordId || null,
     chatTail: game.chat.slice(-30),

@@ -19,6 +19,7 @@ export const EVENTS = {
   SET_PREACTION: 'setPreAction',
   RABBIT_HUNT: 'rabbitHunt',
   DECISION_747: 'decision747',
+  SET_CLIENT_SEED: 'setClientSeed',
   LEAVE_WAITLIST: 'leaveWaitlist',
   HOST_NUDGE: 'host:nudge',
   HOST_APPROVE_WAITLIST: 'host:approveWaitlist',

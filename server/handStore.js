@@ -8,6 +8,7 @@
 import { randomBytes } from 'node:crypto';
 import { run, get, all, now } from './db.js';
 import { ensureTableSession } from './stats.js';
+import { buildCommitment, buildOpenings } from './fairness.js';
 
 function newHandId() {
   return randomBytes(9).toString('base64url');
@@ -40,11 +41,33 @@ export function saveHand(game, hand) {
 
   const pot = hand.results?.pots?.reduce((a, p) => a + p.amount, 0) ?? 0;
 
+  // Provably-fair record. The raw server seed NEVER touches this row. Instead
+  // we store the full per-slot commitment set plus openings for the cards that
+  // were public this hand (board, extra boards, rabbit, and any shown hands) —
+  // enough to verify every card seen, and nothing that could reconstruct a
+  // folded hand.
+  let fairnessRecord = null;
+  if (hand.fairness && game.fairness?.serverSeed && Array.isArray(hand.deck)) {
+    const { serverSeed } = game.fairness;
+    const { nonce } = hand.fairness;
+    const { deckCommit, slotCommits } = buildCommitment(serverSeed, nonce, hand.deck);
+    const publicCards = [
+      ...(hand.board || []),
+      ...(hand.board2 || []),
+      ...(hand.rabbit || []),
+      ...players.filter((p) => p.shown).flatMap((p) => p.cards),
+    ].filter(Boolean);
+    const openings = buildOpenings(serverSeed, nonce, hand.deck, publicCards);
+    fairnessRecord = { ...hand.fairness, deckCommit, slotCommits, openings };
+  } else if (hand.fairness) {
+    fairnessRecord = { ...hand.fairness };
+  }
+
   run(
     `INSERT INTO hands
        (id, table_session_id, hand_no, variant, board_json, timeline_json,
-        players_json, winners_json, pot, cooler_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        players_json, winners_json, pot, cooler_json, created_at, fairness_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     tableSessionId,
     hand.handNo,
@@ -55,7 +78,8 @@ export function saveHand(game, hand) {
     JSON.stringify(hand.results?.winners ?? []),
     pot,
     hand.results?.cooler ? JSON.stringify(hand.results.cooler) : null,
-    now()
+    now(),
+    fairnessRecord ? JSON.stringify(fairnessRecord) : null
   );
   return id;
 }
@@ -65,6 +89,15 @@ export function saveHand(game, hand) {
 export function getHand(id, viewerAccountId = null) {
   const row = get('SELECT * FROM hands WHERE id = ?', id);
   if (!row) return null;
+
+  // Fairness record: the per-slot commitment set and the openings for cards
+  // that were public this hand. The raw server seed is never stored here or
+  // returned, so folded hands can be verified-against but never reconstructed.
+  let fairness = null;
+  if (row.fairness_json) {
+    const f = JSON.parse(row.fairness_json);
+    fairness = { ...f, serverCommit: f.commit ?? null };
+  }
 
   const players = JSON.parse(row.players_json).map((p) => {
     const visible = p.shown || (viewerAccountId && p.accountId === viewerAccountId);
@@ -100,6 +133,7 @@ export function getHand(id, viewerAccountId = null) {
     cooler: row.cooler_json ? JSON.parse(row.cooler_json) : null,
     createdAt: row.created_at,
     reactions: listReactions(row.id),
+    fairness,
   };
 }
 

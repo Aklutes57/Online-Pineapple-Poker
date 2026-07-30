@@ -23,6 +23,14 @@ export function initPanels(client) {
     });
   });
 
+  // The header fairness chip opens the Fair tab.
+  document.getElementById('fair-chip')?.addEventListener('click', () => {
+    const p = document.getElementById('side-panel');
+    p.classList.add('open');
+    p.classList.remove('collapsed');
+    document.querySelector('.tab[data-tab="fair"]')?.click();
+  });
+
   // Mobile drawer toggle.
   const panel = document.getElementById('side-panel');
   document.getElementById('panel-toggle').addEventListener('click', () => {
@@ -144,6 +152,66 @@ export function notifyStateForPanels(client) {
   renderLedger(client);
   renderSeatRequests(client);
   refreshHostModal(client);
+  renderFairness(client);
+}
+
+// ---- provably-fair readout ----
+
+function renderFairness(client) {
+  const state = client.state;
+  const table = state.fairness;
+  const hand = state.hand?.fairness;
+  const chip = document.getElementById('fair-chip');
+  const panel = document.getElementById('fair-panel');
+  if (!table) {
+    if (chip) chip.classList.add('hidden');
+    return;
+  }
+
+  // The live "hashed float value", visible on every hand.
+  const floatStr = hand ? Number(hand.float).toFixed(6) : '—';
+  if (chip) {
+    chip.classList.remove('hidden');
+    chip.textContent = `🔒 ${floatStr}`;
+  }
+  if (!panel) return;
+
+  // Only rebuild the panel when the fairness data actually changes — otherwise
+  // a mid-hand state broadcast would wipe out what a player is typing into the
+  // client-seed box.
+  const sig = `${table.serverCommit}:${table.clientSeed}:${hand?.nonce ?? ''}`;
+  if (panel.dataset.sig === sig) return;
+  panel.dataset.sig = sig;
+
+  const short = (h) => (typeof h === 'string' && h.length > 24 ? `${h.slice(0, 12)}…${h.slice(-8)}` : h || '—');
+
+  panel.innerHTML = `
+    <p class="fp-lead">Every deal is a fixed function of a committed <b>server seed</b>, the public <b>client seed</b>, and the hand number. The server is locked to its seed before any card is dealt.</p>
+    <p class="fp-float" title="A [0,1) fingerprint of this hand's seeds">${floatStr}</p>
+    <dl class="fp-list">
+      <dt>Server commit</dt><dd class="mono" title="${escapeHtml(table.serverCommit)}">${escapeHtml(short(table.serverCommit))}</dd>
+      <dt>Client seed</dt><dd class="mono">${escapeHtml(table.clientSeed)}</dd>
+      ${hand ? `<dt>This hand</dt><dd class="mono">#${escapeHtml(String(hand.nonce))}</dd>` : ''}
+      ${hand ? `<dt>Proof</dt><dd class="mono" title="${escapeHtml(hand.proof)}">${escapeHtml(short(hand.proof))}</dd>` : ''}
+    </dl>
+    <form id="fair-seed-form" class="fair-seed-form">
+      <label>Set the table client seed</label>
+      <div class="fair-seed-row">
+        <input id="fair-seed-input" maxlength="64" placeholder="your own seed…" autocomplete="off" value="${escapeHtml(table.clientSeed)}">
+        <button class="btn btn-primary" type="submit">Set</button>
+      </div>
+      <p class="fp-note">Setting your own client seed guarantees the house couldn't have picked a deck in its favour. Applies from the next hand.</p>
+    </form>
+    <p class="fp-note">The full deck is committed before each deal, so no card can change after the action. Open any finished hand's replay to verify its board and shown cards. Folded hands stay sealed forever.</p>
+  `;
+
+  const form = document.getElementById('fair-seed-form');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = document.getElementById('fair-seed-input').value.trim();
+    if (!val) return;
+    clientRef.send(EVENTS.SET_CLIENT_SEED, { clientSeed: val });
+  });
 }
 
 // ---- chat ----

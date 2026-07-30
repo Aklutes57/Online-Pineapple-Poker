@@ -202,6 +202,17 @@ const MIGRATIONS = [
     updated_at INTEGER NOT NULL
   );
   `,
+
+  // 5 — provably-fair RNG. The server seed is stored the moment the table
+  // session exists but is only ever surfaced through the API once the session
+  // has ended (ended_at set), so a mucked hand can't be reconstructed mid-game.
+  // The public commit is safe to expose immediately; each hand keeps its own
+  // client seed, nonce, proof and float.
+  `
+  ALTER TABLE table_sessions ADD COLUMN fairness_server_seed TEXT;
+  ALTER TABLE table_sessions ADD COLUMN fairness_server_commit TEXT;
+  ALTER TABLE hands ADD COLUMN fairness_json TEXT;
+  `,
 ];
 
 export function initDb(dbPath = process.env.PP_DB_PATH || path.join(root, 'data', 'pineapple.db')) {

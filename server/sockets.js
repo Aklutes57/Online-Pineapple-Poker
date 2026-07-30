@@ -379,6 +379,10 @@ export function attachSockets(io) {
       result(game, hand.handleDecision(player, !!payload.stay), ERRORS.BAD_ACTION);
     }));
 
+    socket.on(EVENTS.SET_CLIENT_SEED, withGame((game, player, payload) => {
+      result(game, game.setClientSeed(player, payload.clientSeed));
+    }));
+
     socket.on(EVENTS.RABBIT_HUNT, withGame((game, player, payload) => {
       const hand = game.currentHand;
       if (!hand || payload.handId !== hand.handId) return;

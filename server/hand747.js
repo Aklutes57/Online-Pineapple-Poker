@@ -21,7 +21,7 @@ import {
 } from './evaluator747.js';
 
 export class Hand747 {
-  constructor({ handNo, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, ctx, carryIn = 0 }) {
+  constructor({ handNo, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, fairness = null, ctx, carryIn = 0 }) {
     this.handNo = handNo;
     this.handId = `h${handNo}`;
     this.variant = { key: '747', label: '747 Poker', engine: '747' };
@@ -35,6 +35,8 @@ export class Hand747 {
     this.seatOrder = players.map((p) => p.seatIndex).sort((a, b) => a - b);
     this.deck = deck || shuffledDeck();
     this.deckIndex = 0;
+    // Public provably-fair proof for this hand (never holds the server seed).
+    this.fairness = fairness || null;
     this.carryIn = carryIn;
 
     // Interface surface shared with the community engine.

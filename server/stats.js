@@ -20,14 +20,21 @@ export function ensureTableSession(game) {
   }
   const result = run(
     `INSERT INTO table_sessions
-       (game_id, host_account_id, variant, small_blind, big_blind, started_at, hands_played)
-     VALUES (?, ?, ?, ?, ?, ?, 0)`,
+       (game_id, host_account_id, variant, small_blind, big_blind, started_at, hands_played,
+        fairness_server_seed, fairness_server_commit)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     game.id,
     game.hostAccountId ?? null,
     game.settings.variant,
     game.settings.smallBlind,
     game.settings.bigBlind,
-    now()
+    now(),
+    // The raw server seed is deliberately NOT persisted — verification uses the
+    // per-hand commitments/openings written by saveHand, so nothing that could
+    // reconstruct a folded hand ever touches the database. Only the public
+    // commitment is kept, for reference.
+    null,
+    game.fairness?.serverCommit ?? null
   );
   game.tableSessionId = Number(result.lastInsertRowid);
   return game.tableSessionId;

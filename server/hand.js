@@ -22,7 +22,7 @@ const VERBS = { fold: 'folds', check: 'checks', call: 'calls', bet: 'bets', rais
 export const PRE_ACTIONS = ['fold', 'checkFold', 'check', 'callAny'];
 
 export class Hand {
-  constructor({ handNo, variantKey, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, ctx, options = {} }) {
+  constructor({ handNo, variantKey, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, fairness = null, ctx, options = {} }) {
     this.handNo = handNo;
     this.handId = `h${handNo}`;
     this.variant = VARIANTS[variantKey];
@@ -52,6 +52,8 @@ export class Hand {
     this.seatOrder = players.map((p) => p.seatIndex).sort((a, b) => a - b);
     this.deck = deck || shuffledDeck();
     this.deckIndex = 0;
+    // Public provably-fair proof for this hand (never holds the server seed).
+    this.fairness = fairness || null;
     this.board = [];
     this.phase = null;
     this.street = null;

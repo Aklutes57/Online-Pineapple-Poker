@@ -257,6 +257,33 @@ try {
   await replay.waitForSelector('.reaction-chip');
   await check('a reaction can be left on a saved hand', true);
 
+  // ---- provably-fair: live readout + client-seed control + replay panel ----
+  await check('the live table shows a provably-fair chip',
+    !(await anna.locator('#fair-chip').getAttribute('class')).includes('hidden'));
+  const fairFloat = await anna.textContent('#fair-chip');
+  await check('the fair chip shows a hashed float for the hand', /🔒\s*0\.\d{4}/.test(fairFloat));
+
+  await anna.click('#fair-chip');
+  await anna.waitForSelector('#tab-fair:not(.hidden)');
+  await check('the Fair tab shows the client seed', (await anna.textContent('#fair-panel')).length > 0);
+
+  await anna.fill('#fair-seed-input', 'smoke-seed-42');
+  await anna.click('#fair-seed-form button[type="submit"]');
+  await anna.waitForFunction(() =>
+    document.getElementById('log-list')?.textContent.includes("set the table's client seed")
+  );
+  await check('a player can set the table client seed', true);
+
+  // The replay verifier re-checks the deck commitment in the browser and
+  // confirms every shown card — while folded hands stay sealed.
+  await replay.waitForSelector('#rp-fairness h3');
+  await check('the replay fairness panel renders with the commitment',
+    /Provably fair/.test(await replay.textContent('#rp-fairness')));
+  await replay.click('#fp-verify');
+  await replay.waitForSelector('#fp-result .fp-checks');
+  await check('the in-browser verifier confirms the deal',
+    /Verified/.test(await replay.textContent('#fp-result')));
+
   // ---- reconnect: reload keeps your seat ----
   await ben.reload();
   await ben.waitForSelector('.seat.me .nameplate');
