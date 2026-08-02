@@ -83,14 +83,42 @@ const CSP = [
   "worker-src 'self'",
 ].join('; ');
 
+// WebRTC ICE servers: public STUN by default (enough for many home networks),
+// plus a TURN relay if one is configured — TURN is what makes the peer-to-peer
+// connection reliable across restrictive networks. Media is always P2P; these
+// only help the two browsers find each other.
+export function rtcIceServers() {
+  const servers = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  ];
+  if (process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+    servers.push({
+      urls: process.env.TURN_URL.split(',').map((u) => u.trim()).filter(Boolean),
+      username: process.env.TURN_USERNAME,
+      credential: process.env.TURN_CREDENTIAL,
+    });
+  }
+  return servers;
+}
+
+// connect-src additions for WebRTC. CSP only accepts scheme-sources here (a
+// full stun:host:port is rejected as invalid), so we allow the stun/turn
+// schemes wholesale — that's what browsers which gate ICE on CSP look for.
+// Media itself (via srcObject) isn't URL-loaded, so needs no media-src entry.
+function iceConnectSrc() {
+  return 'stun: turn: turns:';
+}
+
 function securityHeaders(req, res, next) {
   res.set({
-    'Content-Security-Policy': CSP,
+    'Content-Security-Policy': CSP.replace("connect-src 'self'", `connect-src 'self' ${iceConnectSrc()}`),
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
     'Cross-Origin-Opener-Policy': 'same-origin',
-    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+    // Camera + mic are allowed for our own origin (the in-app video/voice);
+    // geolocation and payment stay off.
+    'Permissions-Policy': 'geolocation=(), camera=(self), microphone=(self), payment=()',
   });
   next();
 }
@@ -159,6 +187,11 @@ export function buildServer() {
 
   app.get('/api/push/vapid-key', (req, res) => {
     res.json({ key: ensureVapid().publicKey });
+  });
+
+  // ICE servers for the in-app voice/video (WebRTC).
+  app.get('/api/rtc-config', (req, res) => {
+    res.json({ iceServers: rtcIceServers() });
   });
 
   app.post('/api/push/subscribe', pushLimiter, (req, res) => {

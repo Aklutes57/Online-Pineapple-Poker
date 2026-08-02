@@ -56,6 +56,8 @@ export function buildViews(game) {
       registered: !!p.accountId,
       stack: p.stack,
       connected: p.connected,
+      // In the A/V session (webcam + mic shared with the table).
+      mediaOn: !!p.mediaOn && p.connected,
       sittingOut: p.sittingOut,
       inHand,
       folded: inHand ? p.folded : false,

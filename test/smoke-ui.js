@@ -55,14 +55,16 @@ log(`server at ${base}`);
 
 // ---- launch browser ----
 
+// Fake camera/mic so the in-app video/voice can be exercised headlessly.
+const mediaArgs = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'];
 try {
-  browser = await chromium.launch();
+  browser = await chromium.launch({ args: mediaArgs });
 } catch {
-  browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: mediaArgs });
 }
 
 async function newPage(name) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['camera', 'microphone'] });
   const page = await context.newPage();
   pages[name] = page;
   page.on('pageerror', (err) => console.error(`  [${name}] pageerror: ${err.message}`));
@@ -96,6 +98,19 @@ try {
   await anna.click('#j-request');
   await anna.waitForSelector('.seat.me .nameplate');
   await check('host is seated', true);
+
+  // ---- in-app webcam + voice: a seated player can turn it on ----
+  await anna.waitForSelector('#av-join:not(.hidden)');
+  await anna.click('#av-join');
+  await anna.waitForSelector('#av-live:not(.hidden)');
+  await anna.waitForFunction(() => {
+    const v = document.querySelector('#seats-layer video.seat-cam.mine');
+    return v && v.videoWidth > 0;
+  }, { timeout: 15000 });
+  await check('a seated player can turn on their webcam at their seat', true);
+  await anna.click('#av-leave');
+  await anna.waitForSelector('#av-join:not(.hidden)');
+  await check('leaving video restores the Video button', true);
 
   // ---- two friends join via the invite link ----
   const ben = await newPage('ben');

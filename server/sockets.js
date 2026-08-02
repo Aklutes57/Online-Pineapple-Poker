@@ -77,6 +77,7 @@ function detachSocket(socket) {
   player.sockets.delete(socket.id);
   if (player.sockets.size === 0) {
     player.connected = false;
+    player.mediaOn = false; // drop out of the A/V session so peers tear down
     game.noteDisconnect(player);
   }
   return game;
@@ -390,6 +391,30 @@ export function attachSockets(io) {
 
     socket.on(EVENTS.SET_CLIENT_SEED, withGame((game, player, payload) => {
       result(game, game.setClientSeed(player, payload.clientSeed));
+    }));
+
+    // ---- WebRTC voice/video (peer-to-peer; the server only relays) ----
+
+    // Announce joining/leaving the A/V session so peers know to connect.
+    socket.on(EVENTS.RTC_MEDIA, withGame((game, player, payload) => {
+      player.mediaOn = !!payload.on;
+      broadcast(game);
+    }));
+
+    // Relay one player's connection handshake (SDP/ICE) to another player in
+    // the SAME game. The payload is opaque and never parsed here; validating
+    // the target is a co-player is what stops it being a cross-table relay.
+    socket.on(EVENTS.RTC_SIGNAL, withGame((game, player, payload) => {
+      const targetId = typeof payload.to === 'string' ? payload.to : '';
+      const target = game.players.get(targetId);
+      if (!target || !target.connected) return;
+      const sockets = socketsByGame.get(game.id);
+      if (!sockets) return;
+      for (const s of sockets) {
+        if (s.data.playerId === target.id) {
+          s.emit(EVENTS.RTC_SIGNAL, { from: player.id, data: payload.data });
+        }
+      }
     }));
 
     socket.on(EVENTS.RABBIT_HUNT, withGame((game, player, payload) => {

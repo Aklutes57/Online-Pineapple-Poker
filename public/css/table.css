@@ -1274,3 +1274,30 @@ td.dim { color: var(--text-dim); }
 .pay-btn.copy { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 500; }
 .ledger-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .ledger-actions .btn { text-decoration: none; }
+
+/* ---- in-app webcam + voice ---- */
+.av-live { display: inline-flex; gap: 6px; align-items: center; }
+.av-live .av-off { opacity: 0.55; text-decoration: line-through; }
+
+/* The webcam feed sits where a seat's avatar would, just above the nameplate. */
+video.seat-cam {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: #05070d;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  margin-bottom: -6px;
+  z-index: 1;
+}
+video.seat-cam.mine {
+  transform: scaleX(-1); /* mirror your own preview, like every video app */
+  border-color: var(--accent);
+}
+video.seat-cam.cam-off { visibility: hidden; }
+.seat.me video.seat-cam { border-color: var(--accent); }
+
+@media (max-width: 720px) {
+  video.seat-cam { width: 72px; height: 54px; }
+}

@@ -11,6 +11,10 @@ import {
 import { renderAll, startTimerLoop } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels } from '/js/panels.js';
+import {
+  initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic,
+  syncSeats as syncAvSeats, avState, setOnChange,
+} from '/js/webrtc.js';
 
 const gameId = location.pathname.split('/').pop();
 const storageKey = `pp:${gameId}`;
@@ -89,6 +93,8 @@ function applyState(state) {
   client.you = state.you;
   renderAll(client);
   notifyStateForPanels(client);
+  syncAvSeats(state); // put each live webcam back into its (re-rendered) seat
+  renderAvControls();
 
   // Tell you when host changes hands, so a silent hand-off (or reclaim) is
   // never a surprise. Skipped on the very first state so joining isn't noisy.
@@ -234,6 +240,44 @@ initActionBar(client);
 initPanels(client);
 initReactions(client);
 startTimerLoop(client);
+
+// ---- voice + webcam controls ----
+
+function renderAvControls() {
+  const st = avState();
+  const seated = !!client.you && !client.you.spectator;
+  const joinBtn = document.getElementById('av-join');
+  const live = document.getElementById('av-live');
+  if (!joinBtn || !live) return;
+
+  // Leaving your seat drops you out of the A/V session automatically.
+  if (st.joined && !seated) { leaveAV(); return; }
+
+  joinBtn.classList.toggle('hidden', !st.supported || !seated || st.joined);
+  live.classList.toggle('hidden', !st.joined);
+  if (st.joined) {
+    const cam = document.getElementById('av-cam');
+    const mic = document.getElementById('av-mic');
+    cam.textContent = st.camOn ? '📷' : '📷̶';
+    cam.classList.toggle('av-off', !st.camOn);
+    cam.title = st.camOn ? 'Turn camera off' : 'Turn camera on';
+    mic.textContent = st.micOn ? '🎙️' : '🔇';
+    mic.classList.toggle('av-off', !st.micOn);
+    mic.title = st.micOn ? 'Mute mic' : 'Unmute mic';
+  }
+}
+
+initWebrtc(client, socket);
+setOnChange(renderAvControls);
+document.getElementById('av-join')?.addEventListener('click', async () => {
+  const r = await joinAV();
+  if (!r.ok && r.error) showToast(r.error);
+  renderAvControls();
+});
+document.getElementById('av-cam')?.addEventListener('click', toggleCamera);
+document.getElementById('av-mic')?.addEventListener('click', toggleMic);
+document.getElementById('av-leave')?.addEventListener('click', leaveAV);
+window.addEventListener('pagehide', leaveAV);
 loadAccount().then(async (account) => {
   client.account = account;
   if (!account) return;

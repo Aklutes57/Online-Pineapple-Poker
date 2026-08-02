@@ -21,6 +21,10 @@ export const EVENTS = {
   DECISION_747: 'decision747',
   SET_CLIENT_SEED: 'setClientSeed',
   LEAVE_WAITLIST: 'leaveWaitlist',
+  // WebRTC voice/video: announce that you've joined the A/V session, and relay
+  // the peer-to-peer connection handshake between two players in the same game.
+  RTC_MEDIA: 'rtc:media',
+  RTC_SIGNAL: 'rtc:signal',
   HOST_NUDGE: 'host:nudge',
   HOST_APPROVE_WAITLIST: 'host:approveWaitlist',
   HOST_APPROVE_SEAT: 'host:approveSeat',
