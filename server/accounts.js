@@ -3,6 +3,7 @@
 
 import { scryptSync, randomBytes, timingSafeEqual, randomUUID } from 'node:crypto';
 import { run, get, all, now } from './db.js';
+import { cleanPayments } from '../shared/payments.js';
 
 const SESSION_TTL = 90 * 24 * 60 * 60 * 1000; // 90 days
 const SCRYPT_KEYLEN = 64;
@@ -134,6 +135,14 @@ export function updatePrefs(accountId, patch) {
   const prefs = { ...account.prefs, ...patch };
   run('UPDATE accounts SET prefs_json = ? WHERE id = ?', JSON.stringify(prefs), accountId);
   return { ok: true, prefs };
+}
+
+// Linked P2P payment handles (Venmo/Cash App/PayPal/Zelle/Chime), validated
+// and stored in prefs so table-mates can pay this player from the ledger.
+export function setPayments(accountId, raw) {
+  const payments = cleanPayments(raw);
+  const result = updatePrefs(accountId, { payments });
+  return result.ok ? payments : {};
 }
 
 export function updateDisplayName(accountId, displayName) {

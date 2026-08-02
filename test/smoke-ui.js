@@ -73,6 +73,10 @@ try {
   // ---- host creates a table from the landing page ----
   const anna = await newPage('anna');
   await anna.goto(base);
+  // The install button is always offered on the landing page (Android + iOS +
+  // desktop), not just when Chrome happens to fire its prompt event.
+  await check('install button is visible on the landing page',
+    !(await anna.locator('#install-btn').getAttribute('class')).includes('hidden'));
   await anna.click('#start-btn');
   await anna.fill('#c-nickname', 'Anna');
   await anna.selectOption('#c-variant', 'holdem');
@@ -330,6 +334,17 @@ try {
   await check('all-time ledger summary renders', true);
   await dana.waitForSelector('#stats-block .stat-tile');
   await check('poker stat block renders', true);
+
+  // ---- payment methods: link a handle so table-mates can pay from the ledger ----
+  await dana.waitForSelector('#pay-fields input[data-pay="venmo"]');
+  await check('payment method fields render on the profile', true);
+  await dana.fill('#pay-fields input[data-pay="venmo"]', '@DanaPays');
+  await dana.click('#pay-save');
+  await dana.waitForSelector('#toast.show');
+  await dana.reload();
+  await dana.waitForSelector('#pay-fields input[data-pay="venmo"]');
+  await check('a saved payment handle persists (@ stripped)',
+    (await dana.inputValue('#pay-fields input[data-pay="venmo"]')) === 'DanaPays');
 
   // ---- invite list and Discord webhook validation through the UI ----
   await dana.fill('#n-email', 'friend@example.com');

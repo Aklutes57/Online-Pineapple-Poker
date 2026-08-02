@@ -20,8 +20,15 @@
   padding: 40px 60px 50px;
 }
 
+/* The replay page scrolls vertically, so its table sizes by width with an
+   aspect ratio rather than the live table's scale-to-fit. This restores the
+   responsive sizing after the live #table became a fixed, JS-scaled stage. */
 .replay-page #table {
   width: min(100%, 760px);
+  height: auto;
+  aspect-ratio: 900 / 504;
+  flex: 0 1 auto;
+  transform: none;
 }
 
 .replay-page #seats-layer,

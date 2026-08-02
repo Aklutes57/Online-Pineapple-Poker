@@ -12,17 +12,30 @@
   overflow: hidden;
 }
 
+/* Never let anything push the page wider than the device. */
+html, body.table-page {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 #app {
   display: grid;
   height: 100vh;
   height: 100dvh;
-  grid-template-rows: 52px 1fr auto;
-  grid-template-columns: 1fr var(--panel-w);
+  max-width: 100vw;
+  /* minmax(0, …) instead of a bare 1fr: a 1fr track is really minmax(auto,1fr),
+     so a wide, non-wrapping row (the action bar) would force the whole grid —
+     and the felt — wider than the screen. The 0 minimum lets it shrink to fit. */
+  grid-template-rows: 52px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
   grid-template-areas:
     'top top'
     'table panel'
     'bar panel';
 }
+
+/* Grid children must be allowed to shrink below their content's min-width. */
+#top-bar, #table-area, #action-bar { min-width: 0; }
 
 body.disconnected #app {
   filter: grayscale(0.6) brightness(0.8);
@@ -124,15 +137,22 @@ body.disconnected::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 56px 70px 64px;
+  padding: 14px;
   min-height: 0;
+  overflow: hidden; /* the scaled stage is sized to fit, so nothing should spill */
 }
 
 #table {
+  /* A fixed logical size that JS (fitTableStage) scales as one piece — felt,
+     seats, bets and all — to fit whatever screen we're on. Everything inside is
+     positioned relative to this box, so scaling it keeps the layout pixel-exact
+     at every size and nothing ever clips or overflows. */
   position: relative;
-  width: min(100%, 950px);
-  aspect-ratio: 2 / 1.12;
-  max-height: 100%;
+  box-sizing: border-box;
+  flex: none;
+  width: 900px;
+  height: 504px;
+  transform-origin: center center;
   background:
     radial-gradient(ellipse at 50% 38%, #2a8c58 0%, var(--felt) 55%, var(--felt-dark) 100%);
   border: 14px solid var(--rail);
@@ -854,7 +874,8 @@ td.dim { color: var(--text-dim); }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  flex-wrap: wrap; /* controls stack instead of forcing the page wider */
+  gap: 10px 14px;
   min-height: 76px;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
@@ -1050,7 +1071,7 @@ td.dim { color: var(--text-dim); }
 
 @media (max-width: 999px) {
   #app {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       'top'
       'table'
@@ -1078,9 +1099,7 @@ td.dim { color: var(--text-dim); }
     display: block;
   }
 
-  #table-area {
-    padding: 46px 48px 52px;
-  }
+  #table-area { padding: 10px; }
 }
 
 @media (max-width: 720px) {
@@ -1101,9 +1120,7 @@ td.dim { color: var(--text-dim); }
     display: none;
   }
 
-  #table-area {
-    padding: 40px 30px 46px;
-  }
+  #table-area { padding: 8px; }
 
   #table {
     border-width: 9px;
@@ -1155,9 +1172,7 @@ td.dim { color: var(--text-dim); }
     top: 40px;
   }
 
-  #table-area {
-    padding: 30px 40px 34px;
-  }
+  #table-area { padding: 6px; }
 
   #action-bar {
     min-height: 56px;
@@ -1244,3 +1259,18 @@ td.dim { color: var(--text-dim); }
   flex: 1; min-width: 0; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
   color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
 }
+
+/* ---- ledger settle-up pay buttons ---- */
+.settle-list li { margin-bottom: 10px; }
+.settle-line { margin-bottom: 4px; }
+.pay-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.pay-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer;
+  background: rgba(255,255,255,0.07); color: var(--text);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 4px 10px;
+}
+.pay-btn:hover { background: rgba(245,197,66,0.16); border-color: rgba(245,197,66,0.4); }
+.pay-btn.copy { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 500; }
+.ledger-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ledger-actions .btn { text-decoration: none; }

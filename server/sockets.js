@@ -161,7 +161,12 @@ export function attachSockets(io) {
         // Signed in after joining as a guest — adopt the account.
         player.accountId = account.id;
       }
-      if (account) player.accountName = account.displayName;
+      if (account) {
+        player.accountName = account.displayName;
+        // Linked payment handles travel with the player so table-mates can pay
+        // them from the ledger. Opt-in: absent unless the account set them.
+        player.payments = account.prefs?.payments || null;
+      }
 
       // This browser's push subscription, so turn alerts reach guests too.
       // Anything malformed is silently ignored.

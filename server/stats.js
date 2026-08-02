@@ -10,6 +10,7 @@
 //    have been played.
 
 import { run, get, all, now } from './db.js';
+import { settleUp } from '../shared/settle.js';
 
 export function ensureTableSession(game) {
   if (game.tableSessionId) return game.tableSessionId;
@@ -79,6 +80,41 @@ export function closeTableSession(game) {
   if (!game.tableSessionId) return;
   syncSessionResults(game);
   run('UPDATE table_sessions SET ended_at = ? WHERE id = ?', now(), game.tableSessionId);
+}
+
+// Builds the dated ledger CSV for a game from its persisted results, so it can
+// be pulled long after the table is gone. Returns { filename, body } or null.
+export function ledgerCsvForGame(gameId) {
+  const session = get(
+    `SELECT id, variant, small_blind, big_blind, started_at
+     FROM table_sessions WHERE game_id = ?`,
+    gameId
+  );
+  if (!session) return null;
+  const rows = all(
+    `SELECT nickname, buy_ins, cash_outs, final_stack, net, hands_played
+     FROM session_results WHERE table_session_id = ? ORDER BY net DESC`,
+    session.id
+  );
+  if (!rows.length) return null;
+
+  const iso = new Date(session.started_at).toISOString().slice(0, 10);
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [
+    ['Pineapple Poker ledger'],
+    ['Game', gameId],
+    ['Date', iso],
+    ['Variant', session.variant],
+    ['Blinds', `${session.small_blind}/${session.big_blind}`],
+    [],
+    ['Player', 'Buy-ins', 'Cash-outs', 'Final stack', 'Hands', 'Net'],
+    ...rows.map((r) => [r.nickname, r.buy_ins, r.cash_outs, r.final_stack, r.hands_played, r.net]),
+    [],
+    ['Settle up: from', 'to', 'amount'],
+    ...settleUp(rows.map((r) => ({ nickname: r.nickname, net: r.net }))).map((p) => [p.from, p.to, p.amount]),
+  ];
+  const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
+  return { filename: `pineapple-ledger-${iso}.csv`, body };
 }
 
 // Rolls one finished hand's per-player flags into each account's aggregates.

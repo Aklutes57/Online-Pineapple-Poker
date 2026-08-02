@@ -260,3 +260,19 @@
     flex-wrap: wrap;
   }
 }
+
+/* ---- payment methods ---- */
+.pay-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 18px; margin-bottom: 14px; }
+.pay-field { display: flex; flex-direction: column; gap: 5px; }
+.pay-input { display: flex; align-items: stretch; }
+.pay-prefix {
+  display: inline-flex; align-items: center; padding: 0 9px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border, rgba(255,255,255,0.14));
+  border-right: none; border-radius: 8px 0 0 8px; color: var(--text-dim); font-weight: 600;
+}
+.pay-input input { border-radius: 8px; flex: 1; min-width: 0; }
+.pay-prefix + input { border-radius: 0 8px 8px 0; }
+.pay-hint { font-size: 11.5px; color: var(--text-dim); }
+.form-actions { margin-top: 4px; }
+.csv-link { color: var(--accent, #f5c542); text-decoration: none; font-size: 12.5px; white-space: nowrap; }
+.csv-link:hover { text-decoration: underline; }

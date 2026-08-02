@@ -96,7 +96,7 @@ export function wireInstallButton(buttonEl) {
 
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
-    deferredInstall = event;
+    deferredInstall = event; // Android/Chrome: a one-tap native install prompt
     buttonEl.classList.remove('hidden');
   });
 
@@ -105,8 +105,14 @@ export function wireInstallButton(buttonEl) {
     buttonEl.classList.add('hidden');
   });
 
-  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (isIos) buttonEl.classList.remove('hidden');
+  const ua = navigator.userAgent;
+  const isIos = /iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  const isAndroid = /android/i.test(ua);
+
+  // Show the button on every non-installed device — even before Chrome fires
+  // its prompt event — so Android and iOS users always have a way in. If the
+  // native prompt isn't ready, we fall back to per-platform instructions.
+  buttonEl.classList.remove('hidden');
 
   buttonEl.addEventListener('click', async () => {
     if (deferredInstall) {
@@ -118,10 +124,23 @@ export function wireInstallButton(buttonEl) {
     }
     if (isIos) {
       alert(
-        'To install on iPhone or iPad:\n\n' +
+        'Install on iPhone or iPad:\n\n' +
         '1. Tap the Share button in Safari\n' +
         '2. Choose "Add to Home Screen"\n\n' +
         'The table then opens fullscreen like any app, and turn alerts work on iOS 16.4+.'
+      );
+    } else if (isAndroid) {
+      alert(
+        'Install on Android:\n\n' +
+        '1. Tap the ⋮ menu in Chrome (top-right)\n' +
+        '2. Choose "Install app" (or "Add to Home screen")\n\n' +
+        'It then opens fullscreen like any app, with turn notifications.'
+      );
+    } else {
+      alert(
+        'Install on your computer:\n\n' +
+        'Click the install icon in your browser\'s address bar (Chrome/Edge), ' +
+        'or open the browser menu and choose "Install Pineapple Poker".'
       );
     }
   });

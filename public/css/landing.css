@@ -235,3 +235,30 @@
   font-size: 13px;
   margin-top: 8px;
 }
+
+/* ---- hero action buttons: grouped, spaced, never overlapping ---- */
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+}
+.btn-install { font-size: 15px; }
+.hero .wrap { position: relative; z-index: 1; } /* content above the decorative cards */
+
+/* The decorative cards live in the bottom-right corner; on smaller screens the
+   centered buttons reach into that corner, so retire the cards there. */
+@media (max-width: 900px) {
+  .hero-cards { display: none; }
+  .hero { padding: 64px 0 72px; }
+}
+
+/* Header: let the nav breathe instead of colliding on small screens. */
+@media (max-width: 560px) {
+  .site-header nav { gap: 12px; }
+  .site-header .wrap { gap: 10px; padding: 0 16px; }
+  .hero-actions { flex-direction: column; }
+  .hero-actions .btn { width: 100%; max-width: 320px; }
+}

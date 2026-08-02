@@ -12,9 +12,9 @@ import { SETTINGS_LIMITS } from '../shared/constants.js';
 import { initDb } from './db.js';
 import {
   createAccount, login, logout, accountForRequest, tokenFromRequest,
-  updateDisplayName, updatePrefs, purgeExpiredSessions,
+  updateDisplayName, updatePrefs, setPayments, purgeExpiredSessions,
 } from './accounts.js';
-import { accountSummary } from './stats.js';
+import { accountSummary, ledgerCsvForGame } from './stats.js';
 import {
   storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
   saveSoundClip, listSoundClips, deleteSoundClip, defaultTheme, LIMITS as UPLOAD_LIMITS,
@@ -437,6 +437,34 @@ export function buildServer() {
       return;
     }
     res.json(accountSummary(account.id));
+  });
+
+  // Linked P2P payment handles, so table-mates can pay from the ledger.
+  app.put('/api/me/payments', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const payments = setPayments(account.id, (req.body || {}).payments || {});
+    res.json({ payments });
+  });
+
+  // The game's ledger as a dated CSV, generated from the persisted results so
+  // it survives the game ending, a lost screenshot, even a server restart.
+  // Unauthenticated by game id, like the hand replays — anyone with the table
+  // link can pull the record afterward.
+  app.get('/api/games/:id/ledger.csv', (req, res) => {
+    const csv = ledgerCsvForGame(req.params.id);
+    if (!csv) {
+      res.status(404).json({ error: 'no ledger for that game yet' });
+      return;
+    }
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${csv.filename}"`,
+    });
+    res.send(csv.body);
   });
 
   app.post('/api/games', createGameLimiter, (req, res) => {

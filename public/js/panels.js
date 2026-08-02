@@ -3,6 +3,7 @@
 import { EVENTS, GAME_STATUS, VARIANTS } from '/shared/constants.js';
 import { settleUp } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
+import { PAYMENT_SERVICES, paymentUrl, displayHandle } from '/shared/payments.js';
 
 let clientRef = null;
 let chatLog = [];
@@ -115,6 +116,17 @@ export function initPanels(client) {
         approve: waitBtn.dataset.wait === 'yes',
       });
     }
+  });
+
+  // Tap-to-copy payment handles (Zelle/Chime have no deep link).
+  document.getElementById('ledger-table').addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('button[data-copy]');
+    if (!copyBtn) return;
+    const handle = copyBtn.dataset.copy;
+    navigator.clipboard?.writeText(handle).then(
+      () => showToast(`Copied ${handle}`),
+      () => showToast(handle)
+    );
   });
 
   // Host player-list actions (delegated).
@@ -294,6 +306,10 @@ function renderLedger(client) {
     return;
   }
   const payments = settleUp(rows);
+  // nickname -> that player's linked payment handles, so a settle-up line can
+  // offer to pay the exact amount straight to the winner.
+  const payTo = new Map(rows.filter((r) => r.payments).map((r) => [r.nickname, r.payments]));
+
   host.innerHTML = `
     <table class="ledger">
       <thead><tr><th>Player</th><th>Buy-ins</th><th>Stack</th><th>Hand</th><th>Net</th></tr></thead>
@@ -319,16 +335,38 @@ function renderLedger(client) {
         payments.length
           ? `<ul class="settle-list">${payments
               .map(
-                (p) =>
-                  `<li><strong>${escapeHtml(p.from)}</strong> pays <strong>${escapeHtml(p.to)}</strong> <span class="settle-amt">${p.amount}</span></li>`
+                (p) => `<li>
+                  <div class="settle-line"><strong>${escapeHtml(p.from)}</strong> pays <strong>${escapeHtml(p.to)}</strong> <span class="settle-amt">${p.amount}</span></div>
+                  ${payButtons(payTo.get(p.to), p.amount)}
+                </li>`
               )
               .join('')}</ul>`
           : '<p class="empty-note">Everyone is square.</p>'
       }
-      <button class="btn btn-ghost ledger-export" id="ledger-csv">Download CSV</button>
+      <div class="ledger-actions">
+        <button class="btn btn-ghost ledger-export" id="ledger-csv">Download CSV</button>
+        <a class="btn btn-ghost ledger-export" href="/api/games/${encodeURIComponent(client.gameId)}/ledger.csv" target="_blank" rel="noopener" title="The copy saved on the server — safe even if the game is over">Saved copy</a>
+      </div>
+      <p class="empty-note">The ledger is auto-saved on the server, so it's here even if nobody screenshots it.</p>
     </div>`;
 
   document.getElementById('ledger-csv').addEventListener('click', () => exportLedgerCsv(client));
+}
+
+// Pay buttons for a settle-up line: a prefilled deep link for services that
+// support one (Venmo/Cash App/PayPal), a tap-to-copy handle for the rest.
+function payButtons(payments, amount) {
+  if (!payments) return '';
+  const btns = PAYMENT_SERVICES.filter((s) => payments[s.key]).map((s) => {
+    const handle = payments[s.key];
+    const url = paymentUrl(s.key, handle, { amount, note: 'Poker' });
+    if (url) {
+      return `<a class="pay-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener">${s.icon} ${escapeHtml(s.label)}</a>`;
+    }
+    const shown = displayHandle(s.key, handle);
+    return `<button type="button" class="pay-btn copy" data-copy="${escapeHtml(shown)}" title="Copy ${escapeHtml(s.label)} handle">${s.icon} ${escapeHtml(shown)}</button>`;
+  });
+  return btns.length ? `<div class="pay-options">${btns.join('')}</div>` : '';
 }
 
 function deltaClass(delta) {

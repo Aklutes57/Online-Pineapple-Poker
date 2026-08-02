@@ -405,6 +405,7 @@ export class Game {
         lastHandDelta: player?.lastHandDelta || 0,
         handsPlayed: player?.handsPlayed || 0,
         seated: player?.status === 'seated',
+        payments: player?.payments || null,
       };
     });
   }

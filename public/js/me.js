@@ -6,6 +6,7 @@ import { loadAccount, currentAccount, signout, updateAccount, authHeaders } from
 import { openAuthModal } from '/js/authModal.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { pushSupported, currentPushSubscription, enablePush, disablePush } from '/js/pwa.js';
+import { PAYMENT_SERVICES } from '/shared/payments.js';
 
 // ---- notifications on this device ----
 
@@ -75,7 +76,55 @@ function render() {
   document.getElementById('profile-sub').textContent =
     `${account.email} · joined ${new Date(account.createdAt).toLocaleDateString()}`;
   document.getElementById('p-name').value = account.displayName;
+  renderPayFields(account);
 }
+
+// ---- payment methods ----
+
+function renderPayFields(account) {
+  const wrap = document.getElementById('pay-fields');
+  if (!wrap) return;
+  const saved = account.prefs?.payments || {};
+  wrap.innerHTML = PAYMENT_SERVICES.map(
+    (s) => `
+    <div class="field pay-field">
+      <label for="pay-${s.key}">${s.icon} ${escapeHtml(s.label)}</label>
+      <div class="pay-input">
+        ${s.prefix ? `<span class="pay-prefix">${s.prefix}</span>` : ''}
+        <input id="pay-${s.key}" data-pay="${s.key}" maxlength="64"
+          placeholder="${escapeHtml(s.placeholder)}" autocomplete="off"
+          value="${escapeHtml(saved[s.key] || '')}">
+      </div>
+      <span class="pay-hint">${escapeHtml(s.hint)}</span>
+    </div>`
+  ).join('');
+}
+
+document.getElementById('pay-save').addEventListener('click', async () => {
+  const payments = {};
+  for (const input of document.querySelectorAll('#pay-fields input[data-pay]')) {
+    const v = input.value.trim();
+    if (v) payments[input.dataset.pay] = v;
+  }
+  try {
+    const res = await fetch('/api/me/payments', {
+      method: 'PUT',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ payments }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    // Reflect the server-normalized handles back into the account + fields.
+    const account = currentAccount();
+    if (account) {
+      account.prefs = { ...account.prefs, payments: data.payments };
+      renderPayFields(account);
+    }
+    showToast('Payment methods saved');
+  } catch {
+    showToast('Could not save payment methods');
+  }
+});
 
 async function loadSummary() {
   try {
@@ -106,7 +155,7 @@ function renderSummary({ totals, sessions, stats }) {
   } else {
     table.innerHTML = `
       <table class="ledger">
-        <thead><tr><th>When</th><th>Game</th><th>Blinds</th><th>Buy-ins</th><th>Out</th><th>Net</th></tr></thead>
+        <thead><tr><th>When</th><th>Game</th><th>Blinds</th><th>Buy-ins</th><th>Out</th><th>Net</th><th>Ledger</th></tr></thead>
         <tbody>${sessions
           .map(
             (s) => `<tr>
@@ -116,10 +165,12 @@ function renderSummary({ totals, sessions, stats }) {
               <td>${s.buyIns}</td>
               <td>${s.cashOuts + s.finalStack}</td>
               <td class="${s.net >= 0 ? 'pos' : 'neg'}">${s.net >= 0 ? '+' : ''}${s.net}</td>
+              <td><a class="csv-link" href="/api/games/${encodeURIComponent(s.gameId)}/ledger.csv" target="_blank" rel="noopener" title="Download this game's ledger">⬇ CSV</a></td>
             </tr>`
           )
           .join('')}</tbody>
-      </table>`;
+      </table>
+      <p class="empty-note">Every game's ledger is saved here as a dated CSV — nothing is lost if a screenshot isn't taken.</p>`;
   }
 
   const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');

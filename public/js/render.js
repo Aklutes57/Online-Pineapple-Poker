@@ -23,6 +23,33 @@ export function renderAll(client) {
   renderActionBar(client);
   document.getElementById('host-menu-btn').classList.toggle('hidden', !you?.isHost);
   document.getElementById('leave-btn').classList.toggle('hidden', !you || you.spectator);
+  fitTableStage();
+}
+
+// Scale the whole table (felt + seats + bets, all positioned inside #table) as
+// one piece to fit the available area on any device — phone or laptop, portrait
+// or landscape. The 900×504 felt plus a 40px seat overhang on every side is the
+// logical stage; we shrink or gently grow it to fill the space, so it always
+// fits whole and never clips or forces the page to scroll.
+const STAGE_W = 980;
+const STAGE_H = 584;
+
+export function fitTableStage() {
+  const area = document.getElementById('table-area');
+  const table = document.getElementById('table');
+  if (!area || !table) return;
+  const cs = getComputedStyle(area);
+  const availW = area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = area.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  if (availW <= 0 || availH <= 0) return;
+  const scale = Math.min(availW / STAGE_W, availH / STAGE_H, 1.25);
+  table.style.transform = `scale(${scale.toFixed(4)})`;
+}
+
+// Refit on any viewport change (rotation, resize, on-screen keyboard, etc.).
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', fitTableStage);
+  window.addEventListener('orientationchange', () => setTimeout(fitTableStage, 200));
 }
 
 // The host's saved table look. Applied as inline styles so it overrides
