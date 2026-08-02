@@ -25,6 +25,10 @@ export class Game {
     this.settings = sanitizeSettings({ ...DEFAULT_SETTINGS, ...settings });
     this.status = GAME_STATUS.LOBBY;
     this.hostId = null;
+    // The player who created the table. Host can pass to someone else if the
+    // creator drops, but the creator reclaims it automatically when they
+    // return — so a brief disconnect never permanently strips their controls.
+    this.creatorId = null;
     this.hostAccountId = null;
     this.tableSessionId = null;
     this.players = new Map(); // playerId -> player
@@ -856,6 +860,18 @@ export class Game {
 
   isHost(player) {
     return player.id === this.hostId;
+  }
+
+  // Called when a player (re)connects. If the table's creator is back and host
+  // had passed to someone else while they were gone, hand it straight back.
+  // Returns true if host actually changed, so the caller can rebroadcast.
+  reclaimHostIfCreator(player) {
+    if (!player || player.id !== this.creatorId || this.hostId === player.id) return false;
+    if (!player.connected) return false;
+    this.hostId = player.id;
+    clearTimeout(this.hostTransferTimeout);
+    this.addLog(`${player.nickname} is back and is the host again`);
+    return true;
   }
 
   noteDisconnect(player) {

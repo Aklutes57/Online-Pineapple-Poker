@@ -1,0 +1,113 @@
+// Host controls: whoever creates a table can run it (no account required), a
+// dropped host passes to a seated player, and the creator reclaims host the
+// moment they return. Regression cover for "my friend couldn't accept players".
+// Usage: node test/test-host.js
+
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-host-')), 'test.db');
+
+const { io: ioc } = await import('socket.io-client');
+const { Game } = await import('../server/game.js');
+const { createGame } = await import('../server/gameManager.js');
+const { buildServer } = await import('../server/app.js');
+const { EVENTS } = await import('../shared/constants.js');
+
+let failures = 0;
+let passes = 0;
+function check(name, cond) {
+  if (cond) { passes++; } else { failures++; console.error(`FAIL: ${name}`); }
+}
+
+// ---- Game-level: creator tracking, transfer, and reclaim ----
+{
+  const { game, host } = createGame({}, 'FriendHost', null);
+  check('the creator is recorded and is the host', game.creatorId === host.id && game.hostId === host.id);
+
+  const ann = game.addPlayer('Ann', null);
+  host.connected = true;
+  ann.connected = true;
+  ann.status = 'seated';
+
+  // A connected host is never transferred away.
+  game.maybeTransferHost();
+  check('a connected host keeps host', game.hostId === host.id);
+
+  // Host drops → host passes to the seated player.
+  host.connected = false;
+  game.maybeTransferHost();
+  check('a dropped host passes to a seated player', game.hostId === ann.id);
+  check('the creator id does not change on transfer', game.creatorId === host.id);
+
+  // A non-creator returning does NOT steal host back.
+  const bob = game.addPlayer('Bob', null);
+  bob.connected = true;
+  check('a non-creator cannot reclaim host', game.reclaimHostIfCreator(bob) === false && game.hostId === ann.id);
+
+  // The creator returns → host snaps back to them.
+  host.connected = true;
+  const reclaimed = game.reclaimHostIfCreator(host);
+  check('the returning creator reclaims host', reclaimed === true && game.hostId === host.id);
+
+  // Idempotent: reclaiming while already host is a no-op.
+  check('reclaim is a no-op when already host', game.reclaimHostIfCreator(host) === false);
+}
+
+// ---- socket-level: a GUEST host can accept players AFTER starting the game ----
+{
+  const { httpServer } = buildServer();
+  await new Promise((r) => httpServer.listen(0, r));
+  const url = `http://localhost:${httpServer.address().port}`;
+
+  const created = await fetch(`${url}/api/games`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname: 'GuestHost', settings: {} }),
+  }).then((r) => r.json());
+
+  function connect(token, nickname) {
+    return new Promise((resolve, reject) => {
+      const s = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: url }, reconnection: false });
+      s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname }, (res) => {
+        res?.ok ? resolve({ s, res }) : reject(new Error('join failed'));
+      }));
+      s.on('connect_error', reject);
+    });
+  }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const stateOf = (h) => new Promise((r) => h.s.emit(EVENTS.JOIN, { gameId: created.gameId, token: h.res.token }, (res) => r(res.state)));
+
+  const host = await connect(created.token, 'GuestHost'); // no account token anywhere
+  check('a guest host is the host (no account needed)', host.res.state.you.isHost === true);
+
+  host.s.emit(EVENTS.REQUEST_SEAT, { nickname: 'GuestHost', buyIn: 200 });
+  const bob = await connect(null, 'Bob');
+  bob.s.emit(EVENTS.REQUEST_SEAT, { nickname: 'Bob', buyIn: 200 });
+  await wait(150);
+  host.s.emit(EVENTS.HOST_APPROVE_SEAT, { playerId: bob.res.playerId, approve: true });
+  await wait(150);
+  host.s.emit(EVENTS.HOST_START_GAME, {});
+  await wait(250);
+
+  // Someone joins AFTER the start.
+  const carol = await connect(null, 'Carol');
+  carol.s.emit(EVENTS.REQUEST_SEAT, { nickname: 'Carol', buyIn: 200 });
+  await wait(200);
+
+  const afterStart = await stateOf(host);
+  check('the host still holds host after starting', afterStart.you.isHost === true);
+  check('the post-start request reaches the host', afterStart.seatRequests.some((r) => r.nickname === 'Carol'));
+  check('state carries hostName for the change toast', afterStart.hostName === 'GuestHost');
+
+  host.s.emit(EVENTS.HOST_APPROVE_SEAT, { playerId: carol.res.playerId, approve: true });
+  await wait(200);
+  const seated = (await stateOf(host)).seats.some((s) => s && s.nickname === 'Carol');
+  check('the guest host successfully accepts a player after start', seated);
+
+  host.s.close(); bob.s.close(); carol.s.close();
+  await new Promise((r) => httpServer.close(r));
+}
+
+console.log(`host: ${passes} passed, ${failures} failed`);
+process.exit(failures ? 1 : 0);

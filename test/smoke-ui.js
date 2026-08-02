@@ -108,6 +108,11 @@ try {
 
   // ---- host approves both ----
   await anna.waitForSelector('#seat-requests button[data-approve="yes"]');
+  // A pending request must be noticeable even with the panel closed: the badge
+  // on the 💬 button shows the count for the host.
+  await check('host gets a seat-request badge on the panel button',
+    !(await anna.locator('#seatreq-badge').getAttribute('class')).includes('hidden')
+    && Number(await anna.textContent('#seatreq-badge')) >= 1);
   while (await anna.locator('#seat-requests button[data-approve="yes"]').count()) {
     await anna.locator('#seat-requests button[data-approve="yes"]').first().click();
     await anna.waitForTimeout(150);

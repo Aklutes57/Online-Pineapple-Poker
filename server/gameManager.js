@@ -21,6 +21,7 @@ export function createGame(settings, hostNickname, hostAccountId = null) {
   const game = new Game(newGameId(), settings);
   const host = game.addPlayer(hostNickname, hostAccountId);
   game.hostId = host.id;
+  game.creatorId = host.id;
   game.hostAccountId = hostAccountId;
   game.addLog(`${hostNickname} created the table`);
   games.set(game.id, game);

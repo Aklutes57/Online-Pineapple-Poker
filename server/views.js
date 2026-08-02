@@ -137,6 +137,7 @@ export function buildViews(game) {
     pauseRequested: game.pauseRequested,
     settings: { ...game.settings },
     hostId: game.hostId,
+    hostName: game.players.get(game.hostId)?.nickname ?? null,
     seats,
     seatRequests,
     waitlist,

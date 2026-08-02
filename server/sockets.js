@@ -182,6 +182,10 @@ export function attachSockets(io) {
       player.connected = true;
       player.disconnectedAt = null;
 
+      // If the table's creator is returning after host had passed on, hand the
+      // controls straight back to them.
+      game.reclaimHostIfCreator(player);
+
       // A reconnecting current actor gets their turn timer re-evaluated
       // (restores the "no timer" state when the action clock is off).
       const hand = game.currentHand;

@@ -92,6 +92,30 @@ body.disconnected::after {
   padding: 0 4px;
 }
 
+/* Pending seat requests — top-left so it can sit alongside the chat badge, and
+   green/pulsing because it's an invitation to act, not an alert. */
+#seatreq-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  background: var(--green, #2ea043);
+  color: #06210f;
+  font-weight: 700;
+  border-radius: 10px;
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 4px;
+  animation: seatreq-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes seatreq-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
 /* ---- table ---- */
 
 #table-area {

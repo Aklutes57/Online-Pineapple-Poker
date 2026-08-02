@@ -364,11 +364,46 @@ function exportLedgerCsv(client) {
 
 // ---- seat requests and waitlist (host) ----
 
+// Tracks which pending requesters the host has already been shown, so a toast
+// fires once per newcomer and not again on every state refresh. null until the
+// first state so a reconnecting host isn't spammed for people already waiting.
+let seenSeatReqs = null;
+
+function updateSeatReqBadge(client, isHost, reqs) {
+  const badge = document.getElementById('seatreq-badge');
+  const waiting = isHost
+    ? [...reqs, ...(client.state.waitlist || []).filter((w) => !w.approved)]
+    : [];
+  const ids = new Set(waiting.map((r) => r.playerId));
+
+  if (badge) {
+    badge.textContent = String(waiting.length);
+    badge.classList.toggle('hidden', waiting.length === 0);
+  }
+
+  if (seenSeatReqs !== null && isHost) {
+    const fresh = waiting.filter((r) => !seenSeatReqs.has(r.playerId));
+    if (fresh.length === 1) {
+      showToast(`${fresh[0].nickname} wants to join — tap 💬 to let them in`);
+    } else if (fresh.length > 1) {
+      showToast(`${fresh.length} players want to join — tap 💬 to let them in`);
+    }
+  }
+  seenSeatReqs = ids;
+}
+
 function renderSeatRequests(client) {
   const box = document.getElementById('seat-requests');
   const reqs = client.state.seatRequests || [];
   const queue = client.state.waitlist || [];
   const isHost = client.you?.isHost;
+
+  // Surface pending requests where the host will actually notice them: a badge
+  // on the 💬 button (visible even with the panel closed, e.g. on a phone) and
+  // a toast the moment a new person asks to join. Without this the approve
+  // buttons sit unseen inside a closed drawer.
+  updateSeatReqBadge(client, isHost, reqs);
+
   const show = (isHost && (reqs.length > 0 || queue.length > 0)) || queue.length > 0;
   box.classList.toggle('hidden', !show);
   if (!show) {

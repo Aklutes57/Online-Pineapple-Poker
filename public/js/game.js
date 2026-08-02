@@ -77,6 +77,7 @@ socket.io.on('reconnect', () => {
 
 let lastCoolerHandId = null;
 let lastResultHandId = null;
+let priorIsHost = null;
 
 function applyState(state) {
   if (!state || state.seq <= client.lastSeq) return;
@@ -88,6 +89,16 @@ function applyState(state) {
   client.you = state.you;
   renderAll(client);
   notifyStateForPanels(client);
+
+  // Tell you when host changes hands, so a silent hand-off (or reclaim) is
+  // never a surprise. Skipped on the very first state so joining isn't noisy.
+  const nowHost = !!state.you?.isHost;
+  if (priorIsHost !== null && priorIsHost !== nowHost) {
+    showToast(nowHost
+      ? "You're the host now — you can accept players and open the ⚙️ Host menu."
+      : `You're no longer the host — ${state.hostName || 'someone else'} is hosting now.`);
+  }
+  priorIsHost = nowHost;
 
   if (!wasMyTurn && (client.you?.availableActions || client.you?.canDecide747)) {
     playSound('yourTurn', { enabled: client.soundOn });
