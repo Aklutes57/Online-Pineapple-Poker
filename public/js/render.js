@@ -3,7 +3,10 @@
 // rebuild their DOM when their content signature changes, so CSS deal
 // animations fire once per new card.
 
-import { SEAT_COUNT, SEAT_COORDS, BET_COORDS, VARIANTS, GAME_STATUS, PHASES, EVENTS } from '/shared/constants.js';
+import {
+  SEAT_COUNT, SEAT_COORDS, BET_COORDS, SEAT_COORDS_PORTRAIT, BET_COORDS_PORTRAIT,
+  VARIANTS, GAME_STATUS, PHASES, EVENTS,
+} from '/shared/constants.js';
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { escapeHtml } from '/js/ui.js';
 import { renderActionBar, openJoinModal } from '/js/actionBar.js';
@@ -14,6 +17,10 @@ const betsLayer = () => document.getElementById('bets-layer');
 export function renderAll(client) {
   const { state, you } = client;
   if (!state) return;
+  lastClient = client;
+  // Settle which way the table lies BEFORE placing anything, so seats and
+  // chips are laid out against the shape they will actually be drawn on.
+  fitTableStage();
   renderTheme(client);
   renderHeader(client);
   renderSeats(client);
@@ -23,33 +30,99 @@ export function renderAll(client) {
   renderActionBar(client);
   document.getElementById('host-menu-btn').classList.toggle('hidden', !you?.isHost);
   document.getElementById('leave-btn').classList.toggle('hidden', !you || you.spectator);
-  fitTableStage();
+  // The action bar's height can change with its contents, which can change the
+  // space left for the table — refit, and re-place if that flipped the shape.
+  relayout();
 }
 
 // Scale the whole table (felt + seats + bets, all positioned inside #table) as
-// one piece to fit the available area on any device — phone or laptop, portrait
-// or landscape. The 900×504 felt plus a 40px seat overhang on every side is the
-// logical stage; we shrink or gently grow it to fill the space, so it always
-// fits whole and never clips or forces the page to scroll.
-const STAGE_W = 980;
-const STAGE_H = 584;
+// one piece to fit the available area on any device. The felt plus a 40px seat
+// overhang on every side is the logical stage; we shrink or gently grow it to
+// fill the space, so it always fits whole and never clips or scrolls.
+//
+// The table comes in two shapes and we pick whichever suits the space: the
+// usual 900×504 landscape oval, or — when the area is taller than it is wide,
+// i.e. a phone held upright — the same table stood on its end (504×900). A
+// portrait phone then gets a genuinely vertical table filling the screen
+// instead of a letterboxed landscape one shrunk to a third of the size.
+// How far seat pods reach past the felt, measured from a full ten-handed
+// table. A pod is centred on its point, so it always spills over the rim —
+// budget too little and the bottom seat gets shaved off by the area's overflow
+// clip; budget too much and the table is needlessly small. Pods spill much
+// further vertically than sideways, and further sideways on the wide table, so
+// each shape gets its own allowance. A webcam tile makes every pod taller, so
+// that cost is only paid when cameras are actually on.
+const OVERHANG = {
+  landscape: { x: 44, y: 80 },
+  upright: { x: 16, y: 68 },
+};
+const CAM_EXTRA_Y = 34; // half a webcam tile, top and bottom
+const FELT_LONG = 900;
+const FELT_SHORT = 504;
+
+let portrait = false;
+
+// Which way the table should lie, from the space we actually have to fill.
+// Measured on the area (whose size never depends on the table's), so choosing
+// a shape can't feed back into the measurement.
+function measureArea() {
+  const area = document.getElementById('table-area');
+  if (!area) return null;
+  const cs = getComputedStyle(area);
+  const w = area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const h = area.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  return w > 0 && h > 0 ? { w, h } : null;
+}
+
+export function isPortraitTable() {
+  return portrait;
+}
+
+export function seatCoord(slot) {
+  return (portrait ? SEAT_COORDS_PORTRAIT : SEAT_COORDS)[slot];
+}
+
+export function betCoord(slot) {
+  return (portrait ? BET_COORDS_PORTRAIT : BET_COORDS)[slot];
+}
 
 export function fitTableStage() {
-  const area = document.getElementById('table-area');
   const table = document.getElementById('table');
-  if (!area || !table) return;
-  const cs = getComputedStyle(area);
-  const availW = area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const availH = area.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  if (availW <= 0 || availH <= 0) return;
-  const scale = Math.min(availW / STAGE_W, availH / STAGE_H, 1.25);
+  const area = measureArea();
+  if (!table || !area) return;
+
+  portrait = area.h > area.w;
+  table.classList.toggle('upright', portrait);
+
+  const feltW = portrait ? FELT_SHORT : FELT_LONG;
+  const feltH = portrait ? FELT_LONG : FELT_SHORT;
+  const pad = portrait ? OVERHANG.upright : OVERHANG.landscape;
+  const camY = document.querySelector('#seats-layer video.seat-cam') ? CAM_EXTRA_Y : 0;
+  const scale = Math.min(
+    area.w / (feltW + pad.x * 2),
+    area.h / (feltH + (pad.y + camY) * 2),
+    1.25
+  );
   table.style.transform = `scale(${scale.toFixed(4)})`;
+}
+
+// Rotating the phone changes which shape fits, so the seats and chips have to
+// move too — re-place them, then refit. Cheap: seat contents are sig-guarded,
+// so this only rewrites the coordinates.
+let lastClient = null;
+function relayout() {
+  const was = portrait;
+  fitTableStage();
+  if (portrait !== was && lastClient?.state) {
+    placeSeats(lastClient);
+    renderBets(lastClient);
+  }
 }
 
 // Refit on any viewport change (rotation, resize, on-screen keyboard, etc.).
 if (typeof window !== 'undefined') {
-  window.addEventListener('resize', fitTableStage);
-  window.addEventListener('orientationchange', () => setTimeout(fitTableStage, 200));
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', () => setTimeout(relayout, 200));
 }
 
 // The host's saved table look. Applied as inline styles so it overrides
@@ -97,8 +170,22 @@ function displaySlot(seatIndex, client) {
   return (seatIndex - mySeat + SEAT_COUNT) % SEAT_COUNT;
 }
 
+// Position every seat pod around whichever oval we're using. Split out from
+// the content render so rotating the phone can re-place the ring on its own.
+function placeSeats(client) {
+  const layer = seatsLayer();
+  if (!layer) return;
+  for (let i = 0; i < SEAT_COUNT; i++) {
+    const pod = layer.querySelector(`[data-seat="${i}"]`);
+    if (!pod) continue;
+    const coord = seatCoord(displaySlot(i, client));
+    pod.style.left = coord.left + '%';
+    pod.style.top = coord.top + '%';
+  }
+}
+
 function renderSeats(client) {
-  const { state, you } = client;
+  const { state } = client;
   const layer = seatsLayer();
 
   for (let i = 0; i < SEAT_COUNT; i++) {
@@ -109,11 +196,6 @@ function renderSeats(client) {
       pod.dataset.seat = i;
       layer.appendChild(pod);
     }
-    const slot = displaySlot(i, client);
-    const coord = SEAT_COORDS[slot];
-    pod.style.left = coord.left + '%';
-    pod.style.top = coord.top + '%';
-
     const seat = state.seats[i];
     if (!seat) {
       renderEmptySeat(pod, i, client);
@@ -121,6 +203,7 @@ function renderSeats(client) {
       renderPlayerSeat(pod, seat, i, client);
     }
   }
+  placeSeats(client);
 }
 
 function renderEmptySeat(pod, seatIndex, client) {
@@ -269,13 +352,14 @@ function renderBets(client) {
       if (seat && seat.betThisRound > 0) parts.push([i, seat.betThisRound]);
     }
   }
-  const sig = JSON.stringify([parts, client.you?.seatIndex]);
+  // Orientation is part of the signature: turning the phone moves every chip.
+  const sig = JSON.stringify([parts, client.you?.seatIndex, portrait]);
   if (layer.dataset.sig === sig) return;
   layer.dataset.sig = sig;
   layer.innerHTML = '';
   for (const [seatIndex, amount] of parts) {
     const slot = displaySlot(seatIndex, client);
-    const coord = BET_COORDS[slot];
+    const coord = betCoord(slot);
     const chip = document.createElement('div');
     chip.className = 'bet-chip';
     chip.style.left = coord.left + '%';

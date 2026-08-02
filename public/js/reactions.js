@@ -1,7 +1,8 @@
 // Emoji reactions: a picker in the top bar, and emoji that float up from the
 // reacting player's seat (or the table edge for spectators).
 
-import { EVENTS, REACTIONS, SEAT_COUNT, SEAT_COORDS } from '/shared/constants.js';
+import { EVENTS, REACTIONS, SEAT_COUNT } from '/shared/constants.js';
+import { seatCoord } from '/js/render.js';
 
 let clientRef = null;
 let pickerOpen = false;
@@ -42,7 +43,7 @@ function launchPoint(seatIndex) {
   if (seatIndex === null || seatIndex === undefined) return { left: 50, top: 88 };
   const mySeat = clientRef.you?.seatIndex ?? 0;
   const slot = (seatIndex - mySeat + SEAT_COUNT) % SEAT_COUNT;
-  return SEAT_COORDS[slot];
+  return seatCoord(slot); // follows whichever way the table is lying
 }
 
 export function showReaction({ emoji, seatIndex, from }) {

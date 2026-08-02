@@ -8,7 +8,7 @@ import { play as playSound, setCustomClips } from '/js/sounds.js';
 import {
   pushSupported, savedPushEndpoint, currentPushSubscription, enablePush, disablePush,
 } from '/js/pwa.js';
-import { renderAll, startTimerLoop } from '/js/render.js';
+import { renderAll, startTimerLoop, fitTableStage } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels } from '/js/panels.js';
 import {
@@ -94,6 +94,7 @@ function applyState(state) {
   renderAll(client);
   notifyStateForPanels(client);
   syncAvSeats(state); // put each live webcam back into its (re-rendered) seat
+  fitTableStage();    // webcam tiles make pods taller — refit around them
   renderAvControls();
 
   // Tell you when host changes hands, so a silent hand-off (or reclaim) is

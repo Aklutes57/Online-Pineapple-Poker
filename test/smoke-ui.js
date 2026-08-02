@@ -99,6 +99,27 @@ try {
   await anna.waitForSelector('.seat.me .nameplate');
   await check('host is seated', true);
 
+  // ---- an upright phone gets an upright table ----
+  await anna.setViewportSize({ width: 390, height: 844 });
+  await anna.waitForTimeout(500);
+  const upright = await anna.evaluate(() => {
+    const t = document.getElementById('table');
+    const r = t.getBoundingClientRect();
+    const area = document.getElementById('table-area').getBoundingClientRect();
+    const clipped = [...document.querySelectorAll('#seats-layer .seat.occupied')].some((s) => {
+      const b = s.getBoundingClientRect();
+      return b.left < area.left - 1 || b.right > area.right + 1
+        || b.top < area.top - 1 || b.bottom > area.bottom + 1;
+    });
+    return { cls: t.classList.contains('upright'), taller: r.height > r.width, clipped };
+  });
+  await check('a portrait screen turns the table upright', upright.cls && upright.taller);
+  await check('no seat is cut off on a portrait screen', !upright.clipped);
+  await anna.setViewportSize({ width: 1280, height: 800 });
+  await anna.waitForTimeout(500);
+  await check('going back to landscape lays the table down again',
+    await anna.evaluate(() => !document.getElementById('table').classList.contains('upright')));
+
   // ---- in-app webcam + voice: a seated player can turn it on ----
   await anna.waitForSelector('#av-join:not(.hidden)');
   await anna.click('#av-join');
@@ -391,16 +412,21 @@ try {
   await dana.click('#start-btn');
   await dana.click('#c-create');
   await dana.waitForURL('**/games/**');
+  // #table is static markup, so it exists before the first state arrives —
+  // wait for the theme to actually be applied rather than racing it.
+  const feltIsPink = (page) => page.waitForFunction(
+    () => document.getElementById('table')?.style.backgroundColor === 'rgb(122, 31, 75)',
+    { timeout: 10000 }
+  ).then(() => true, () => false);
+
   await dana.waitForSelector('#table');
-  const feltColor = await dana.locator('#table').evaluate((el) => el.style.backgroundColor);
-  await check('saved felt colour applies to a newly hosted table', feltColor === 'rgb(122, 31, 75)');
+  await check('saved felt colour applies to a newly hosted table', await feltIsPink(dana));
 
   // A guest opening the same table sees the host's look too.
   const guestView = await newPage('guestview');
   await guestView.goto(dana.url());
   await guestView.waitForSelector('#table');
-  const guestFelt = await guestView.locator('#table').evaluate((el) => el.style.backgroundColor);
-  await check("guests see the host's table look", guestFelt === 'rgb(122, 31, 75)');
+  await check("guests see the host's table look", await feltIsPink(guestView));
 
   await dana.goto(`${base}/me`);
   await dana.waitForSelector('#signed-in:not(.hidden)');

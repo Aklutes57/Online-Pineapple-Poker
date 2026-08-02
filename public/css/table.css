@@ -162,6 +162,15 @@ body.disconnected::after {
     0 18px 60px rgba(0, 0, 0, 0.5);
 }
 
+/* Phone held upright: the same table stood on its end, so a portrait screen
+   gets a real vertical table filling it rather than a letterboxed landscape
+   one. Only the felt turns — every seat, card and label stays upright. */
+#table.upright {
+  width: 504px;
+  height: 900px;
+  border-radius: 52% / 50%;
+}
+
 #table::before {
   content: '';
   position: absolute;
@@ -169,6 +178,10 @@ body.disconnected::after {
   border: 2px solid rgba(255, 255, 255, 0.08);
   border-radius: 50% / 52%;
   pointer-events: none;
+}
+
+#table.upright::before {
+  border-radius: 52% / 50%;
 }
 
 #table-center {
@@ -1155,6 +1168,46 @@ td.dim { color: var(--text-dim); }
   .seat.empty .empty-label {
     width: 48px !important;
     height: 48px !important;
+  }
+
+  /* …but NOT on the live table. Everything there lives inside a stage that is
+     already scaled to fit the screen, so shrinking it again would shrink it
+     twice. The table keeps its full logical sizes at every viewport and the
+     scale alone decides how big it lands; the shrinks above are for the replay
+     page, which sizes by width instead. */
+  body.table-page {
+    --card-w: 44px;
+    --card-h: 62px;
+    --board-card-w: 58px;
+    --board-card-h: 82px;
+  }
+
+  .table-page #table {
+    border-width: 14px;
+  }
+
+  .table-page .seat {
+    width: 150px;
+  }
+
+  .table-page .nameplate {
+    min-width: 110px;
+    padding: 6px 12px;
+  }
+
+  .table-page .np-name,
+  .table-page .np-stack {
+    font-size: 13px;
+  }
+
+  .table-page .empty-seat-btn {
+    width: 66px !important;
+    height: 66px !important;
+  }
+
+  .table-page .seat.empty .empty-label {
+    width: 58px !important;
+    height: 58px !important;
   }
 }
 

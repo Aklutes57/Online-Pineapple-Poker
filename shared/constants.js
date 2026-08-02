@@ -171,6 +171,26 @@ export const SEAT_COORDS = [
   { left: 77, top: 90 },
 ];
 
+// The same ring for a table stood on its end — used when the screen is taller
+// than it is wide (a phone held upright), so the felt becomes a vertical oval
+// with the seats around it instead of a letterboxed landscape table. Index 0 is
+// still bottom-center (always you), still clockwise.
+// The side seats sit further in than a simple ellipse would put them: a seat
+// pod is a much larger share of this narrower felt, so hugging the rim would
+// leave them dangling in space beside the table.
+export const SEAT_COORDS_PORTRAIT = [
+  { left: 50, top: 97 },
+  { left: 28, top: 88 },
+  { left: 17, top: 65 },
+  { left: 17, top: 35 },
+  { left: 28, top: 12 },
+  { left: 50, top: 3 },
+  { left: 72, top: 12 },
+  { left: 83, top: 35 },
+  { left: 83, top: 65 },
+  { left: 72, top: 88 },
+];
+
 // Where each seat's bet chips render, pulled toward the table center.
 export const BET_COORDS = [
   { left: 50, top: 76 },
@@ -183,6 +203,20 @@ export const BET_COORDS = [
   { left: 83, top: 38 },
   { left: 83, top: 58 },
   { left: 70, top: 72 },
+];
+
+// Bet chip anchors for the upright (portrait) table.
+export const BET_COORDS_PORTRAIT = [
+  { left: 50, top: 80 },
+  { left: 36, top: 74 },
+  { left: 27, top: 59 },
+  { left: 27, top: 41 },
+  { left: 36, top: 26 },
+  { left: 50, top: 20 },
+  { left: 64, top: 26 },
+  { left: 73, top: 41 },
+  { left: 73, top: 59 },
+  { left: 64, top: 74 },
 ];
 
 // The reaction palette. Server-validated, so a client can't inject arbitrary

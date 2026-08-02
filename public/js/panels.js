@@ -52,14 +52,6 @@ export function initPanels(client) {
     input.value = '';
   });
 
-  // Rotate hint.
-  document.getElementById('rotate-dismiss').addEventListener('click', () => {
-    document.getElementById('rotate-hint').classList.add('hidden');
-    sessionStorage.setItem('pp:rotate-dismissed', '1');
-  });
-  updateRotateHint();
-  window.addEventListener('resize', updateRotateHint);
-
   // Host modal.
   document.getElementById('h-variant').innerHTML = Object.values(VARIANTS)
     .map((v) => `<option value="${v.key}">${escapeHtml(v.label)}</option>`)
@@ -557,13 +549,5 @@ function refreshHostModal(client, force = false) {
     : '<p class="empty-note">Nobody is seated yet.</p>';
 }
 
-// ---- rotate hint ----
-
-function updateRotateHint() {
-  const portrait = window.matchMedia('(orientation: portrait)').matches;
-  const small = window.innerWidth < 720;
-  const dismissed = sessionStorage.getItem('pp:rotate-dismissed');
-  document
-    .getElementById('rotate-hint')
-    .classList.toggle('hidden', !(portrait && small) || !!dismissed);
-}
+// (The old "rotate your phone" nag is gone: an upright phone now gets a real
+// vertical table, so there is nothing to apologise for.)
