@@ -17,6 +17,7 @@ const { EVENTS, TIMINGS } = await import('../shared/constants.js');
 TIMINGS.NEXT_HAND_DELAY = 40;
 TIMINGS.RUNOUT_STREET_DELAY = 5;
 TIMINGS.DISCARD_TIME = 3000;
+TIMINGS.RIT_VOTE_TIME = 2000; // a bot that declines to answer shouldn't stall the soak
 TIMINGS.AWAY_GRACE = 20;
 TIMINGS.COUNTDOWN_747 = 10;
 
@@ -105,6 +106,19 @@ class Bot {
       this.actedKeys.add(key);
       setTimeout(
         () => this.socket.emit(EVENTS.DECISION_747, { handId: hand.handId, stay: rnd() < 0.6 }),
+        randInt(0, 10)
+      );
+      return;
+    }
+
+    // Run it twice is now a per-hand vote that needs everyone's agreement.
+    // Mostly yes, so both the two-board and the declined path get exercised.
+    if (you.canVoteRunItTwice) {
+      const key = `rit:${hand.handId}`;
+      if (this.actedKeys.has(key)) return;
+      this.actedKeys.add(key);
+      setTimeout(
+        () => this.socket.emit(EVENTS.RUN_IT_TWICE_VOTE, { handId: hand.handId, yes: rnd() < 0.75 }),
         randInt(0, 10)
       );
       return;

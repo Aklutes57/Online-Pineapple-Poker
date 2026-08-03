@@ -79,7 +79,7 @@ export function initPanels(client) {
       rabbitHunt: document.getElementById('h-rabbit').checked,
       runItTwice: document.getElementById('h-rit').checked,
     });
-    showToast('Settings saved — they apply from the next hand');
+    showToast('Settings saved — they apply from the next hand', { ok: true });
   });
   document.getElementById('h-pause').addEventListener('click', () => {
     const paused = clientRef.state.status === GAME_STATUS.PAUSED || clientRef.state.pauseRequested;
@@ -116,7 +116,7 @@ export function initPanels(client) {
     if (!copyBtn) return;
     const handle = copyBtn.dataset.copy;
     navigator.clipboard?.writeText(handle).then(
-      () => showToast(`Copied ${handle}`),
+      () => showToast(`Copied ${handle}`, { ok: true }),
       () => showToast(handle)
     );
   });
@@ -128,7 +128,7 @@ export function initPanels(client) {
     const playerId = btn.dataset.player;
     if (btn.dataset.haction === 'nudge') {
       client.send(EVENTS.HOST_NUDGE, { playerId });
-      showToast('Nudged — they have a few seconds to act');
+      showToast('Nudged — they have a few seconds to act', { ok: true });
     } else if (btn.dataset.haction === 'kick') {
       if (confirm('Remove this player from the table?')) {
         client.send(EVENTS.HOST_KICK, { playerId });

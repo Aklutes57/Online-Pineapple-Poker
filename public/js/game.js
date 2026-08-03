@@ -268,6 +268,45 @@ function renderAvControls() {
   }
 }
 
+// ---- shared table picture + your own webcam frame ----
+// Both are uploaded straight to the table using the per-game player token, so
+// guests can do it too — no account needed to decorate the table you're at.
+function uploadImage(file, path, okMessage) {
+  if (!file) return;
+  const token = saved().token;
+  if (!token) {
+    showToast('Join the table first');
+    return;
+  }
+  file.arrayBuffer().then((buf) =>
+    fetch(`/api/games/${gameId}/${path}?name=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Player-Token': token },
+      body: buf,
+    })
+      .then(async (res) => {
+        if (res.ok) showToast(okMessage, { ok: true });
+        else showToast((await res.json().catch(() => ({}))).error || 'Upload failed');
+      })
+      .catch(() => showToast('Upload failed'))
+  );
+}
+
+document.getElementById('table-img-btn')?.addEventListener('click', () =>
+  document.getElementById('table-img-input').click()
+);
+document.getElementById('table-img-input')?.addEventListener('change', (e) => {
+  uploadImage(e.target.files[0], 'table-image', 'Table picture updated for everyone');
+  e.target.value = '';
+});
+document.getElementById('av-frame')?.addEventListener('click', () =>
+  document.getElementById('cam-frame-input').click()
+);
+document.getElementById('cam-frame-input')?.addEventListener('change', (e) => {
+  uploadImage(e.target.files[0], 'cam-frame', 'Webcam frame updated');
+  e.target.value = '';
+});
+
 initWebrtc(client, socket);
 setOnChange(renderAvControls);
 document.getElementById('av-join')?.addEventListener('click', async () => {

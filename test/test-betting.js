@@ -240,7 +240,7 @@ function totalChips(players, hand) {
   check('timeout: a marked away', players[0].sittingOut === true);
 }
 
-// --- Pineapple: discard before the flop ---
+// --- Pineapple: discard FIRST, then the preflop betting round ---
 {
   const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
   const deck = [
@@ -250,18 +250,22 @@ function totalChips(players, hand) {
   const { hand } = makeHand({ players, deck, variantKey: 'pineapple' });
   hand.start();
   check('pineapple: three hole cards', hand.bySeat.get(0).holeCards.length === 3);
-  act(hand, 0, 'call');
-  act(hand, 1, 'check');
-  check('pineapple: discard before flop', hand.phase === PHASES.DISCARD_PREFLOP);
+  // The discard comes before anyone bets: you play preflop with the two you keep.
+  check('pineapple: discard opens the hand', hand.phase === PHASES.DISCARD_PREFLOP);
+  check('pineapple: nobody is on the clock to bet yet', hand.toActSeat === null);
   check('pineapple: no board yet', hand.board.length === 0);
   const r = hand.handleDiscard(hand.bySeat.get(0), 2); // a drops 3d -> keeps Qs Qd
   check('pineapple: discard accepted', r.ok);
   const r2 = hand.handleDiscard(hand.bySeat.get(0), 0);
   check('pineapple: double discard rejected', !r2.ok);
   hand.handleDiscard(hand.bySeat.get(1), 2); // b drops 2c -> keeps Ah Kh
-  check('pineapple: flop after discards', hand.phase === PHASES.FLOP && hand.board.length === 3);
+  check('pineapple: preflop betting opens after the discards', hand.phase === PHASES.PREFLOP);
+  check('pineapple: still no board during preflop betting', hand.board.length === 0);
   check('pineapple: two cards remain', hand.bySeat.get(0).holeCards.length === 2);
-  // play to showdown: board 9s Ts Jh 4c 5s -> b has AhKh (K-high... A-high), a has QsQd pair
+  act(hand, 0, 'call');
+  act(hand, 1, 'check');
+  check('pineapple: flop after the preflop round', hand.phase === PHASES.FLOP && hand.board.length === 3);
+  // play to showdown: board 9s Ts Jh 4c 5s -> b has AhKh (A-high), a has QsQd pair
   act(hand, 1, 'check'); act(hand, 0, 'check');
   act(hand, 1, 'check'); act(hand, 0, 'check');
   act(hand, 1, 'check'); act(hand, 0, 'check');
@@ -269,7 +273,7 @@ function totalChips(players, hand) {
   check('pineapple: queens win', players[0].stack === 202 && players[1].stack === 198);
 }
 
-// --- Crazy Pineapple: discard after the flop betting round ---
+// --- Crazy Pineapple: bet preflop with three, discard as the flop lands ---
 {
   const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
   const deck = [
@@ -278,16 +282,22 @@ function totalChips(players, hand) {
   ];
   const { hand } = makeHand({ players, deck, variantKey: 'crazyPineapple' });
   hand.start();
+  check('crazy: preflop betting starts straight away', hand.phase === PHASES.PREFLOP);
+  check('crazy: preflop is played with all three', hand.bySeat.get(0).holeCards.length === 3);
   act(hand, 0, 'call');
   act(hand, 1, 'check');
-  check('crazy: flop comes before discard', hand.phase === PHASES.FLOP && hand.board.length === 3);
-  check('crazy: still three cards on flop', hand.bySeat.get(0).holeCards.length === 3);
-  act(hand, 1, 'check');
-  act(hand, 0, 'check');
-  check('crazy: discard after flop betting', hand.phase === PHASES.DISCARD_POSTFLOP);
+  // The flop is dealt and the discard happens immediately — before flop betting.
+  check('crazy: flop dealt', hand.board.length === 3);
+  check('crazy: discard as soon as the flop lands', hand.phase === PHASES.DISCARD_POSTFLOP);
+  check('crazy: nobody on the clock during the discard', hand.toActSeat === null);
   hand.handleDiscard(hand.bySeat.get(0), 2);
   hand.handleDiscard(hand.bySeat.get(1), 2);
-  check('crazy: turn after discards', hand.phase === PHASES.TURN && hand.board.length === 4);
+  check('crazy: flop betting opens after the discards',
+    hand.phase === PHASES.FLOP && hand.board.length === 3);
+  check('crazy: two cards remain', hand.bySeat.get(0).holeCards.length === 2);
+  act(hand, 1, 'check');
+  act(hand, 0, 'check');
+  check('crazy: turn after the flop round', hand.phase === PHASES.TURN && hand.board.length === 4);
 }
 
 // --- Discard timeout auto-discards the last card ---
@@ -296,13 +306,11 @@ function totalChips(players, hand) {
   const deck = ['Ah', 'Kh', '2c', 'Qs', 'Qd', '3d', '9s', 'Ts', 'Jh', '4c', '5s'];
   const { hand, ctx } = makeHand({ players, deck, variantKey: 'pineapple' });
   hand.start();
-  act(hand, 0, 'call');
-  act(hand, 1, 'check');
   check('discard timeout: timer armed', ctx.timer?.name === 'discard');
   ctx.fire();
   check('discard timeout: both auto-discarded', hand.bySeat.get(0).holeCards.length === 2 && hand.bySeat.get(1).holeCards.length === 2);
   check('discard timeout: last card dropped', !hand.bySeat.get(0).holeCards.includes('3d'));
-  check('discard timeout: flop dealt', hand.phase === PHASES.FLOP);
+  check('discard timeout: preflop betting opens', hand.phase === PHASES.PREFLOP);
 }
 
 // --- Crazy Pineapple all-in preflop: discard still happens during run-out, then reveal ---
@@ -323,6 +331,21 @@ function totalChips(players, hand) {
   ctx.fireAll();
   check('crazy-runout: reaches showdown', hand.finished && hand.phase === PHASES.SHOWDOWN);
   check('crazy-runout: chips conserved', totalChips(players, hand) === 200);
+}
+
+// --- Pineapple all-in from the blinds: discard still comes first ---
+{
+  const players = [makePlayer(0, 1, 'a'), makePlayer(1, 1, 'b')];
+  const deck = ['Ah', 'Kh', '2c', 'Qs', 'Qd', '3d', '9s', 'Ts', 'Jh', '4c', '5s'];
+  const { hand, ctx } = makeHand({ players, deck, variantKey: 'pineapple' });
+  hand.start();
+  check('pineapple-runout: discard opens even when all-in', hand.phase === PHASES.DISCARD_PREFLOP);
+  hand.handleDiscard(hand.bySeat.get(0), 2);
+  hand.handleDiscard(hand.bySeat.get(1), 2);
+  check('pineapple-runout: two cards each', hand.bySeat.get(0).holeCards.length === 2);
+  ctx.fireAll();
+  check('pineapple-runout: reaches showdown', hand.finished && hand.phase === PHASES.SHOWDOWN);
+  check('pineapple-runout: chips conserved', totalChips(players, hand) === 2);
 }
 
 // --- showCards is rejected for players not dealt into the hand ---
@@ -527,7 +550,14 @@ function totalChips(players, hand) {
   hand.start();
   act(hand, 0, 'raise', 100);
   act(hand, 1, 'call');
-  check('run it twice engaged', hand.runItTwice === true);
+  // Running twice is never automatic — the table is asked, and it only happens
+  // if everyone still in the hand says yes.
+  check('run it twice is put to a vote', hand.phase === PHASES.RIT_VOTE);
+  check('not running twice until the votes are in', hand.runItTwice === false);
+  hand.handleRitVote(hand.bySeat.get(0), true);
+  check('still waiting on the second player', hand.runItTwice === false);
+  hand.handleRitVote(hand.bySeat.get(1), true);
+  check('run it twice engaged once everyone agreed', hand.runItTwice === true);
   ctx.fireAll();
   check('two boards dealt', hand.board.length === 5 && hand.board2.length === 5);
   check('boards share no cards', !hand.board.some((c) => hand.board2.includes(c)));
@@ -544,8 +574,43 @@ function totalChips(players, hand) {
   hand.start();
   act(hand, 0, 'raise', 51);
   act(hand, 1, 'call');
+  hand.handleRitVote(hand.bySeat.get(0), true);
+  hand.handleRitVote(hand.bySeat.get(1), true);
   ctx.fireAll();
   check('odd run-it-twice pot conserved', players.reduce((a, p) => a + p.stack, 0) === 102);
+}
+
+// --- One "no" means once, and so does nobody answering ---
+{
+  const deck = ['2h', '7d', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s', '9d', 'Ts', 'Qh', '6c', '2c'];
+  {
+    const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+    const { hand, ctx } = makeHand({ players, deck, options: { runItTwice: true } });
+    hand.start();
+    act(hand, 0, 'raise', 100);
+    act(hand, 1, 'call');
+    hand.handleRitVote(hand.bySeat.get(0), true);
+    hand.handleRitVote(hand.bySeat.get(1), false); // one refusal settles it
+    check('a single no means run it once', hand.runItTwice === false);
+    check('the vote does not linger', hand.phase !== PHASES.RIT_VOTE);
+    ctx.fireAll();
+    check('one board only', hand.board.length === 5 && !hand.board2?.length);
+    check('declined run-it-twice conserves chips',
+      players.reduce((a, p) => a + p.stack, 0) === 200);
+  }
+  {
+    const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+    const { hand, ctx } = makeHand({ players, deck, options: { runItTwice: true } });
+    hand.start();
+    act(hand, 0, 'raise', 100);
+    act(hand, 1, 'call');
+    check('vote is open', hand.phase === PHASES.RIT_VOTE);
+    ctx.fireAll(); // nobody answers — the vote times out
+    check('no answer means run it once', hand.runItTwice === false);
+    check('timed-out vote still reaches showdown', hand.finished);
+    check('timed-out vote conserves chips',
+      players.reduce((a, p) => a + p.stack, 0) === 200);
+  }
 }
 
 // --- Rabbit hunt ---

@@ -132,6 +132,27 @@ export function renderActionBar(client) {
           : ''}
       </div>
       ${trayOpen && av.canRaise ? trayHtml(av, client) : ''}`;
+  } else if (you.canVoteRunItTwice) {
+    // Everyone in the hand has to agree, so this is a plain yes/no — and
+    // saying nothing counts as "once".
+    html = `
+      <div class="ab-actions">
+        <button class="btn btn-green ab-btn" data-act="rit-yes">Run it twice</button>
+        <button class="btn ab-btn" data-act="rit-no">Just once</button>
+      </div>
+      <span class="ab-note">All-in — deal two boards? Everyone has to agree.</span>`;
+  } else if (hand && hand.phase === PHASES.RIT_VOTE) {
+    html = '<span class="ab-note">Waiting on the others to answer…</span>';
+  } else if (you.canRebuy) {
+    const { minBuyIn, maxBuyIn, defaultBuyIn } = state.settings;
+    const suggested = Math.min(Math.max(defaultBuyIn, minBuyIn), maxBuyIn);
+    html = `
+      <span class="ab-note ab-highlight">You're out of chips.</span>
+      <div class="ab-actions">
+        <button class="btn btn-green ab-btn" data-act="rebuy" data-amount="${suggested}">Re-buy ${suggested}</button>
+        <button class="btn ab-btn" data-act="rebuy-other">Other amount</button>
+        <button class="btn btn-red ab-btn" data-act="stand-up">Leave seat</button>
+      </div>`;
   } else if (you.canDecide747) {
     // 747: one secret, simultaneous choice. Big buttons, no tray.
     html = `
@@ -257,7 +278,7 @@ function buildPresets(av, pot) {
 function bindBarEvents(client, av) {
   const el = bar();
   el.querySelectorAll('[data-act]').forEach((btn) => {
-    btn.addEventListener('click', () => handleAct(client, btn.dataset.act, av));
+    btn.addEventListener('click', () => handleAct(client, btn.dataset.act, av, btn.dataset.amount));
   });
   el.querySelectorAll('[data-pre]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -312,7 +333,7 @@ function syncTrayInputs(skipNumber = false) {
   if (confirmAmt) confirmAmt.textContent = trayAmount;
 }
 
-function handleAct(client, act, av) {
+function handleAct(client, act, av, arg = null) {
   const hand = client.state.hand;
   switch (act) {
     case 'open-join':
@@ -359,6 +380,25 @@ function handleAct(client, act, av) {
       break;
     case 'rabbit':
       client.send(EVENTS.RABBIT_HUNT, { handId: hand.handId });
+      break;
+    case 'rit-yes':
+      client.send(EVENTS.RUN_IT_TWICE_VOTE, { handId: hand.handId, yes: true });
+      break;
+    case 'rit-no':
+      client.send(EVENTS.RUN_IT_TWICE_VOTE, { handId: hand.handId, yes: false });
+      break;
+    case 'rebuy':
+      client.send(EVENTS.REBUY, { amount: parseInt(arg, 10) });
+      break;
+    case 'rebuy-other': {
+      const { minBuyIn, maxBuyIn } = client.state.settings;
+      const raw = prompt(`Re-buy how many chips? (${minBuyIn}-${maxBuyIn})`);
+      const amount = parseInt(raw, 10);
+      if (Number.isInteger(amount)) client.send(EVENTS.REBUY, { amount });
+      break;
+    }
+    case 'stand-up':
+      client.send(EVENTS.STAND_UP, {});
       break;
   }
 }

@@ -201,6 +201,13 @@ label {
   opacity: 1;
 }
 
+/* Something worked — green, so a confirmation doesn't read as an error. */
+#toast.ok {
+  background: var(--green, #2ea043);
+  color: #04240f;
+  font-weight: 600;
+}
+
 .pineapple-mark {
   font-weight: 800;
   letter-spacing: 0.5px;

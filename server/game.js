@@ -317,6 +317,44 @@ export class Game {
     return { ok: true };
   }
 
+  // Any player at the table can change the felt picture — it is a shared table,
+  // not the host's alone. Applies immediately for everyone.
+  setTableImage(player, url) {
+    if (!player || !this.players.has(player.id)) return { ok: false, error: 'not at this table' };
+    if (typeof url !== 'string' || !url.startsWith('/uploads/')) {
+      return { ok: false, error: 'bad image' };
+    }
+    this.settings.tableTheme = { ...(this.settings.tableTheme || {}), feltImage: url };
+    this.addLog(`${player.nickname} changed the table picture`);
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  // A busted player topping themselves back up, without needing the host.
+  // Same buy-in limits as taking a seat, and it lands as a fresh buy-in on the
+  // ledger so the books still balance.
+  rebuy(player, amount) {
+    if (player.status !== 'seated') return { ok: false, error: 'not seated' };
+    const { minBuyIn, maxBuyIn } = this.settings;
+    const want = Number.isInteger(amount) ? amount : this.settings.defaultBuyIn;
+    if (!Number.isInteger(want) || want < minBuyIn || want > maxBuyIn) {
+      return { ok: false, error: `re-buy must be ${minBuyIn}-${maxBuyIn}` };
+    }
+    if (player.stack + want > maxBuyIn) {
+      return { ok: false, error: `a stack can't go past ${maxBuyIn}` };
+    }
+    if (this.playerInLiveHand(player)) {
+      this.queueOp({ type: 'adjustStack', playerId: player.id, delta: want });
+      this.addLog(`${player.nickname} re-buys ${want} — lands after this hand`);
+      return { ok: true, queued: true };
+    }
+    this.applyStackAdjust(player, want);
+    this.addLog(`${player.nickname} re-buys ${want}`);
+    if (player.stack > 0 && !player.kicked) player.sittingOut = false;
+    this.maybeStartHand();
+    return { ok: true };
+  }
+
   adjustStack(playerId, delta) {
     const player = this.players.get(playerId);
     if (!player || player.status !== 'seated') return { ok: false, error: 'not seated' };
@@ -618,6 +656,7 @@ export class Game {
         fairness: fair747.meta,
         ctx: this.handCtx(),
       });
+      this.currentHand.fairnessSeed = fair747.serverSeed;
       this.currentHand.start();
       this.emitChanged();
       return;
@@ -647,6 +686,7 @@ export class Game {
       },
       ctx: this.handCtx(),
     });
+    this.currentHand.fairnessSeed = fair.serverSeed;
     this.currentHand.start();
     this.emitChanged();
   }
@@ -656,7 +696,13 @@ export class Game {
   // (already public), the client seed, the nonce, and hashes of them do.
   fairnessForHand() {
     const nonce = this.handNo;
-    const { serverSeed, serverCommit, clientSeed, algo } = this.fairness;
+    const { clientSeed, algo } = this.fairness;
+    // Every hand is dealt from its own fresh randomness: 32 new bytes straight
+    // from the OS random source, per deal. Nothing about one hand's shuffle can
+    // be derived from another's, and no stored seed decides the night's cards.
+    // The seed still anchors the integrity proof for THIS hand — it is
+    // committed before the deal and never leaves the server.
+    const serverSeed = newServerSeed();
     const deck = seededShuffle(serverSeed, clientSeed, nonce);
     const proof = handProof(serverSeed, clientSeed, nonce);
     // deckCommit locks all 52 positions the instant the hand starts, so the
@@ -664,7 +710,11 @@ export class Game {
     const { deckCommit } = buildCommitment(serverSeed, nonce, deck);
     return {
       deck,
-      meta: { algo, commit: serverCommit, clientSeed, nonce, proof, float: floatFromHex(proof), deckCommit },
+      serverSeed,
+      meta: {
+        algo, commit: commitOf(serverSeed), clientSeed, nonce,
+        proof, float: floatFromHex(proof), deckCommit,
+      },
     };
   }
 

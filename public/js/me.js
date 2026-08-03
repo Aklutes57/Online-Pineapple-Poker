@@ -120,7 +120,7 @@ document.getElementById('pay-save').addEventListener('click', async () => {
       account.prefs = { ...account.prefs, payments: data.payments };
       renderPayFields(account);
     }
-    showToast('Payment methods saved');
+    showToast('Payment methods saved', { ok: true });
   } catch {
     showToast('Could not save payment methods');
   }

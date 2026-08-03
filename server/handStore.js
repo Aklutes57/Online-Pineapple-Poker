@@ -47,8 +47,8 @@ export function saveHand(game, hand) {
   // enough to verify every card seen, and nothing that could reconstruct a
   // folded hand.
   let fairnessRecord = null;
-  if (hand.fairness && game.fairness?.serverSeed && Array.isArray(hand.deck)) {
-    const { serverSeed } = game.fairness;
+  if (hand.fairness && hand.fairnessSeed && Array.isArray(hand.deck)) {
+    const serverSeed = hand.fairnessSeed;
     const { nonce } = hand.fairness;
     const { deckCommit, slotCommits } = buildCommitment(serverSeed, nonce, hand.deck);
     const publicCards = [

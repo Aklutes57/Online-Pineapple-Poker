@@ -23,6 +23,9 @@ let micOn = true;
 
 const peers = new Map();     // peerId -> RTCPeerConnection
 const videoEls = new Map();  // playerId -> HTMLVideoElement (own + remote)
+// Players you have muted, for you only — it silences their audio in your
+// browser and tells them nothing. Kept per table between reloads.
+const mutedPeers = new Set();
 let iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 export async function initWebrtc(c, sock) {
@@ -34,11 +37,50 @@ export async function initWebrtc(c, sock) {
   } catch {
     /* fall back to the default public STUN */
   }
+  loadMuted();
   socket.on(EVENTS.RTC_SIGNAL, onSignal);
 }
 
 export function avState() {
   return { supported: isSupported(), joined, camOn, micOn };
+}
+
+// ---- muting individual players (local only) ----
+
+const muteKey = () => `pp:muted:${client?.gameId || ''}`;
+
+function loadMuted() {
+  try {
+    for (const id of JSON.parse(localStorage.getItem(muteKey()) || '[]')) mutedPeers.add(id);
+  } catch {
+    /* nothing saved */
+  }
+}
+
+export function isMuted(playerId) {
+  return mutedPeers.has(playerId);
+}
+
+export function toggleMutePlayer(playerId) {
+  if (mutedPeers.has(playerId)) mutedPeers.delete(playerId);
+  else mutedPeers.add(playerId);
+  try {
+    localStorage.setItem(muteKey(), JSON.stringify([...mutedPeers]));
+  } catch {
+    /* private mode — muting still works for this session */
+  }
+  applyMutes();
+  onChange();
+  return mutedPeers.has(playerId);
+}
+
+// A muted player's own <video> element is what carries their audio, so
+// silencing it is exactly "mute this person, for me".
+function applyMutes() {
+  for (const [id, el] of videoEls) {
+    if (id === client?.you?.playerId) continue; // your own is always muted
+    el.muted = mutedPeers.has(id);
+  }
 }
 export function setOnChange(fn) { onChange = fn || (() => {}); }
 
@@ -136,6 +178,15 @@ export function syncSeats(state) {
     if (!pod) continue;
     const v = seat && seat.mediaOn ? videoEls.get(seat.playerId) : null;
     if (v) {
+      // Each player picks the frame around their own tile.
+      if (seat.camFrame) {
+        v.style.borderImage = `url("${seat.camFrame}") 30 round`;
+        v.style.borderWidth = '10px';
+      } else {
+        v.style.borderImage = '';
+        v.style.borderWidth = '';
+      }
+      v.classList.toggle('muted-peer', mutedPeers.has(seat.playerId));
       if (v.parentElement !== pod) pod.insertBefore(v, pod.firstChild);
     } else {
       // A seat that lost media: pull any stray video for whoever sits there.
@@ -154,6 +205,7 @@ function makePeer(peerId, initiator) {
     const v = ensureVideoEl(peerId, false);
     if (v.srcObject !== e.streams[0]) {
       v.srcObject = e.streams[0];
+      v.muted = mutedPeers.has(peerId);
       v.play?.().catch(() => {});
     }
     if (client.state) syncSeats(client.state);

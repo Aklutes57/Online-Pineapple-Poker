@@ -417,6 +417,20 @@ export function attachSockets(io) {
       }
     }));
 
+    socket.on(EVENTS.RUN_IT_TWICE_VOTE, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'No vote right now');
+        return;
+      }
+      if (typeof hand.handleRitVote !== 'function') return;
+      result(game, hand.handleRitVote(player, !!payload.yes), ERRORS.BAD_ACTION);
+    }));
+
+    socket.on(EVENTS.REBUY, withGame((game, player, payload) => {
+      result(game, game.rebuy(player, payload.amount), ERRORS.BAD_AMOUNT);
+    }));
+
     socket.on(EVENTS.RABBIT_HUNT, withGame((game, player, payload) => {
       const hand = game.currentHand;
       if (!hand || payload.handId !== hand.handId) return;

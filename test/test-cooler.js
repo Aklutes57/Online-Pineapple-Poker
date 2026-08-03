@@ -19,59 +19,59 @@ function near(actual, expected, tolerance) {
   return Math.abs(actual - expected) <= tolerance;
 }
 
+// The equity figures below are Monte Carlo. Sampling off Math.random made this
+// suite fail roughly one run in five for no reason, so feed it a fixed PRNG:
+// same draws every time, so a failure here means the maths is wrong.
+function seededRng(seed = 0x2f6e2b1) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const fixed = () => ({ rng: seededRng() });
+
 // ---- equity against known figures ----
 // Tolerances are wide enough for the Monte Carlo paths but tight enough that
 // a genuinely wrong calculation fails.
 
 {
-  const e = equity(
-    [{ seat: 0, holeCards: ['As', 'Ah'] }, { seat: 1, holeCards: ['Ks', 'Kh'] }],
-    []
-  );
+  const e = equity([{ seat: 0, holeCards: ['As', 'Ah'] }, { seat: 1, holeCards: ['Ks', 'Kh'] }], [], fixed());
   check('AA vs KK preflop is about 82%', near(e.get(0), 0.82, 0.04));
   check('equity sums to 1', near(e.get(0) + e.get(1), 1, 0.001));
 }
 
 {
   // A pair against two live overcards — the classic coin flip.
-  const e = equity(
-    [{ seat: 0, holeCards: ['8s', '8h'] }, { seat: 1, holeCards: ['Ac', 'Kd'] }],
-    []
-  );
+  const e = equity([{ seat: 0, holeCards: ['8s', '8h'] }, { seat: 1, holeCards: ['Ac', 'Kd'] }], [], fixed());
   check('pair vs two overcards is near a coin flip', near(e.get(0), 0.53, 0.05));
 }
 
 {
   // Exact enumeration on the flop: a set against a flush draw.
-  const e = equity(
-    [{ seat: 0, holeCards: ['9s', '9d'] }, { seat: 1, holeCards: ['Ah', 'Kh'] }],
-    ['9h', '7h', '2c']
-  );
+  const e = equity([{ seat: 0, holeCards: ['9s', '9d'] }, { seat: 1, holeCards: ['Ah', 'Kh'] }], ['9h', '7h', '2c'], fixed());
   check('set vs flush draw on the flop favours the set', e.get(0) > 0.6 && e.get(0) < 0.8);
   check('flop equity sums to 1', near(e.get(0) + e.get(1), 1, 0.001));
 }
 
 {
   // Drawing dead: the board is already a made straight flush for seat 0.
-  const e = equity(
-    [{ seat: 0, holeCards: ['9h', '8h'] }, { seat: 1, holeCards: ['As', 'Ad'] }],
-    ['7h', '6h', '5h', '2c', '3d']
-  );
+  const e = equity([{ seat: 0, holeCards: ['9h', '8h'] }, { seat: 1, holeCards: ['As', 'Ad'] }], ['7h', '6h', '5h', '2c', '3d'], fixed());
   check('a completed straight flush has 100% equity', near(e.get(0), 1, 0.001));
   check('drawing dead is 0%', near(e.get(1), 0, 0.001));
 }
 
 {
   // Identical hands by rank must split exactly.
-  const e = equity(
-    [{ seat: 0, holeCards: ['As', 'Kd'] }, { seat: 1, holeCards: ['Ah', 'Kc'] }],
-    ['2c', '7d', '9h', 'Ts', 'Jc']
-  );
+  const e = equity([{ seat: 0, holeCards: ['As', 'Kd'] }, { seat: 1, holeCards: ['Ah', 'Kc'] }], ['2c', '7d', '9h', 'Ts', 'Jc'], fixed());
   check('an exact chop splits 50/50', near(e.get(0), 0.5, 0.001) && near(e.get(1), 0.5, 0.001));
 }
 
 {
-  const e = equity([{ seat: 3, holeCards: ['As', 'Ah'] }], ['2c', '7d', '9h']);
+  const e = equity([{ seat: 3, holeCards: ['As', 'Ah'] }], ['2c', '7d', '9h'], fixed());
   check('a lone player has all the equity', e.get(3) === 1);
 }
 

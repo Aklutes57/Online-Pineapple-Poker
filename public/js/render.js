@@ -10,6 +10,7 @@ import {
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { escapeHtml } from '/js/ui.js';
 import { renderActionBar, openJoinModal } from '/js/actionBar.js';
+import { isMuted, toggleMutePlayer } from '/js/webrtc.js';
 
 const seatsLayer = () => document.getElementById('seats-layer');
 const betsLayer = () => document.getElementById('bets-layer');
@@ -56,7 +57,7 @@ const OVERHANG = {
   landscape: { x: 44, y: 80 },
   upright: { x: 16, y: 68 },
 };
-const CAM_EXTRA_Y = 34; // half a webcam tile, top and bottom
+const CAM_EXTRA_Y = 74; // half a webcam tile, top and bottom
 const FELT_LONG = 900;
 const FELT_SHORT = 504;
 
@@ -241,6 +242,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
     seat.isDealer, toAct, waitingDiscard, seat.handResult,
     isMe, you?.canDiscard, you?.hasDiscarded,
+    seat.mediaOn, seat.camFrame, isMuted(seat.playerId),
     decisionPhase ? seat.decided : null, myHandNow,
     hand && !hand.finished ? hand.lastAction?.seat === seatIndex && JSON.stringify(hand.lastAction) : null,
   ]);
@@ -297,6 +299,11 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
       <span class="np-stack">${seat.stack}</span>
     </div>
     ${statusBits.length ? `<div class="np-status">${statusBits.join(' · ')}</div>` : ''}
+    ${seat.mediaOn && !isMe
+      ? `<button class="np-mute${isMuted(seat.playerId) ? ' on' : ''}" data-mute="${seat.playerId}"
+           title="${isMuted(seat.playerId) ? 'Unmute' : 'Mute'} ${escapeHtml(seat.nickname)} (just for you)"
+           >${isMuted(seat.playerId) ? '🔇' : '🔊'}</button>`
+      : ''}
     <div class="timer-bar hidden"><div class="timer-fill"></div></div>
   `;
 
@@ -333,6 +340,14 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     plate.appendChild(disc);
   }
   pod.appendChild(plate);
+  const muteBtn = plate.querySelector('[data-mute]');
+  if (muteBtn) {
+    muteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMutePlayer(muteBtn.dataset.mute);
+      renderAll(client);
+    });
+  }
   if (bubble) plate.insertAdjacentHTML('beforeend', bubble);
   if (isMe && you.hasDiscarded && discardPhase) {
     plate.insertAdjacentHTML('beforeend', '<div class="np-bubble">discarded ✓</div>');

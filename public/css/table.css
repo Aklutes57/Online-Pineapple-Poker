@@ -137,7 +137,7 @@ body.disconnected::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px;
+  padding: 4px;
   min-height: 0;
   overflow: hidden; /* the scaled stage is sized to fit, so nothing should spill */
 }
@@ -728,10 +728,14 @@ body.disconnected::after {
 
 .tab {
   flex: 1;
-  padding: 10px 0;
+  /* "Verifying Integrity" is a long label — let tabs shrink and wrap their
+     text over two lines rather than pushing the row wider than the panel. */
+  min-width: 0;
+  padding: 8px 4px;
   background: none;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.15;
   border-radius: 0;
   border-bottom: 2px solid transparent;
 }
@@ -1112,7 +1116,7 @@ td.dim { color: var(--text-dim); }
     display: block;
   }
 
-  #table-area { padding: 10px; }
+  #table-area { padding: 4px; }
 }
 
 @media (max-width: 720px) {
@@ -1133,7 +1137,7 @@ td.dim { color: var(--text-dim); }
     display: none;
   }
 
-  #table-area { padding: 8px; }
+  #table-area { padding: 4px; }
 
   #table {
     border-width: 9px;
@@ -1225,7 +1229,7 @@ td.dim { color: var(--text-dim); }
     top: 40px;
   }
 
-  #table-area { padding: 6px; }
+  #table-area { padding: 3px; }
 
   #action-bar {
     min-height: 56px;
@@ -1334,8 +1338,8 @@ td.dim { color: var(--text-dim); }
 
 /* The webcam feed sits where a seat's avatar would, just above the nameplate. */
 video.seat-cam {
-  width: 96px;
-  height: 72px;
+  width: 192px;
+  height: 144px;
   object-fit: cover;
   border-radius: 12px;
   border: 2px solid rgba(255, 255, 255, 0.22);
@@ -1352,5 +1356,23 @@ video.seat-cam.cam-off { visibility: hidden; }
 .seat.me video.seat-cam { border-color: var(--accent); }
 
 @media (max-width: 720px) {
-  video.seat-cam { width: 72px; height: 54px; }
+  video.seat-cam { width: 144px; height: 108px; }
 }
+
+/* ---- per-player mute + muted styling ---- */
+.np-mute {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 11px;
+  line-height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(14, 17, 26, 0.95);
+  cursor: pointer;
+}
+.np-mute.on { background: var(--red); border-color: var(--red); }
+video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }

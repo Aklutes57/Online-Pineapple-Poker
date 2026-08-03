@@ -30,8 +30,12 @@
         <span id="av-live" class="av-live hidden">
           <button id="av-cam" class="btn-ghost btn top-btn" title="Turn camera off">📷</button>
           <button id="av-mic" class="btn-ghost btn top-btn" title="Mute mic">🎙️</button>
+          <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">🖼️</button>
           <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video &amp; voice">📹✕</button>
         </span>
+        <button id="table-img-btn" class="btn-ghost btn top-btn" title="Put a picture on the table (everyone sees it)">🖼️</button>
+        <input type="file" id="table-img-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        <input type="file" id="cam-frame-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on/off">🔊</button>
         <button id="deck-toggle" class="btn-ghost btn top-btn" title="Four-color deck on/off">🃏</button>
         <button id="push-bell" class="btn-ghost btn top-btn" title="Turn alerts when you're away">🔕</button>
@@ -61,7 +65,7 @@
         <button data-tab="chat" class="tab active">Chat</button>
         <button data-tab="log" class="tab">Log</button>
         <button data-tab="ledger" class="tab">Ledger</button>
-        <button data-tab="fair" class="tab">Fair</button>
+        <button data-tab="fair" class="tab">Verifying Integrity</button>
         <button id="panel-close" class="tab tab-close">✕</button>
       </div>
       <div id="tab-chat" class="tab-body">

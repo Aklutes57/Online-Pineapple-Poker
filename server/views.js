@@ -58,6 +58,7 @@ export function buildViews(game) {
       connected: p.connected,
       // In the A/V session (webcam + mic shared with the table).
       mediaOn: !!p.mediaOn && p.connected,
+      camFrame: p.camFrame || null,
       sittingOut: p.sittingOut,
       inHand,
       folded: inHand ? p.folded : false,
@@ -125,6 +126,11 @@ export function buildViews(game) {
         carryOut: hand.finished ? hand.results?.carryOut ?? 0 : 0,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
+        // Run it twice is put to the table each time; this is who has answered.
+        ritVote: hand.phase === PHASES.RIT_VOTE
+          ? hand.livePlayers().map((p) => ({ seat: p.seatIndex, voted: p.ritVote !== null && p.ritVote !== undefined }))
+          : null,
+        runItTwice: !!hand.runItTwice,
         // Provably-fair proof for this hand: the committed hash and a [0,1)
         // float, visible while the hand is live. The server seed is NOT here —
         // it is revealed only after the table closes.
@@ -184,6 +190,11 @@ export function buildViews(game) {
         inHand && hand.phase === PHASES.DECISION_747 && !p.folded && p.decision747 === null,
       decided747: inHand && hand.variant.engine === '747' && p.decision747 != null,
       availableActions: myTurn ? availableActionsFor(hand, p) : null,
+      canVoteRunItTwice:
+        inHand && !p.folded && hand.phase === PHASES.RIT_VOTE
+        && (p.ritVote === null || p.ritVote === undefined),
+      // Busted: offer a re-buy (or standing up) rather than leaving them stuck.
+      canRebuy: p.status === 'seated' && p.stack <= 0,
       timeBank: Math.round((p.timeBank || 0) / 1000),
       // Private: broadcasting that a seat has Check/Fold armed would be a
       // genuine tell, worse than anything available at a live table.

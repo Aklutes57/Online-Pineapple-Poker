@@ -214,6 +214,9 @@ check('the commit reveals nothing usable — seed is 64 hex chars of entropy',
     results: { pots: [{ amount: 20 }], winners: [{ seat: 0, amount: 20 }] },
     fairness: { algo: srv.ALGO, commit: srv.commitOf(serverSeed), clientSeed, nonce, proof,
       float: srv.floatFromHex(proof), deckCommit },
+    // Each hand carries its own seed (never broadcast, never stored) — that is
+    // what saveHand opens the public slots with.
+    fairnessSeed: serverSeed,
   };
 
   const id = saveHand(game, hand);
@@ -241,6 +244,40 @@ check('the commit reveals nothing usable — seed is 64 hex chars of entropy',
   check('mucked cards cannot be recovered from the record', !audit.provenCards.includes(boCards[0]));
 
   closeDb();
+}
+
+// ---- every hand is dealt from its own fresh randomness ----
+
+{
+  const { Game } = await import('../server/game.js');
+  const g = new Game('rand-1');
+  const seen = new Set();
+  const commits = new Set();
+  for (let i = 1; i <= 40; i++) {
+    g.handNo = i;
+    const f = g.fairnessForHand();
+    seen.add(f.deck.join(''));
+    commits.add(f.meta.commit);
+    check(`hand ${i} deck is a full 52`, f.deck.length === 52 && new Set(f.deck).size === 52);
+  }
+  check('40 consecutive hands are 40 different decks', seen.size === 40);
+  check('each hand commits to its own fresh seed', commits.size === 40);
+
+  // Two tables that happen to share a client seed still deal differently:
+  // nothing about the deal is derived from a stored table seed.
+  const a = new Game('rand-a');
+  const b = new Game('rand-b');
+  a.fairness.clientSeed = 'same-seed';
+  b.fairness.clientSeed = 'same-seed';
+  a.handNo = 1; b.handNo = 1;
+  check('same client seed + same hand number still differ across tables',
+    a.fairnessForHand().deck.join('') !== b.fairnessForHand().deck.join(''));
+
+  // Replaying the same table from scratch does not reproduce its cards.
+  const c = new Game('rand-c');
+  c.handNo = 1;
+  check('the same table re-dealt gives a different hand',
+    c.fairnessForHand().deck.join('') !== c.fairnessForHand().deck.join(''));
 }
 
 console.log(`fairness: ${passes} passed, ${failures} failed`);

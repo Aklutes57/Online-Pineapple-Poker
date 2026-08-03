@@ -314,6 +314,66 @@ export function buildServer() {
     res.sendFile(uploadPath(upload));
   });
 
+  // Anyone AT a table can put a picture on the felt, or set the frame around
+  // their own webcam — including guests, who have no account to upload
+  // through. Authorised by the per-game player token the browser already
+  // holds, so it is participants-only rather than open to the world.
+  function playerFromToken(req) {
+    const game = getGame(req.params.id);
+    if (!game || game.closed) return {};
+    const token = req.get('x-player-token') || req.query.token;
+    const player = typeof token === 'string' ? game.playerByToken(token) : null;
+    return { game, player };
+  }
+
+  const tableImageLimiter = makeRateLimiter({ windowMs: 60_000, max: 20 });
+
+  app.post('/api/games/:id/table-image', tableImageLimiter, rawUpload, (req, res) => {
+    const { game, player } = playerFromToken(req);
+    if (!game || !player) {
+      res.status(403).json({ error: 'Join the table first' });
+      return;
+    }
+    const stored = storeUpload({
+      buffer: req.body,
+      accountId: player.accountId ?? null,
+      wantKind: 'image',
+      originalName: typeof req.query.name === 'string' ? req.query.name : null,
+    });
+    if (!stored.ok) {
+      res.status(400).json({ error: stored.error });
+      return;
+    }
+    const result = game.setTableImage(player, stored.upload.url);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true, url: stored.upload.url });
+  });
+
+  app.post('/api/games/:id/cam-frame', tableImageLimiter, rawUpload, (req, res) => {
+    const { game, player } = playerFromToken(req);
+    if (!game || !player) {
+      res.status(403).json({ error: 'Join the table first' });
+      return;
+    }
+    const stored = storeUpload({
+      buffer: req.body,
+      accountId: player.accountId ?? null,
+      wantKind: 'image',
+      originalName: typeof req.query.name === 'string' ? req.query.name : null,
+    });
+    if (!stored.ok) {
+      res.status(400).json({ error: stored.error });
+      return;
+    }
+    player.camFrame = stored.upload.url;
+    game.addLog(`${player.nickname} set a new webcam frame`);
+    game.emitChanged();
+    res.json({ ok: true, url: stored.upload.url });
+  });
+
   app.get('/api/me/theme', (req, res) => {
     const account = accountForRequest(req);
     if (!account) {

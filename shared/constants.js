@@ -20,6 +20,8 @@ export const EVENTS = {
   RABBIT_HUNT: 'rabbitHunt',
   DECISION_747: 'decision747',
   SET_CLIENT_SEED: 'setClientSeed',
+  RUN_IT_TWICE_VOTE: 'runItTwiceVote',
+  REBUY: 'rebuy',
   LEAVE_WAITLIST: 'leaveWaitlist',
   // WebRTC voice/video: announce that you've joined the A/V session, and relay
   // the peer-to-peer connection handshake between two players in the same game.
@@ -55,6 +57,7 @@ export const PHASES = {
   DISCARD_PREFLOP: 'discardPreflop',
   FLOP: 'flop',
   DISCARD_POSTFLOP: 'discardPostflop',
+  RIT_VOTE: 'ritVote',
   TURN: 'turn',
   RIVER: 'river',
   SHOWDOWN: 'showdown',
@@ -73,28 +76,32 @@ export const VARIANTS = {
     key: 'holdem',
     label: "Texas Hold'em",
     holeCards: 2,
-    discardAfter: null,
+    discardBefore: null,
     potLimit: false,
   },
   pineapple: {
     key: 'pineapple',
     label: 'Pineapple',
     holeCards: 3,
-    discardAfter: 'preflop', // discard one before the flop is dealt
+    // Throw a card away first, then bet: the preflop round is played with the
+    // two cards you are keeping.
+    discardBefore: 'preflop',
     potLimit: false,
   },
   crazyPineapple: {
     key: 'crazyPineapple',
     label: 'Crazy Pineapple',
     holeCards: 3,
-    discardAfter: 'flop', // discard one after the flop betting round
+    // Bet preflop holding all three, then discard the moment the flop lands —
+    // before the flop betting round.
+    discardBefore: 'flop',
     potLimit: false,
   },
   plo: {
     key: 'plo',
     label: 'Pot Limit Omaha',
     holeCards: 4,
-    discardAfter: null,
+    discardBefore: null,
     potLimit: true,
     omaha: true, // must use exactly 2 hole cards
   },
@@ -103,7 +110,7 @@ export const VARIANTS = {
     label: '747 Poker',
     engine: '747',
     holeCards: 4, // plus a fifth card for players who stay
-    discardAfter: null,
+    discardBefore: null,
     potLimit: false,
     // Ante-based dealer game: no blinds, no betting rounds. The ante is the
     // table's big-blind setting, everyone plays the house dealer hand,
@@ -146,6 +153,7 @@ export const SETTINGS_LIMITS = {
 
 export const TIMINGS = {
   DISCARD_TIME: 15000, // ms for the pineapple discard decision
+  RIT_VOTE_TIME: 12000, // ms to answer 'run it twice?' — no answer means no
   DISCARD_NO_CLOCK: 300000, // untimed tables still need a stall fallback
   NUDGE_GRACE: 15000, // ms a nudged player gets before the host's prod lands
   COUNTDOWN_747: 3200, // the 3-2-1 before stay/fold choices are revealed

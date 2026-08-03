@@ -67,7 +67,8 @@ export class Hand {
     // separate from ctx.log, which is prose for humans and will drift.
     this.timeline = [];
     this.startedAt = Date.now();
-    this.discardsDone = !this.variant.discardAfter;
+    this.discardsDone = !this.variant.discardBefore;
+    this.afterDiscard = 'bet';
     this.finished = false;
     this.lastAction = null;
     this.results = null; // { pots, winners: [{seat, amount}], uncalledReturn }
@@ -183,6 +184,12 @@ export class Hand {
     betting.resetStreet(this);
     this.street = 'preflop';
     this.phase = PHASES.PREFLOP;
+    // A bomb pot skips the preflop round, but a Pineapple player still has to
+    // pitch a card before the flop is dealt — discard, then carry on.
+    if (this.variant.discardBefore === 'preflop' && !this.discardsDone && this.discardPending().length) {
+      this.enterDiscard('proceed');
+      return;
+    }
     this.afterStreetComplete();
   }
 
@@ -232,12 +239,28 @@ export class Hand {
       }
     }
 
+    // Pineapple discards happen BEFORE this street's betting: regular
+    // Pineapple throws a card away and then plays the preflop round with two,
+    // and Crazy Pineapple bets preflop holding three then discards the moment
+    // the flop lands. Checked ahead of the run-out branch because an all-in
+    // player still has to pitch a card before any showdown.
+    if (this.variant.discardBefore === street && !this.discardsDone && this.discardPending().length) {
+      this.enterDiscard();
+      return;
+    }
+
     if (this.runOut) {
       this.afterStreetComplete();
       return;
     }
 
-    this.toActSeat = betting.firstToActSeat(this, street === 'preflop');
+    this.beginBetting();
+  }
+
+  // Opens the betting round for whatever street we're on.
+  beginBetting() {
+    this.phase = PHASES[this.street.toUpperCase()];
+    this.toActSeat = betting.firstToActSeat(this, this.street === 'preflop');
     if (this.toActSeat === null) {
       this.afterStreetComplete();
     } else if (this.armOrAutoAct()) {
@@ -457,10 +480,6 @@ export class Hand {
   }
 
   afterStreetComplete() {
-    if (this.variant.discardAfter === this.street && !this.discardsDone) {
-      this.enterDiscard();
-      return;
-    }
     this.proceedFromStreet();
   }
 
@@ -470,13 +489,6 @@ export class Hand {
     const actors = live.filter((p) => !p.allIn);
     if (!this.runOut && live.length >= 2 && actors.length <= 1) {
       this.runOut = true;
-      // Run it twice: both boards share every card dealt before the all-in,
-      // and draw from the same cursor so they can never duplicate a card.
-      if (this.runItTwiceEnabled && NEXT_STREET[this.street] !== 'showdown') {
-        this.runItTwice = true;
-        this.board2 = [...this.board];
-        this.ctx.log('Running it twice');
-      }
       // Snapshot the odds at the moment the chips went in — that is what
       // makes a later loss a bad beat rather than just a loss.
       try {
@@ -488,7 +500,63 @@ export class Hand {
       } catch {
         this.allInEquity = null;
       }
+      // Running it twice is never automatic: everyone still in the hand has to
+      // agree, every time. Ask them, and carry on once the answers are in.
+      if (this.runItTwiceEnabled && NEXT_STREET[this.street] !== 'showdown') {
+        this.enterRitVote();
+        return;
+      }
     }
+    this.continueStreet();
+  }
+
+  // ---- run it twice: unanimous, per hand ----
+
+  enterRitVote() {
+    const live = this.livePlayers();
+    for (const p of live) p.ritVote = null;
+    this.phase = PHASES.RIT_VOTE;
+    this.toActSeat = null;
+    this.ctx.log('All-in — run it twice? Everyone in the hand has to agree.');
+    this.ctx.setTimer('ritvote', TIMINGS.RIT_VOTE_TIME, () => this.resolveRitVote(true));
+    this.ctx.changed();
+  }
+
+  handleRitVote(player, yes) {
+    if (this.phase !== PHASES.RIT_VOTE) return { ok: false, error: 'no vote right now' };
+    if (player.folded) return { ok: false, error: 'you are not in this hand' };
+    if (player.ritVote !== null && player.ritVote !== undefined) return { ok: true };
+    player.ritVote = !!yes;
+    this.ctx.log(`${player.nickname} wants to run it ${yes ? 'twice' : 'once'}`);
+    // One "no" settles it — no point asking the rest.
+    const live = this.livePlayers();
+    if (!yes || live.every((p) => p.ritVote !== null && p.ritVote !== undefined)) {
+      this.ctx.clearTimer();
+      this.resolveRitVote();
+    } else {
+      this.ctx.changed();
+    }
+    return { ok: true };
+  }
+
+  resolveRitVote(timedOut = false) {
+    const live = this.livePlayers();
+    const unanimous = live.length > 0 && live.every((p) => p.ritVote === true);
+    this.runItTwice = unanimous;
+    if (unanimous) {
+      // Both boards share every card dealt before the all-in, and draw from
+      // the same cursor so they can never duplicate a card.
+      this.board2 = [...this.board];
+      this.ctx.log('Running it twice — everyone agreed');
+    } else {
+      this.ctx.log(timedOut ? 'Running it once — not everyone answered' : 'Running it once');
+    }
+    this.phase = PHASES[this.street.toUpperCase()];
+    this.continueStreet();
+  }
+
+  continueStreet() {
+    const live = this.livePlayers();
     if (this.runOut && !this.revealed && this.discardsDone) {
       this.revealed = true;
       for (const p of live) {
@@ -516,17 +584,20 @@ export class Hand {
 
   // ---- discard phase (Pineapple / Crazy Pineapple) ----
 
-  enterDiscard() {
+  // `next` says what happens once everyone has pitched: 'bet' opens this
+  // street's betting round (the normal case, since discards now come first),
+  // 'proceed' skips straight on (a bomb pot, which has no preflop round).
+  enterDiscard(next = 'bet') {
+    this.afterDiscard = next;
     const pending = this.discardPending();
     if (pending.length === 0) {
-      this.discardsDone = true;
-      this.proceedFromStreet();
+      this.finishDiscard();
       return;
     }
     // Untimed tables still need a fallback here: the discard phase has no
     // seat to act, so nothing else can rescue a table whose player vanished.
     const ms = this.actionTime > 0 ? TIMINGS.DISCARD_TIME : TIMINGS.DISCARD_NO_CLOCK;
-    this.phase = this.variant.discardAfter === 'preflop'
+    this.phase = this.variant.discardBefore === 'preflop'
       ? PHASES.DISCARD_PREFLOP
       : PHASES.DISCARD_POSTFLOP;
     this.toActSeat = null;
@@ -583,7 +654,14 @@ export class Hand {
 
   finishDiscard() {
     this.discardsDone = true;
-    this.proceedFromStreet();
+    // A bomb pot has no preflop round to open, and an all-in table has nobody
+    // left to bet — both just carry on. Otherwise the betting round the
+    // discard was holding up now begins.
+    if (this.afterDiscard === 'proceed' || this.runOut) {
+      this.proceedFromStreet();
+      return;
+    }
+    this.beginBetting();
   }
 
   // ---- endings ----
