@@ -101,11 +101,14 @@ function makeCtx() {
   };
 }
 
-function make747({ players, deck, buttonSeat = 0, bb = 10, actionTime = 30, carryIn = 0 }) {
+function make747({
+  players, deck, buttonSeat = 0, bb = 10, actionTime = 30, carryIn = 0,
+  ante = 0, penaltyCap = 0,
+}) {
   const ctx = makeCtx();
   const hand = new Hand747({
     handNo: 1, smallBlind: bb / 2, bigBlind: bb, actionTime,
-    buttonSeat, players, deck, ctx, carryIn,
+    buttonSeat, players, deck, ctx, carryIn, ante, penaltyCap,
   });
   hand.start();
   return { hand, ctx };
@@ -247,20 +250,22 @@ function conserve(name, players, before, hand, carryIn = 0) {
   conserve('carry in', players, before, hand, 50);
 }
 
-// Two winners split, odd chip going clockwise from the button.
+// A dead-exact tie for best hand is not a loss to anyone: both hold players
+// challenge the dealer together and split, odd chip clockwise from the button.
 {
   const players = [makePlayer(0, 100), makePlayer(1, 100), makePlayer(2, 100)];
   const before = totalChips(players);
   const { hand, ctx } = make747({
     players,
     deck: [
-      'As', 'Ah', 'Ad', 'Jc', // seat 1
-      'Ks', 'Kh', 'Kd', 'Qc', // seat 2
-      '2c', '3c', '9d', 'Th', // seat 0 — folds
-      '8d', '8h', '5s', '6d', // dealer
-      'Ac', 'Kc', '2d',       // fifths: seat1 -> quad aces, seat2 -> quad kings, dealer
+      'As', 'Ks', 'Qs', 'Js', // seat 1
+      'Ah', 'Kh', 'Qh', 'Jh', // seat 2
+      '2c', '3c', '9d', '8c', // seat 0 — folds
+      '8d', '8s', '5s', '6d', // dealer
+      'Ts', 'Th', '2d',       // fifths: two royal flushes, dealer pairs eights
     ],
     carryIn: 5,
+    penaltyCap: 25,
   });
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[2], true);
@@ -269,10 +274,128 @@ function conserve(name, players, before, hand, carryIn = 0) {
   const pot = 30 + 5;
   const w1 = hand.results.winners.find((w) => w.seat === 1)?.amount ?? 0;
   const w2 = hand.results.winners.find((w) => w.seat === 2)?.amount ?? 0;
-  check('both dealer-beaters win', w1 > 0 && w2 > 0);
+  check('tied best hands both play the dealer', w1 > 0 && w2 > 0);
   check('split covers the whole pot', w1 + w2 === pot);
   check('split is near-even', Math.abs(w1 - w2) <= 1);
+  check('a tie for best carries no penalty', (hand.results.penalties || []).length === 0);
   conserve('split pot', players, before, hand, 5);
+}
+
+// Losing to another player: only the best hand plays the dealer, and the
+// beaten holder pays min(pot, cap) into the NEXT pot — never into this one.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100), makePlayer(2, 100)];
+  const before = totalChips(players);
+  const { hand, ctx } = make747({
+    players,
+    deck: [
+      'As', 'Ah', 'Ad', 'Jc', // seat 1 -> quad aces with the fifth
+      'Ks', 'Kh', 'Kd', 'Qc', // seat 2 -> quad kings with the fifth
+      '2c', '3c', '9d', '8c', // seat 0 — folds
+      '8d', '8s', '5s', '6d', // dealer -> pair of eights
+      'Ac', 'Kc', '2d',
+    ],
+    penaltyCap: 25,
+  });
+  hand.handleDecision(players[1], true);
+  hand.handleDecision(players[2], true);
+  hand.handleDecision(players[0], false);
+  ctx.fire();
+  const pot = 30; // three antes of 10, read before any penalty
+  check('only the best holder plays the dealer',
+    hand.results.winners.length === 1 && hand.results.winners[0].seat === 1);
+  check('the beaten holder pays the pot, capped',
+    hand.results.penalties.length === 1
+    && hand.results.penalties[0].seat === 2
+    && hand.results.penalties[0].amount === 25
+    && hand.results.penalties[0].to === 'player');
+  check('the winner takes only the pot that was already there',
+    hand.results.winners[0].amount === pot && players[1].stack === 90 + pot);
+  check('the penalty rides to the next pot, not this one',
+    hand.results.carryOut === 25 && ctx.carried === 25);
+  check('the beaten holder actually paid', players[2].stack === 90 - 25);
+  conserve('lost to a player', players, before, hand);
+}
+
+// Losing to the dealer pays the same penalty, and the pot rides on top of it.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100)];
+  const before = totalChips(players);
+  const { hand, ctx } = make747({
+    players,
+    deck: [
+      '2c', '3d', '9h', '8c', // seat 1 -> junk
+      'Ts', 'Jd', '5h', '6c', // seat 0 — folds
+      'As', 'Ah', 'Ad', 'Ac', // dealer -> quad aces
+      '7d', '2s',             // fifths: seat 1, dealer
+    ],
+    penaltyCap: 25,
+  });
+  hand.handleDecision(players[1], true);
+  hand.handleDecision(players[0], false);
+  ctx.fire();
+  const pot = 20;
+  check('nobody beats the dealer', hand.results.winners.length === 0);
+  check('the challenger pays for losing to the dealer',
+    hand.results.penalties.length === 1
+    && hand.results.penalties[0].to === 'dealer'
+    && hand.results.penalties[0].amount === 20); // pot < cap, so pay the pot
+  check('pot plus penalty both ride', hand.results.carryOut === pot + 20);
+  conserve('lost to the dealer', players, before, hand);
+}
+
+// A short stack pays only what it has, and penalties are off when the cap is 0.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100), makePlayer(2, 15)];
+  const before = totalChips(players);
+  const { hand, ctx } = make747({
+    players,
+    deck: [
+      'As', 'Ah', 'Ad', 'Jc', // seat 1 -> quad aces
+      'Ks', 'Kh', 'Kd', 'Qc', // seat 2 -> quad kings, only 5 chips left after the ante
+      '2c', '3c', '9d', '8c', // seat 0 — folds
+      '8d', '8s', '5s', '6d', // dealer
+      'Ac', 'Kc', '2d',
+    ],
+    penaltyCap: 25,
+  });
+  hand.handleDecision(players[1], true);
+  hand.handleDecision(players[2], true);
+  hand.handleDecision(players[0], false);
+  ctx.fire();
+  check('a short stack pays what it has and no more',
+    hand.results.penalties[0].amount === 5 && players[2].stack === 0);
+  conserve('short-stack penalty', players, before, hand);
+}
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100), makePlayer(2, 100)];
+  const before = totalChips(players);
+  const { hand, ctx } = make747({
+    players,
+    deck: [
+      'As', 'Ah', 'Ad', 'Jc',
+      'Ks', 'Kh', 'Kd', 'Qc',
+      '2c', '3c', '9d', '8c',
+      '8d', '8s', '5s', '6d',
+      'Ac', 'Kc', '2d',
+    ],
+    penaltyCap: 0, // penalties off
+  });
+  hand.handleDecision(players[1], true);
+  hand.handleDecision(players[2], true);
+  hand.handleDecision(players[0], false);
+  ctx.fire();
+  check('a zero cap turns penalties off',
+    hand.results.penalties.length === 0 && players[2].stack === 90);
+  conserve('penalties off', players, before, hand);
+}
+
+// A host-set ante replaces the big-blind alias.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100)];
+  const { hand } = make747({ players, deck: null, bb: 10, ante: 3 });
+  check('the host-set ante is what everyone posts',
+    hand.ante === 3 && players.every((p) => p.stack === 97 && p.totalCommitted === 3));
 }
 
 // Timed table: the decision timer folds anyone still undecided.

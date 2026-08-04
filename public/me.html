@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your profile — Pineapple Poker</title>
+  <title>Your profile — Reg-Poker Online</title>
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2c0a14">
@@ -15,7 +15,7 @@
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="pineapple-mark" href="/">🍍 <span class="pine">Pineapple</span> Poker</a>
+      <a class="brand-mark" href="/"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></a>
       <nav>
         <a href="/">Home</a>
         <span id="account-slot"></span>
@@ -36,7 +36,29 @@
       <p class="profile-sub" id="profile-sub"></p>
 
       <section class="profile-section">
-        <h2>Get paid 💸</h2>
+        <h2>Your profile picture</h2>
+        <p class="section-note">
+          Shown in your seat at every table you sit at, whenever your camera is
+          off. Saved to your account, so you only ever upload it once.
+        </p>
+        <div class="avatar-editor">
+          <img id="avatar-preview" class="avatar-preview hidden" alt="Your profile picture">
+          <div id="avatar-empty" class="avatar-preview avatar-empty">No picture yet</div>
+          <div class="avatar-controls">
+            <div class="field">
+              <label for="a-image">Picture</label>
+              <input id="a-image" type="file" accept="image/png,image/jpeg,image/gif,image/webp">
+              <p class="hint">PNG, JPEG, GIF or WebP, up to 4MB.</p>
+            </div>
+            <div class="actions-left">
+              <button class="btn btn-ghost" id="a-clear">Remove picture</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Get paid</h2>
         <p class="section-note">Link your payment apps so table-mates can pay you in one tap right from the ledger. Only people at your tables see these. Leave any blank.</p>
         <div id="pay-fields" class="pay-fields"></div>
         <div class="form-actions">

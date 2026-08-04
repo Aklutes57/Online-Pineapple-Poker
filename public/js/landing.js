@@ -72,6 +72,16 @@ document.getElementById('c-72').addEventListener('change', (e) => {
   document.getElementById('c-72-amount').disabled = !e.target.checked;
 });
 
+// 747's ante and penalty cap only exist on a 747 table, so the create pop-up
+// reveals them the moment you pick the game.
+function sync747Fields() {
+  const on = document.getElementById('c-variant').value === '747';
+  document.getElementById('c-747-row').classList.toggle('hidden', !on);
+  document.getElementById('c-747-note').classList.toggle('hidden', !on);
+}
+document.getElementById('c-variant').addEventListener('change', sync747Fields);
+sync747Fields();
+
 async function createGame() {
   const nickname = document.getElementById('c-nickname').value.trim();
   if (!nickname) {
@@ -92,6 +102,8 @@ async function createGame() {
     sevenDeuceBounty: document.getElementById('c-72').checked
       ? parseInt(document.getElementById('c-72-amount').value, 10) || 0
       : 0,
+    ante747: parseInt(document.getElementById('c-747-ante').value, 10) || 0,
+    penaltyCap747: Math.max(0, parseInt(document.getElementById('c-747-cap').value, 10) || 0),
   };
   const btn = document.getElementById('c-create');
   btn.disabled = true;

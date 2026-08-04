@@ -177,6 +177,11 @@ export function syncSeats(state) {
     const pod = layer.querySelector(`[data-seat="${i}"]`);
     if (!pod) continue;
     const v = seat && seat.mediaOn ? videoEls.get(seat.playerId) : null;
+    // A live tile covers the same spot as the profile picture; when the camera
+    // is switched off the tile only goes invisible, so the picture comes back
+    // and fills the hole rather than leaving a gap in the pod.
+    const avatar = pod.querySelector('.seat-avatar');
+    if (avatar) avatar.classList.toggle('hidden', !!v && !v.classList.contains('cam-off'));
     if (v) {
       // Each player picks the frame around their own tile.
       if (seat.camFrame) {

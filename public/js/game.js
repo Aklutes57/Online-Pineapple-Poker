@@ -117,7 +117,7 @@ function applyState(state) {
   const nowHost = !!state.you?.isHost;
   if (priorIsHost !== null && priorIsHost !== nowHost) {
     showToast(nowHost
-      ? "You're the host now — you can accept players and open the ⚙️ Host menu."
+      ? "You're the host now — you can accept players and open the Host menu."
       : `You're no longer the host — ${state.hostName || 'someone else'} is hosting now.`);
   }
   priorIsHost = nowHost;
@@ -206,9 +206,9 @@ applyDeckPref();
 document.getElementById('sound-toggle').addEventListener('click', (e) => {
   client.soundOn = !client.soundOn;
   localStorage.setItem('pp:sound', client.soundOn ? 'on' : 'off');
-  e.currentTarget.textContent = client.soundOn ? '🔊' : '🔇';
+  e.currentTarget.textContent = client.soundOn ? 'Sound on' : 'Sound off';
 });
-document.getElementById('sound-toggle').textContent = client.soundOn ? '🔊' : '🔇';
+document.getElementById('sound-toggle').textContent = client.soundOn ? 'Sound on' : 'Sound off';
 
 // ---- turn alerts bell ----
 
@@ -220,7 +220,7 @@ async function syncBell() {
     return;
   }
   const subscription = await currentPushSubscription();
-  bell.textContent = subscription ? '🔔' : '🔕';
+  bell.textContent = subscription ? 'Alerts on' : 'Alerts off';
   bell.title = subscription
     ? 'Turn alerts are on for this device'
     : "Get a notification when it's your turn and you're away";
@@ -274,10 +274,10 @@ function renderAvControls() {
   if (st.joined) {
     const cam = document.getElementById('av-cam');
     const mic = document.getElementById('av-mic');
-    cam.textContent = st.camOn ? '📷' : '📷̶';
+    cam.textContent = st.camOn ? 'Camera on' : 'Camera off';
     cam.classList.toggle('av-off', !st.camOn);
     cam.title = st.camOn ? 'Turn camera off' : 'Turn camera on';
-    mic.textContent = st.micOn ? '🎙️' : '🔇';
+    mic.textContent = st.micOn ? 'Mic on' : 'Mic off';
     mic.classList.toggle('av-off', !st.micOn);
     mic.title = st.micOn ? 'Mute mic' : 'Unmute mic';
   }
@@ -286,7 +286,7 @@ function renderAvControls() {
 // ---- shared table picture + your own webcam frame ----
 // Both are uploaded straight to the table using the per-game player token, so
 // guests can do it too — no account needed to decorate the table you're at.
-function uploadImage(file, path, okMessage) {
+function uploadImage(file, path, okMessage, onDone) {
   if (!file) return;
   const token = saved().token;
   if (!token) {
@@ -300,12 +300,44 @@ function uploadImage(file, path, okMessage) {
       body: buf,
     })
       .then(async (res) => {
-        if (res.ok) showToast(okMessage, { ok: true });
-        else showToast((await res.json().catch(() => ({}))).error || 'Upload failed');
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          showToast(okMessage, { ok: true });
+          onDone?.(body);
+        } else {
+          showToast(body.error || 'Upload failed');
+        }
       })
       .catch(() => showToast('Upload failed'))
   );
 }
+
+// ---- your profile picture ----
+// Signed in: the server also writes it to the account, so it follows you to
+// every future table. A guest's browser remembers the upload URL and re-asserts
+// it on each connect, so guests keep a face too.
+const AVATAR_KEY = 'pp:avatar';
+
+function pushAvatar() {
+  let url = null;
+  try {
+    url = localStorage.getItem(AVATAR_KEY);
+  } catch { /* private browsing */ }
+  if (url) client.send(EVENTS.SET_AVATAR, { url });
+}
+socket.on('connect', () => setTimeout(pushAvatar, 250));
+
+document.getElementById('avatar-btn')?.addEventListener('click', () =>
+  document.getElementById('avatar-input').click()
+);
+document.getElementById('avatar-input')?.addEventListener('change', (e) => {
+  uploadImage(e.target.files[0], 'avatar', 'Profile picture updated', ({ url }) => {
+    try {
+      if (url) localStorage.setItem(AVATAR_KEY, url);
+    } catch { /* private browsing */ }
+  });
+  e.target.value = '';
+});
 
 document.getElementById('table-img-btn')?.addEventListener('click', () =>
   document.getElementById('table-img-input').click()

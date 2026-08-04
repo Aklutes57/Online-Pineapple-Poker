@@ -141,6 +141,21 @@ check('vpip did not increment on a folded hand', row2.vpip_hands === 1);
 check('net chips accumulate across hands', row2.net_chips === 30);
 check('best hand is not overwritten by a worse one', row2.best_hand_desc === 'Two Pair, Aces and Eights');
 
+// A better hand DOES replace it — including one that never reached a showdown,
+// which is what "best hand ever made" means.
+player.handStartStack = 230;
+player.stack = 400;
+player.handResult = { desc: null, won: 170 }; // won by folding everyone out
+player.handStats = {
+  vpip: true, pfr: false, threeBet: false, threeBetOp: false, sawFlop: true,
+  wtsd: false, wsd: false, aggressive: 1, passive: 0,
+  showdownScore: 0, madeScore: 99_999_999, madeDesc: 'Four of a Kind, Kings',
+};
+stats.recordHandStats(fakeGame, fakeHand);
+const row3 = get('SELECT * FROM player_stats WHERE account_id = ?', acct.account.id);
+check('a better hand replaces the best hand', row3.best_hand_desc === 'Four of a Kind, Kings');
+check('a hand never shown down still counts as made', row3.best_hand_score === 99_999_999);
+
 // ---- session results include guests ----
 
 stats.syncSessionResults(fakeGame);
@@ -161,7 +176,7 @@ check('re-sync does not duplicate rows', get('SELECT COUNT(*) AS n FROM session_
 const summary = stats.accountSummary(acct.account.id);
 check('summary reports the session', summary.totals.sessions === 1);
 check('summary net matches the ledger', summary.totals.net === 60);
-check('summary carries stats', summary.stats.handsDealt === 2);
+check('summary carries stats', summary.stats.handsDealt === 3);
 check('summary lists the session row', summary.sessions[0].variant === 'holdem');
 
 closeDb();

@@ -42,7 +42,7 @@ const discordWebhook = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: 'Pineapple Poker',
+        username: 'Reg-Poker Online',
         embeds: [
           {
             title: payload.subject,
@@ -85,7 +85,7 @@ const email = {
     // No SMTP configured: the outbox row IS the delivery, and the UI says so.
     if (!tx) throw new NotConfiguredError();
     await tx.sendMail({
-      from: process.env.SMTP_FROM || 'Pineapple Poker <no-reply@pineapple.poker>',
+      from: process.env.SMTP_FROM || 'Reg-Poker Online <no-reply@reg-poker.online>',
       to: target,
       subject: payload.subject,
       text: `${payload.body}\n\n${payload.link}\n\n${payload.footer || ''}`,
@@ -116,7 +116,7 @@ function escapeHtml(s) {
 function renderEmailHtml(payload) {
   return `
     <div style="font-family:system-ui,sans-serif;background:#10131c;color:#e8ebf4;padding:28px;border-radius:12px">
-      <h2 style="margin:0 0 12px">🍍 ${escapeHtml(payload.subject)}</h2>
+      <h2 style="margin:0 0 12px">${escapeHtml(payload.subject)}</h2>
       <p style="color:#9aa3ba;margin:0 0 20px">${escapeHtml(payload.body)}</p>
       <a href="${escapeHtml(payload.link)}"
          style="display:inline-block;background:#f5c542;color:#1a1405;font-weight:700;
@@ -272,7 +272,7 @@ export async function announceTable(accountId, { gameId, variantLabel, blinds, l
     for (const contact of listContacts(accountId)) {
       if (!contact.autoSend) continue;
       jobs.push(enqueue({ channel: 'email', target: contact.email, subject, body, link,
-        footer: 'You are on a Pineapple Poker invite list. Reply to be removed.' }));
+        footer: 'You are on a Reg-Poker Online invite list. Reply to be removed.' }));
     }
     for (const target of all(
       'SELECT * FROM notify_targets WHERE account_id = ? AND auto_send = 1', accountId

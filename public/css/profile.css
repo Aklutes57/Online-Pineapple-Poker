@@ -276,3 +276,48 @@
 .form-actions { margin-top: 4px; }
 .csv-link { color: var(--accent, #f5c542); text-decoration: none; font-size: 12.5px; white-space: nowrap; }
 .csv-link:hover { text-decoration: underline; }
+
+/* ---- profile picture ---- */
+.avatar-editor {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.avatar-preview {
+  width: 160px;
+  height: 120px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid var(--accent-dark);
+  background: var(--bg-raised);
+}
+.avatar-empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  border-style: dashed;
+}
+.avatar-controls { flex: 1; min-width: 240px; }
+
+/* ---- best hand ever made ---- */
+.best-hand {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(74, 21, 36, .55), rgba(28, 7, 9, .55));
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 39, .22);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.best-hand strong {
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--accent-lite);
+  text-wrap: balance;
+}
+.best-hand .hint { margin: 0; }

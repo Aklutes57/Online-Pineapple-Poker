@@ -107,6 +107,25 @@ await wait(150);
 const after = bob.state?.seats?.find((s) => s && s.playerId === alice.res.playerId);
 check('leaving A/V clears mediaOn', after?.mediaOn === false);
 
+// ---- profile pictures ----
+const GOOD_AVATAR = `/uploads/${'a'.repeat(64)}.png`;
+alice.s.emit(EVENTS.SET_AVATAR, { url: GOOD_AVATAR });
+await wait(150);
+const withPic = bob.state?.seats?.find((s) => s && s.playerId === alice.res.playerId);
+check('a profile picture reaches every client at the table', withPic?.avatarUrl === GOOD_AVATAR);
+
+for (const bad of ['https://evil.example/x.png', '/uploads/../../etc/passwd', '/uploads/nothex.png', 42, { nested: 1 }]) {
+  alice.s.emit(EVENTS.SET_AVATAR, { url: bad });
+}
+await wait(200);
+const stillGood = bob.state?.seats?.find((s) => s && s.playerId === alice.res.playerId);
+check('an off-site or malformed picture URL is refused', stillGood?.avatarUrl === GOOD_AVATAR);
+
+alice.s.emit(EVENTS.SET_AVATAR, { url: '' });
+await wait(150);
+const cleared = bob.state?.seats?.find((s) => s && s.playerId === alice.res.playerId);
+check('a player can clear their picture', cleared?.avatarUrl === null);
+
 // ---- cross-table isolation ----
 const g2 = await makeGame('Carol');
 const carol = await connect(g2.gameId, g2.token, 'Carol');

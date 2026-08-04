@@ -7,12 +7,13 @@ import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
 import { payoutPots } from './pots.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
-import { saveHand } from './handStore.js';
+import { saveHand, updateHandShown } from './handStore.js';
 import { notifyTurn, notifySeatApproved } from './push.js';
 import {
   ALGO as FAIRNESS_ALGO, newServerSeed, newClientSeed, commitOf, seededShuffle,
   handProof, floatFromHex, buildCommitment,
 } from './fairness.js';
+import { AVATAR_URL_RE } from './accounts.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 function shortId() {
@@ -152,6 +153,14 @@ export class Game {
       pendingBuyIn: 0,
       requestedSeat: null,
       seatedAt: null,
+      avatarUrl: null,
+      // Once the host has let you in, you don't queue again for a re-buy —
+      // this survives standing up, so busting out and coming back is one tap.
+      boughtInHere: false,
+      // …unless the host removed you. `kicked` is cleared the moment the kick
+      // completes, so the ban has to be recorded separately or an auto-seat
+      // would walk a kicked player straight back past the host.
+      bannedFromSeat: false,
       createdAt: Date.now(),
       disconnectedAt: null,
       lastChatAt: 0,
@@ -207,11 +216,21 @@ export class Game {
     player.status = 'requesting';
     player.pendingBuyIn = buyIn;
     player.requestedSeat = seatIndex;
-    if (player.id === this.hostId) {
-      return this.approveSeat(player.id, true); // the host seats themselves
+    // The host approves a player once. After that — busting out, standing up,
+    // buying back in — they seat themselves. Every bound above (buy-in range,
+    // seat free, table not full) has already run, so this path is validated
+    // exactly as the approved one is.
+    if (player.id === this.hostId || this.seatsItself(player)) {
+      return this.approveSeat(player.id, true);
     }
     this.addLog(`${player.nickname} wants to join with ${buyIn}`);
     return { ok: true };
+  }
+
+  // A returning player skips the queue; a first-timer and anyone the host
+  // removed does not.
+  seatsItself(player) {
+    return !!player.boughtInHere && !player.bannedFromSeat;
   }
 
   cancelSeatRequest(player) {
@@ -243,6 +262,9 @@ export class Game {
     player.stack = player.pendingBuyIn;
     player.seatedAt = Date.now();
     player.sittingOut = false;
+    // The single choke point every legitimate seating funnels through: host
+    // approval, the host self-seat, and the waitlist drain all land here.
+    player.boughtInHere = true;
     this.creditLedger(player, player.pendingBuyIn);
     this.addLog(`${player.nickname} takes seat ${seat + 1} with ${player.stack}`);
     player.pendingBuyIn = 0;
@@ -297,6 +319,10 @@ export class Game {
     player.seatIndex = null;
     player.status = 'spectating';
     player.sittingOut = false;
+    // Remember the kick before the transient flag is cleared — otherwise a
+    // removed player would look exactly like a voluntary leaver and re-seat
+    // themselves without the host.
+    if (reason === 'kick') player.bannedFromSeat = true;
     player.kicked = false;
   }
 
@@ -330,6 +356,25 @@ export class Game {
 
   // Any player at the table can change the felt picture — it is a shared table,
   // not the host's alone. Applies immediately for everyone.
+  // A player's profile picture: shown in their seat pod whenever their webcam
+  // isn't. Guests get one too — it lives on the in-memory player, and the
+  // client re-asserts it on every reconnect from its own device storage.
+  setAvatar(player, url) {
+    if (!player || !this.players.has(player.id)) return { ok: false, error: 'not at this table' };
+    if (url === null || url === '') {
+      player.avatarUrl = null;
+      this.emitChanged();
+      return { ok: true };
+    }
+    if (typeof url !== 'string' || !AVATAR_URL_RE.test(url)) {
+      return { ok: false, error: 'bad picture' };
+    }
+    if (player.avatarUrl === url) return { ok: true };
+    player.avatarUrl = url;
+    this.emitChanged();
+    return { ok: true };
+  }
+
   setTableImage(player, url) {
     if (!player || !this.players.has(player.id)) return { ok: false, error: 'not at this table' };
     if (typeof url !== 'string' || !url.startsWith('/uploads/')) {
@@ -542,7 +587,8 @@ export class Game {
     if (patch.maxBuyIn !== undefined) next.maxBuyIn = patch.maxBuyIn;
     if (patch.defaultBuyIn !== undefined) next.defaultBuyIn = patch.defaultBuyIn;
     if (patch.tableTheme !== undefined) next.tableTheme = patch.tableTheme;
-    for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery', 'sevenDeuceBounty']) {
+    for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery',
+      'sevenDeuceBounty', 'ante747', 'penaltyCap747']) {
       if (patch[key] !== undefined) next[key] = patch[key];
     }
     // The game can change mid-session; an unknown variant keeps the current
@@ -619,8 +665,9 @@ export class Game {
     // 747: you must cover the ante to be dealt in, and the deck fits at
     // most 9 players plus the dealer — the overflow seat is skipped this
     // hand and picked up as the button moves.
+    const ante747 = s.ante747 > 0 ? s.ante747 : s.bigBlind;
     if (is747) {
-      players = players.filter((p) => p.stack >= s.bigBlind);
+      players = players.filter((p) => p.stack >= ante747);
     }
     if (players.length < 2) {
       this.currentHand = null;
@@ -660,6 +707,8 @@ export class Game {
         smallBlind: s.smallBlind,
         bigBlind: s.bigBlind,
         actionTime: s.actionTime,
+        ante: ante747,
+        penaltyCap: s.penaltyCap747,
         buttonSeat: this.buttonSeat,
         players: players.sort((a, b) => a.seatIndex - b.seatIndex),
         carryIn,
@@ -759,7 +808,22 @@ export class Game {
       carryOut: (amount) => {
         this.carryPot += amount;
       },
+      // Someone turned their hand face up after it ended. The row was written
+      // the instant the hand finished, so the replay and its integrity proof
+      // have to be brought back in step.
+      handShown: () => this.onHandShown(),
     };
+  }
+
+  onHandShown() {
+    const hand = this.currentHand;
+    if (!hand || !this.lastHandRecordId) return;
+    // Persistence must never take a table down.
+    try {
+      updateHandShown(this.lastHandRecordId, hand);
+    } catch (err) {
+      console.error(`show update failed for game ${this.id}:`, err.message);
+    }
   }
 
   // 747: split a riding pot evenly among seated players when it can no
@@ -862,7 +926,12 @@ export class Game {
     }
     player.status = 'waitlisted';
     player.pendingBuyIn = buyIn;
-    this.waitlist.push({ playerId: player.id, buyIn, seatIndex: seatIndex ?? null, approved: false });
+    this.waitlist.push({
+      playerId: player.id, buyIn, seatIndex: seatIndex ?? null,
+      // Same rule as requestSeat: a returning player doesn't wait on the host
+      // just because the table happened to be full when they came back.
+      approved: this.seatsItself(player),
+    });
     this.addLog(`${player.nickname} joined the waitlist`);
     return { ok: true };
   }
@@ -1018,6 +1087,8 @@ export function sanitizeSettings(s) {
     runItTwice: !!s.runItTwice,
     bombPotEvery: bounded(s.bombPotEvery, 0, 100, 0),
     sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, MAX_CHIPS, 0),
+    ante747: bounded(s.ante747, 0, MAX_CHIPS, DEFAULT_SETTINGS.ante747),
+    penaltyCap747: bounded(s.penaltyCap747, 0, MAX_CHIPS, DEFAULT_SETTINGS.penaltyCap747),
   };
 }
 

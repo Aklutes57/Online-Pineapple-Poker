@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hand replay — Pineapple Poker</title>
+  <title>Hand replay — Reg-Poker Online</title>
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2c0a14">
@@ -16,7 +16,7 @@
 <body class="replay-page">
   <header class="site-header">
     <div class="wrap">
-      <a class="pineapple-mark" href="/">🍍 <span class="pine">Pineapple</span> Poker</a>
+      <a class="brand-mark" href="/"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></a>
       <nav>
         <span id="hand-title"></span>
         <button class="btn btn-ghost nav-btn" id="share-btn">Copy link</button>
@@ -28,7 +28,7 @@
     <div id="replay-missing" class="hidden signed-out-card">
       <h1>Hand not found</h1>
       <p>That replay link has expired or never existed.</p>
-      <a class="btn btn-primary" href="/">Back to Pineapple Poker</a>
+      <a class="btn btn-primary" href="/">Back to Reg-Poker Online</a>
     </div>
 
     <div id="replay-body" class="hidden">
@@ -45,11 +45,11 @@
       </div>
 
       <div class="replay-controls">
-        <button class="btn btn-ghost" id="rp-first" title="Start">⏮</button>
-        <button class="btn btn-ghost" id="rp-prev" title="Back">◀</button>
-        <button class="btn btn-primary" id="rp-play">▶ Play</button>
-        <button class="btn btn-ghost" id="rp-next" title="Forward">▶</button>
-        <button class="btn btn-ghost" id="rp-last" title="End">⏭</button>
+        <button class="btn btn-ghost" id="rp-first" title="Jump to the start">Start</button>
+        <button class="btn btn-ghost" id="rp-prev" title="Step back">Back</button>
+        <button class="btn btn-primary" id="rp-play">Play</button>
+        <button class="btn btn-ghost" id="rp-next" title="Step forward">Forward</button>
+        <button class="btn btn-ghost" id="rp-last" title="Jump to the end">End</button>
         <input type="range" id="rp-scrub" min="0" value="0">
         <span id="rp-position"></span>
       </div>

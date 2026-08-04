@@ -111,10 +111,19 @@ export function renderActionBar(client) {
       html = `
         <span class="ab-note">Seat requested (buy-in ${you.pendingBuyIn}) — waiting for the host…</span>
         <button class="btn btn-ghost" data-act="cancel-request">Cancel</button>`;
-    } else {
+    } else if (you.status === 'waitlisted') {
       html = `
-        <span class="ab-note">You're watching this table.</span>
-        <button class="btn btn-primary" data-act="open-join">Take a seat</button>`;
+        <span class="ab-note">Table's full — you're in the queue for the next free seat.</span>
+        <button class="btn btn-ghost" data-act="leave-waitlist">Leave the queue</button>`;
+    } else {
+      // Someone the host has already let in sits straight back down; only a
+      // first-timer waits, so don't promise a queue that isn't there.
+      html = `
+        <span class="ab-note">${you.seatOnRequest
+          ? "You're watching this table — sit back down whenever you like."
+          : "You're watching this table."}</span>
+        <button class="btn btn-primary" data-act="open-join">${
+          you.seatOnRequest ? 'Buy back in' : 'Take a seat'}</button>`;
     }
   } else if (av) {
     const callLabel =
@@ -152,7 +161,12 @@ export function renderActionBar(client) {
         <button class="btn btn-green ab-btn" data-act="rebuy" data-amount="${suggested}">Re-buy ${suggested}</button>
         <button class="btn ab-btn" data-act="rebuy-other">Other amount</button>
         <button class="btn btn-red ab-btn" data-act="stand-up">Leave seat</button>
-      </div>`;
+      </div>
+      ${you.canShow
+        // Busting out doesn't cost you the right to show the hand you just
+        // played — this branch used to swallow the Show button entirely.
+        ? '<button class="btn btn-ghost ab-small" data-act="show-cards">Show your cards</button>'
+        : ''}`;
   } else if (you.canDecide747) {
     // 747: one secret, simultaneous choice. Big buttons, no tray.
     html = `
@@ -166,7 +180,7 @@ export function renderActionBar(client) {
   } else if (hand && hand.phase === PHASES.COUNTDOWN_747 && !hand.finished) {
     html = `<span class="ab-note ab-highlight">Revealing…</span>`;
   } else if (you.canDiscard) {
-    html = `<span class="ab-note ab-highlight">🍍 Tap one of your cards to throw it away</span>`;
+    html = `<span class="ab-note ab-highlight">Tap one of your cards to throw it away</span>`;
   } else if (you.hasDiscarded && hand && (hand.phase === PHASES.DISCARD_PREFLOP || hand.phase === PHASES.DISCARD_POSTFLOP)) {
     html = `<span class="ab-note">Discarded — waiting for the others…</span>`;
   } else if (you.canShow) {
@@ -174,7 +188,7 @@ export function renderActionBar(client) {
     html = `
       <span class="ab-note">${iFolded ? 'Hand over — show what you folded?' : 'You took it down without a showdown.'}</span>
       <button class="btn btn-ghost" data-act="show-cards">Show your cards</button>
-      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">🐇 Rabbit hunt</button>' : ''}
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">Rabbit hunt</button>' : ''}
       <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
   } else if (you.sittingOut) {
     html = `
@@ -202,7 +216,7 @@ export function renderActionBar(client) {
   } else if (state.status === GAME_STATUS.RUNNING || state.status === GAME_STATUS.PAUSED) {
     html = `
       <span class="ab-note">${waitingText(client)}</span>
-      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">🐇 Rabbit hunt</button>' : ''}
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">Rabbit hunt</button>' : ''}
       <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
   } else {
     html = `<span class="ab-note">Seated with ${you.stack} — waiting for the game to start.</span>`;
@@ -341,6 +355,9 @@ function handleAct(client, act, av, arg = null) {
       break;
     case 'cancel-request':
       client.send(EVENTS.CANCEL_SEAT_REQUEST, {});
+      break;
+    case 'leave-waitlist':
+      client.send(EVENTS.LEAVE_WAITLIST, {});
       break;
     case 'fold':
       client.send(EVENTS.ACTION, { handId: hand.handId, action: 'fold' });

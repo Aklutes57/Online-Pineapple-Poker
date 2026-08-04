@@ -100,6 +100,18 @@ function ctx() {
   check('a participant sees their own hole cards', Array.isArray(alice.cards) && alice.cards.length === 2);
   const bob = asAlice.players.find((p) => p.nickname === 'Bob');
   check("a participant does not see an opponent's hidden cards", bob.cards === null);
+
+  // Showing after the hand ends happens AFTER the row is written, so the saved
+  // record has to be brought back in step — including the fairness openings,
+  // or the replay's verifier would fail closed on a card it can see.
+  hand.handleShowCards(hand.bySeat.get(0));
+  handStore.updateHandShown(id, hand);
+  const afterShow = handStore.getHand(id, null);
+  const shownAlice = afterShow.players.find((p) => p.nickname === 'Alice');
+  check('a voluntary show reaches the saved replay',
+    Array.isArray(shownAlice.cards) && shownAlice.cards.length === 2);
+  check('the folder who did not show is still hidden',
+    afterShow.players.find((p) => p.nickname === 'Bob').cards === null);
 }
 
 // ---- a hand that goes to showdown: shown cards are public ----

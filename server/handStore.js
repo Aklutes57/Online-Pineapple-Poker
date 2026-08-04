@@ -14,15 +14,12 @@ function newHandId() {
   return randomBytes(9).toString('base64url');
 }
 
-export function saveHand(game, hand) {
-  if (!hand.finished) throw new Error('refusing to save an unfinished hand');
-
-  const tableSessionId = ensureTableSession(game);
-  const id = newHandId();
-
-  // Only cards that were actually turned face up are stored as revealed;
-  // everyone else's are kept for the participants' own replay view.
-  const players = hand.players.map((p) => ({
+// The single definition of who is face up in a saved hand. Byte-identical in
+// meaning to server/views.js's `showCards`: a showdown reveals the hands still
+// in it, never the folded ones — those only go public by their owner's choice.
+// Both saveHand and updateHandShown go through here so the two can never drift.
+function playerRows(hand) {
+  return hand.players.map((p) => ({
     seat: p.seatIndex,
     playerId: p.id,
     accountId: p.accountId ?? null,
@@ -38,15 +35,13 @@ export function saveHand(game, hand) {
     desc: p.handResult?.desc ?? null,
     won: p.handResult?.won ?? 0,
   }));
+}
 
-  const pot = hand.results?.pots?.reduce((a, p) => a + p.amount, 0) ?? 0;
-
-  // Provably-fair record. The raw server seed NEVER touches this row. Instead
-  // we store the full per-slot commitment set plus openings for the cards that
-  // were public this hand (board, extra boards, rabbit, and any shown hands) —
-  // enough to verify every card seen, and nothing that could reconstruct a
-  // folded hand.
-  let fairnessRecord = null;
+// The provably-fair record for a hand: the per-slot commitment set plus the
+// openings for exactly the cards that ended up public. Recomputed rather than
+// patched, so a late voluntary show can never open a slot the `shown` rule
+// does not already make visible.
+function fairnessFor(hand, players) {
   if (hand.fairness && hand.fairnessSeed && Array.isArray(hand.deck)) {
     const serverSeed = hand.fairnessSeed;
     const { nonce } = hand.fairness;
@@ -58,10 +53,23 @@ export function saveHand(game, hand) {
       ...players.filter((p) => p.shown).flatMap((p) => p.cards),
     ].filter(Boolean);
     const openings = buildOpenings(serverSeed, nonce, hand.deck, publicCards);
-    fairnessRecord = { ...hand.fairness, deckCommit, slotCommits, openings };
-  } else if (hand.fairness) {
-    fairnessRecord = { ...hand.fairness };
+    return { ...hand.fairness, deckCommit, slotCommits, openings };
   }
+  return hand.fairness ? { ...hand.fairness } : null;
+}
+
+export function saveHand(game, hand) {
+  if (!hand.finished) throw new Error('refusing to save an unfinished hand');
+
+  const tableSessionId = ensureTableSession(game);
+  const id = newHandId();
+
+  const players = playerRows(hand);
+  const pot = hand.results?.pots?.reduce((a, p) => a + p.amount, 0) ?? 0;
+
+  // The raw server seed NEVER touches this row — only the commitments and the
+  // openings for cards that were actually public.
+  const fairnessRecord = fairnessFor(hand, players);
 
   run(
     `INSERT INTO hands
@@ -82,6 +90,26 @@ export function saveHand(game, hand) {
     fairnessRecord ? JSON.stringify(fairnessRecord) : null
   );
   return id;
+}
+
+// A player can turn their hand face up in the few seconds after it ends, which
+// is AFTER the row was written. Rewrite the two columns that depend on who is
+// face up — the player rows and the fairness openings — so the replay and the
+// integrity proof agree with what the table actually saw.
+//
+// Safe to call repeatedly: both columns are recomputed from the live hand, and
+// the hand is still in memory (with its seed) for the whole show window.
+export function updateHandShown(id, hand) {
+  if (!id || !hand?.finished) return false;
+  const players = playerRows(hand);
+  const fairnessRecord = fairnessFor(hand, players);
+  const res = run(
+    'UPDATE hands SET players_json = ?, fairness_json = ? WHERE id = ?',
+    JSON.stringify(players),
+    fairnessRecord ? JSON.stringify(fairnessRecord) : null,
+    id
+  );
+  return !!res;
 }
 
 // viewerAccountId reveals that participant's own cards; everyone else only

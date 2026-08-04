@@ -12,7 +12,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-fair-')),
 import * as srv from '../server/fairness.js';
 import * as web from '../shared/fairness.js';
 import { initDb, closeDb } from '../server/db.js';
-import { saveHand, getHand } from '../server/handStore.js';
+import { saveHand, getHand, updateHandShown } from '../server/handStore.js';
 
 let failures = 0;
 let passes = 0;
@@ -242,6 +242,27 @@ check('the commit reveals nothing usable — seed is 64 hex chars of entropy',
   });
   check('the browser verifies the commitment and every public card', audit.ok === true);
   check('mucked cards cannot be recovered from the record', !audit.provenCards.includes(boCards[0]));
+
+  // A late voluntary show happens after the row is written. Re-opening the
+  // record must publish exactly the newly-shown slots and nothing else, or the
+  // browser verifier fails closed on a card it can now see.
+  hand.players[1].showedCards = true;
+  updateHandShown(id, hand);
+  const reopened = getHand(id);
+  check('a late show opens exactly the cards it made public',
+    reopened.fairness.openings.length === board.length + annCards.length + boCards.length);
+  const reopenedAudit = await web.verifyReveal({
+    deckCommit: reopened.fairness.deckCommit,
+    slotCommits: reopened.fairness.slotCommits,
+    openings: reopened.fairness.openings,
+    publicCards: [...board, ...annCards, ...boCards],
+  });
+  check('the browser still verifies after a late show', reopenedAudit.ok === true);
+  hand.players[1].showedCards = false;
+  updateHandShown(id, hand);
+  const reclosed = getHand(id);
+  check('un-showing narrows the openings back down',
+    reclosed.fairness.openings.length === board.length + annCards.length);
 
   closeDb();
 }

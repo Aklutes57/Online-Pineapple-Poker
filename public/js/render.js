@@ -57,7 +57,8 @@ const OVERHANG = {
   landscape: { x: 44, y: 98 },
   upright: { x: 16, y: 88 },
 };
-const CAM_EXTRA_Y = 74; // half a webcam tile, top and bottom
+const CAM_EXTRA_Y = 74;    // half a webcam tile, top and bottom
+const AVATAR_EXTRA_Y = 44; // a profile picture is smaller than a live tile
 const FELT_LONG = 900;
 const FELT_SHORT = 504;
 
@@ -98,7 +99,13 @@ export function fitTableStage() {
   const feltW = portrait ? FELT_SHORT : FELT_LONG;
   const feltH = portrait ? FELT_LONG : FELT_SHORT;
   const pad = portrait ? OVERHANG.upright : OVERHANG.landscape;
-  const camY = document.querySelector('#seats-layer video.seat-cam') ? CAM_EXTRA_Y : 0;
+  // Anything stacked above the cards makes every pod taller, so it has to buy
+  // vertical room or the top and bottom seats get shaved off.
+  const camY = document.querySelector('#seats-layer video.seat-cam')
+    ? CAM_EXTRA_Y
+    : document.querySelector('#seats-layer .seat-avatar:not(.hidden)')
+      ? AVATAR_EXTRA_Y
+      : 0;
   const scale = Math.min(
     area.w / (feltW + pad.x * 2),
     area.h / (feltH + (pad.y + camY) * 2),
@@ -248,7 +255,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
     seat.isDealer, toAct, waitingDiscard, seat.handResult,
     isMe, you?.canDiscard, you?.hasDiscarded,
-    seat.mediaOn, seat.camFrame, isMuted(seat.playerId), seat.nameFont,
+    seat.mediaOn, seat.camFrame, seat.avatarUrl, isMuted(seat.playerId), seat.nameFont,
     decisionPhase ? seat.decided : null, myHandNow,
     hand && !hand.finished ? hand.lastAction?.seat === seatIndex && JSON.stringify(hand.lastAction) : null,
   ]);
@@ -297,7 +304,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   if (waitingDiscard) statusBits.push('discarding…');
   // 747 decision phase: THAT a player locked in is public, never which way.
   if (decisionPhase && seat.inHand && !seat.folded) {
-    statusBits.push(seat.decided ? 'locked in ✓' : 'deciding…');
+    statusBits.push(seat.decided ? 'locked in' : 'deciding…');
   }
   plate.innerHTML = `
     <div class="np-row">
@@ -308,7 +315,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     ${seat.mediaOn && !isMe
       ? `<button class="np-mute${isMuted(seat.playerId) ? ' on' : ''}" data-mute="${seat.playerId}"
            title="${isMuted(seat.playerId) ? 'Unmute' : 'Mute'} ${escapeHtml(seat.nickname)} (just for you)"
-           >${isMuted(seat.playerId) ? '🔇' : '🔊'}</button>`
+           >${isMuted(seat.playerId) ? 'Muted' : 'Mute'}</button>`
       : ''}
     <div class="timer-bar hidden"><div class="timer-fill"></div></div>
   `;
@@ -331,6 +338,16 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   }
 
   pod.innerHTML = '';
+  // The profile picture sits exactly where the webcam tile goes, so a player
+  // with the camera off still has a face at the table. webrtc.js hides it the
+  // moment a live tile covers the same spot.
+  if (seat.avatarUrl) {
+    const avatar = document.createElement('img');
+    avatar.className = 'seat-avatar';
+    avatar.src = seat.avatarUrl;
+    avatar.alt = '';
+    pod.appendChild(avatar);
+  }
   pod.appendChild(fan);
   // Live "what do I have" readout — private, shown only under your own fan.
   if (myHandNow) {
@@ -356,7 +373,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   }
   if (bubble) plate.insertAdjacentHTML('beforeend', bubble);
   if (isMe && you.hasDiscarded && discardPhase) {
-    plate.insertAdjacentHTML('beforeend', '<div class="np-bubble">discarded ✓</div>');
+    plate.insertAdjacentHTML('beforeend', '<div class="np-bubble">discarded</div>');
   }
 }
 
@@ -500,7 +517,7 @@ function renderCenter(client) {
       html = `
         <p>Share the invite link, approve seats, then deal the first hand.</p>
         <button class="btn btn-green" id="start-game-btn" ${seated < 2 ? 'disabled' : ''}>
-          ▶ Start the game
+          Start the game
         </button>`;
     } else {
       html = '<p>Waiting for the host to start the game…</p>';

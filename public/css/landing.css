@@ -20,13 +20,27 @@
   height: 60px;
 }
 
-.site-header .pineapple-mark {
+.site-header .brand-mark {
   font-size: 18px;
 }
 
 .site-header nav {
   display: flex;
+  align-items: center; /* text links share the Sign-in button's centre line */
   gap: 22px;
+}
+
+/* #account-slot wraps the Sign in / account link, so it needs to centre its own
+   child too — otherwise the button sits at the top of a stretched span. */
+.site-header nav > * {
+  display: flex;
+  align-items: center;
+}
+
+.site-header nav a {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .site-header a {
@@ -83,28 +97,28 @@
 .hero-cards {
   position: absolute;
   right: max(2vw, 8px);
-  bottom: -30px;
-  opacity: 0.9;
+  bottom: -48px;
+  opacity: 0.92;
 }
 
 .hcard {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 84px;
-  height: 118px;
+  width: 132px;
+  height: 185px;
   background: #f4f6fb;
   color: #1c2230;
   border-radius: 9px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
-  font-size: 26px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+  font-size: 40px;
   font-weight: 700;
-  padding: 8px;
+  padding: 12px;
 }
 
 .hcard span b {
   display: block;
-  font-size: 30px;
+  font-size: 46px;
   line-height: 1;
 }
 
@@ -112,9 +126,9 @@
   color: #c0392b;
 }
 
-.hcard.c1 { transform: rotate(14deg) translate(-6px, -10px); }
-.hcard.c2 { transform: rotate(-2deg) translate(-74px, 6px); }
-.hcard.c3 { transform: rotate(-18deg) translate(-142px, 24px); }
+.hcard.c1 { transform: rotate(14deg) translate(-10px, -16px); }
+.hcard.c2 { transform: rotate(-2deg) translate(-116px, 10px); }
+.hcard.c3 { transform: rotate(-18deg) translate(-223px, 38px); }
 
 /* ---- features ---- */
 

@@ -235,6 +235,10 @@ function renderSeats(view) {
       const cards = seat.cardsShown || (step >= hand.timeline.length ? seat.cards : null);
       if (cards) for (const c of cards) fan.appendChild(makeCardEl(c));
       else for (let i = 0; i < seat.cardCount; i++) fan.appendChild(makeCardBack());
+    } else if (seat.cards && step >= hand.timeline.length) {
+      // A folded player who chose to show at the table: the live view draws
+      // the fan behind the folded styling, and so should the replay.
+      for (const c of seat.cards) fan.appendChild(makeCardEl(c));
     }
     pod.appendChild(fan);
 
@@ -298,7 +302,7 @@ function togglePlay() {
     return;
   }
   if (step >= hand.timeline.length) goTo(0);
-  document.getElementById('rp-play').textContent = '⏸ Pause';
+  document.getElementById('rp-play').textContent = 'Pause';
   playing = setInterval(() => {
     if (step >= hand.timeline.length) {
       stop();
@@ -312,7 +316,7 @@ function stop() {
   if (!playing) return;
   clearInterval(playing);
   playing = null;
-  document.getElementById('rp-play').textContent = '▶ Play';
+  document.getElementById('rp-play').textContent = 'Play';
 }
 
 document.addEventListener('keydown', (e) => {

@@ -217,15 +217,36 @@ label {
   font-weight: 600;
 }
 
-.pineapple-mark {
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 800;
   letter-spacing: 0.5px;
   text-decoration: none;
   color: inherit;
+  white-space: nowrap;
 }
 
-.pineapple-mark .pine {
+.brand-mark .brand-hi {
   color: var(--accent);
+}
+
+/* A poker chip drawn in CSS — no image request, scales with the wordmark. */
+.brand-chip {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--accent) 0 12.5%, var(--bg-panel) 0 25%,
+                   var(--accent) 0 37.5%, var(--bg-panel) 0 50%,
+                   var(--accent) 0 62.5%, var(--bg-panel) 0 75%,
+                   var(--accent) 0 87.5%, var(--bg-panel) 0);
+  box-shadow:
+    inset 0 0 0 0.17em var(--accent-dark),
+    inset 0 0 0 0.3em var(--felt),
+    0 0 0 1px var(--ink);
 }
 
 /* ---- accounts ---- */

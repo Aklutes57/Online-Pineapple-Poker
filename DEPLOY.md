@@ -1,4 +1,4 @@
-# Deploying Pineapple Poker
+# Deploying Reg-Poker Online
 
 The app is one Node process holding live tables in memory, with a SQLite
 file and uploads on disk. That means it needs a host that keeps **one
@@ -64,7 +64,7 @@ Fly.io, with notes for alternatives at the end.
 # Real email delivery for the auto-invite list (otherwise invites are
 # logged to the outbox and the UI says so):
 fly secrets set SMTP_URL='smtps://user:pass@smtp.example.com:465'
-fly secrets set SMTP_FROM='Pineapple Poker <poker@example.com>'
+fly secrets set SMTP_FROM='Reg-Poker Online <poker@example.com>'
 
 # Contact address embedded in push-notification credentials:
 fly secrets set VAPID_SUBJECT='mailto:you@example.com'

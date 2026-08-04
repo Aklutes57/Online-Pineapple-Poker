@@ -20,6 +20,7 @@ export const EVENTS = {
   RABBIT_HUNT: 'rabbitHunt',
   DECISION_747: 'decision747',
   SET_CLIENT_SEED: 'setClientSeed',
+  SET_AVATAR: 'setAvatar',
   SET_NAME_FONT: 'setNameFont',
   RUN_IT_TWICE_VOTE: 'runItTwiceVote',
   REBUY: 'rebuy',
@@ -113,11 +114,13 @@ export const VARIANTS = {
     holeCards: 4, // plus a fifth card for players who stay
     discardBefore: null,
     potLimit: false,
-    // Ante-based dealer game: no blinds, no betting rounds. The ante is the
-    // table's big-blind setting, everyone plays the house dealer hand,
-    // fours are wild, and two natural sevens in the first four cards win
-    // outright. If the dealer beats everyone, the pot rides to the next
-    // 747 hand.
+    // Ante-based dealer game: no blinds, no betting rounds. Everyone antes,
+    // takes four cards, and locks a hold-or-drop choice; holders get a fifth
+    // card. Only the BEST hand among the holders plays the house dealer —
+    // every other holder lost to a player, is out of the hand, and pays a
+    // penalty. Fours are wild and two natural sevens in the first four cards
+    // win outright. If the dealer beats the challenger, the pot rides to the
+    // next 747 hand; either way, penalties fund the NEXT pot, never this one.
   },
 };
 
@@ -135,6 +138,11 @@ export const DEFAULT_SETTINGS = {
   runItTwice: false, // deal two boards when everyone is all-in
   bombPotEvery: 0, // every N hands: everyone antes, straight to the flop
   sevenDeuceBounty: 0, // chips each opponent pays for a win with 7-2
+  // 747 only. ante747 = 0 means "use the big blind", which is what 747 tables
+  // did before the ante became host-settable.
+  ante747: 0,
+  // Cap on the 747 penalty. A loser pays min(pot, cap); 0 turns penalties off.
+  penaltyCap747: 25,
 };
 
 // Not a gameplay cap — blinds and buy-ins are host's choice, uncapped. This

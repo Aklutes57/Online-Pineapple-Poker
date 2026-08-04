@@ -1,4 +1,4 @@
-# 🍍 Pineapple Poker
+# Reg-Poker Online
 
 Free play-money poker with friends, in the browser. Create a private table,
 share the link, approve who sits down, and play — no downloads, no accounts,

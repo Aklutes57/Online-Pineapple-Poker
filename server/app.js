@@ -12,7 +12,7 @@ import { SETTINGS_LIMITS } from '../shared/constants.js';
 import { initDb } from './db.js';
 import {
   createAccount, login, logout, accountForRequest, tokenFromRequest,
-  updateDisplayName, updatePrefs, setPayments, purgeExpiredSessions,
+  updateDisplayName, updatePrefs, setPayments, setAvatar, purgeExpiredSessions,
 } from './accounts.js';
 import { accountSummary, ledgerCsvForGame } from './stats.js';
 import {
@@ -374,6 +374,51 @@ export function buildServer() {
     res.json({ ok: true, url: stored.upload.url });
   });
 
+  // A profile picture, uploaded from the table so guests get one too. When the
+  // player is signed in it is also written to their account, so it follows
+  // them to every future table without being uploaded again.
+  app.post('/api/games/:id/avatar', tableImageLimiter, rawUpload, (req, res) => {
+    const { game, player } = playerFromToken(req);
+    if (!game || !player) {
+      res.status(403).json({ error: 'Join the table first' });
+      return;
+    }
+    const stored = storeUpload({
+      buffer: req.body,
+      accountId: player.accountId ?? null,
+      wantKind: 'image',
+      originalName: typeof req.query.name === 'string' ? req.query.name : null,
+    });
+    if (!stored.ok) {
+      res.status(400).json({ error: stored.error });
+      return;
+    }
+    const result = game.setAvatar(player, stored.upload.url);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    if (player.accountId) setAvatar(player.accountId, stored.upload.url);
+    res.json({ ok: true, url: stored.upload.url });
+  });
+
+  // Setting the picture from the profile page: the bytes went to /api/uploads
+  // first, so this only records which upload is the account's avatar.
+  app.put('/api/me/avatar', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const url = req.body?.url;
+    const result = setAvatar(account.id, url === null ? null : url);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true, avatarUrl: result.avatarUrl });
+  });
+
   app.get('/api/me/theme', (req, res) => {
     const account = accountForRequest(req);
     if (!account) {
@@ -512,13 +557,13 @@ export function buildServer() {
     const result = unsubscribeByToken(req.params.token);
     res.type('html').send(
       `<body style="font-family:system-ui;background:#10131c;color:#e8ebf4;padding:60px;text-align:center">
-        <h1>🍍 ${result.ok ? 'Unsubscribed' : 'Link not recognised'}</h1>
+        <h1>${result.ok ? 'Unsubscribed' : 'Link not recognised'}</h1>
         <p style="color:#9aa3ba">${
           result.ok
             ? 'You will not get any more table invites from this list.'
             : 'That unsubscribe link is no longer valid.'
         }</p>
-        <a href="/" style="color:#f5c542">Back to Pineapple Poker</a>
+        <a href="/" style="color:#f5c542">Back to Reg-Poker Online</a>
       </body>`
     );
   });

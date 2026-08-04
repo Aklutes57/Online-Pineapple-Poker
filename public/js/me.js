@@ -77,6 +77,7 @@ function render() {
     `${account.email} · joined ${new Date(account.createdAt).toLocaleDateString()}`;
   document.getElementById('p-name').value = account.displayName;
   renderPayFields(account);
+  renderAvatar(account.avatarUrl || account.prefs?.avatarUrl || null);
 }
 
 // ---- payment methods ----
@@ -192,8 +193,16 @@ function renderSummary({ totals, sessions, stats }) {
             ? (stats.aggressiveActions / stats.passiveActions).toFixed(2)
             : '—'
         }</span></div>
+      <div class="stat-tile"><span class="stat-label">Hands won</span>
+        <span class="stat-value">${stats.handsWon || 0}</span></div>
+      <div class="stat-tile"><span class="stat-label">Biggest pot</span>
+        <span class="stat-value">${stats.biggestPot || 0}</span></div>
     </div>
-    ${stats.bestHandDesc ? `<p class="empty-note">Best hand shown down: ${escapeHtml(stats.bestHandDesc)}</p>` : ''}`;
+    <div class="best-hand">
+      <span class="stat-label">Best hand ever made</span>
+      <strong>${stats.bestHandDesc ? escapeHtml(stats.bestHandDesc) : 'Nothing yet — go make one'}</strong>
+      <span class="hint">Counts every hand you made, even the ones nobody got to see.</span>
+    </div>`;
 }
 
 // ---- invite list and Discord ----
@@ -355,6 +364,45 @@ async function uploadFile(file, url) {
   if (!res.ok) return { ok: false, error: data.error || 'Upload failed' };
   return { ok: true, data };
 }
+
+// ---- profile picture ----
+
+function renderAvatar(url) {
+  const img = document.getElementById('avatar-preview');
+  const empty = document.getElementById('avatar-empty');
+  if (!img || !empty) return;
+  img.src = url || '';
+  img.classList.toggle('hidden', !url);
+  empty.classList.toggle('hidden', !!url);
+}
+
+async function saveAvatar(url) {
+  const res = await fetch('/api/me/avatar', {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    showToast('Could not save the picture');
+    return;
+  }
+  renderAvatar(url);
+  showToast(url ? 'Profile picture saved' : 'Profile picture removed', { ok: true });
+}
+
+document.getElementById('a-image')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const result = await uploadFile(file, '/api/uploads?kind=image');
+  if (!result.ok) {
+    showToast(result.error);
+    return;
+  }
+  await saveAvatar(result.data.upload.url);
+});
+
+document.getElementById('a-clear')?.addEventListener('click', () => saveAvatar(null));
 
 document.getElementById('t-image').addEventListener('change', async (e) => {
   const file = e.target.files[0];

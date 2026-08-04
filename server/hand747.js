@@ -7,9 +7,15 @@
 // Flow: antes → four cards each (plus a hidden dealer hand) → simultaneous
 // stay/fold decisions → 3-2-1 countdown → reveal → fifth card to stayers
 // and dealer → Natural Seven check (original four cards only) → wildcard
-// evaluation (fours are wild) → each stayer compared against the dealer.
-// Winners split the pot; ties lose to the dealer; if the dealer beats
-// everyone, the pot rides to the next 747 hand (carryOut → Game.carryPot).
+// evaluation (fours are wild).
+//
+// Only the BEST hand among the stayers plays the dealer. Every other stayer
+// lost to a player: they are knocked out of the hand and pay a penalty of
+// min(pot, cap). The challenger either beats the dealer and takes the pot as
+// it stood before the round, or loses and pays the same penalty while the pot
+// rides. Ties lose to the dealer. Penalties never join the pot they were paid
+// during — they ride to the NEXT hand alongside any riding pot, so beating a
+// player never pays you, it only builds the next pot.
 // Chips only ever move through betting.pay and the pot — conservation holds.
 
 import { PHASES, TIMINGS } from '../shared/constants.js';
@@ -21,11 +27,17 @@ import {
 } from './evaluator747.js';
 
 export class Hand747 {
-  constructor({ handNo, smallBlind, bigBlind, actionTime, buttonSeat, players, deck, fairness = null, ctx, carryIn = 0 }) {
+  constructor({
+    handNo, smallBlind, bigBlind, actionTime, buttonSeat, players, deck,
+    fairness = null, ctx, carryIn = 0, ante = 0, penaltyCap = 0,
+  }) {
     this.handNo = handNo;
     this.handId = `h${handNo}`;
     this.variant = { key: '747', label: '747 Poker', engine: '747' };
-    this.ante = bigBlind; // the table's big-blind setting is the 747 ante
+    // Host-set ante; 0 keeps the old behaviour of aliasing it to the big blind.
+    this.ante = ante > 0 ? ante : bigBlind;
+    // A loser pays min(pot, penaltyCap) into the NEXT pot. 0 = penalties off.
+    this.penaltyCap = penaltyCap > 0 ? penaltyCap : 0;
     this.smallBlind = smallBlind;
     this.bigBlind = bigBlind;
     this.actionTime = actionTime;
@@ -239,18 +251,61 @@ export class Hand747 {
     }
     const dealerScore = evaluate747(this.dealerCards);
 
-    // Each player plays the dealer, not each other. Ties lose to the house.
-    const winners = stayers.filter((p) => scores.get(p.seatIndex) > dealerScore);
-    this.finishShowdown(winners, scores, dealerScore);
+    // Only the best hand among the stayers gets to play the dealer. Everyone
+    // else lost to a player — out of the hand, and they pay the penalty. A
+    // dead-exact tie for best is not a loss to anyone, so both challenge.
+    const best = Math.max(...stayers.map((p) => scores.get(p.seatIndex)));
+    const challengers = stayers.filter((p) => scores.get(p.seatIndex) === best);
+    const lostToPlayer = stayers.filter((p) => scores.get(p.seatIndex) < best);
+    if (lostToPlayer.length) {
+      this.ctx.log(
+        `${challengers.map((p) => p.nickname).join(' and ')} ` +
+        `${challengers.length > 1 ? 'hold' : 'holds'} the best hand and ` +
+        `${challengers.length > 1 ? 'play' : 'plays'} the dealer — ` +
+        `${lostToPlayer.map((p) => p.nickname).join(', ')} lost to a player`
+      );
+    }
+
+    // Ties lose to the house. Challengers all share one score, so they win or
+    // lose together.
+    const winners = challengers.filter((p) => scores.get(p.seatIndex) > dealerScore);
+    const lostToDealer = challengers.filter((p) => scores.get(p.seatIndex) <= dealerScore);
+    this.finishShowdown(winners, scores, dealerScore, { lostToPlayer, lostToDealer });
   }
 
-  finishShowdown(winners, scores, dealerScore = null) {
+  finishShowdown(winners, scores, dealerScore = null, losses = {}) {
     this.ctx.clearTimer();
+    // The pot as it stood before the round is settled: antes plus anything
+    // riding in. Read BEFORE penalties are paid, so a penalty can never
+    // inflate the pot it was triggered by.
     const pot = this.players.reduce((a, p) => a + p.totalCommitted, 0) + this.carryIn;
     const winnerSeats = winners.map((p) => p.seatIndex);
     const naturalSevenSeats = winners
       .filter((p) => scores.get(p.seatIndex) === NATURAL_SEVEN_SCORE)
       .map((p) => p.seatIndex);
+
+    // Penalties: every knocked-out stayer pays min(pot, cap), capped again by
+    // what they actually have. These chips leave the stack here and are routed
+    // straight to the riding pot below — they are deliberately NOT added to
+    // `pot`, which was already read above.
+    const penalties = [];
+    let penaltyTotal = 0;
+    const due = this.penaltyCap > 0 ? Math.min(pot, this.penaltyCap) : 0;
+    if (due > 0) {
+      for (const [reason, group] of [['player', losses.lostToPlayer], ['dealer', losses.lostToDealer]]) {
+        for (const p of group || []) {
+          const paid = betting.pay(p, due);
+          if (paid <= 0) continue;
+          penaltyTotal += paid;
+          penalties.push({ seat: p.seatIndex, amount: paid, to: reason });
+          this.pushEvent({ type: 'penalty', seat: p.seatIndex, amount: paid, to: reason });
+          this.ctx.log(
+            `${p.nickname} pays ${paid} into the next pot ` +
+            `(lost to ${reason === 'dealer' ? 'the dealer' : 'a player'})`
+          );
+        }
+      }
+    }
 
     let winnersOut = [];
     let carryOut = 0;
@@ -268,12 +323,16 @@ export class Hand747 {
     } else {
       carryOut = pot; // the dealer swept — the pot rides
       this.carryIn = 0; // consumed into the ride, not refundable twice
-      this.ctx.carryOut(carryOut);
     }
+    // Penalties always ride, whether or not the pot was won.
+    carryOut += penaltyTotal;
+    if (carryOut > 0) this.ctx.carryOut(carryOut);
 
     for (const p of this.players) {
+      // Penalty chips were routed to the riding pot, never to this pot.
       p.totalCommitted = 0;
       p.betThisRound = 0;
+      p.allIn = false;
     }
 
     this.dealerRevealed = true;
@@ -291,10 +350,19 @@ export class Hand747 {
       p.handStats.wtsd = true;
       p.handStats.wsd = won > 0;
       p.handStats.showdownScore = score;
+      if (score > (p.handStats.madeScore || 0)) {
+        p.handStats.madeScore = score;
+        p.handStats.madeDesc = p.handResult.desc;
+      }
       this.pushEvent({ type: 'reveal', seat: p.seatIndex, cards: [...p.holeCards], desc: p.handResult.desc });
+      const lostToAPlayer = (losses.lostToPlayer || []).includes(p);
       this.ctx.log(
         `${p.nickname} shows ${p.holeCards.join(' ')} — ${p.handResult.desc}` +
-        (won ? `, beats the dealer for ${won}` : dealerScore !== null ? ', loses to the dealer' : '')
+        (won
+          ? `, beats the dealer for ${won}`
+          : lostToAPlayer
+            ? ', loses to a player'
+            : dealerScore !== null ? ', loses to the dealer' : '')
       );
     }
     for (const w of winnersOut) {
@@ -311,7 +379,11 @@ export class Hand747 {
       }
     }
     if (carryOut > 0) {
-      this.ctx.log(`Nobody beat the dealer — ${carryOut} rides to the next 747 hand`);
+      this.ctx.log(
+        winnerSeats.length
+          ? `${carryOut} in penalties rides to the next 747 hand`
+          : `Nobody beat the dealer — ${carryOut} rides to the next 747 hand`
+      );
     }
 
     this.revealed = true;
@@ -329,6 +401,7 @@ export class Hand747 {
       dealer: { cards: [...this.dealerCards], desc: dealerDesc },
       naturalSevenSeats,
       carryOut,
+      penalties,
     };
     this.ctx.changed();
     this.ctx.finished();
@@ -363,6 +436,7 @@ export class Hand747 {
     if (player.showedCards) return { ok: false, error: 'already shown' };
     player.showedCards = true;
     this.ctx.log(`${player.nickname} shows ${player.holeCards.join(' ')}`);
+    this.ctx.handShown?.();
     this.ctx.changed();
     return { ok: true };
   }

@@ -64,6 +64,9 @@ export function initPanels(client) {
   document.getElementById('h-72-on').addEventListener('change', (e) => {
     document.getElementById('h-72').disabled = !e.target.checked;
   });
+  // Picking 747 opens its two settings right there in the host pop-up, so the
+  // ante and the penalty cap are set at the moment you switch to it.
+  document.getElementById('h-variant').addEventListener('change', sync747Fields);
   document.getElementById('h-save').addEventListener('click', () => {
     client.send(EVENTS.HOST_UPDATE_SETTINGS, {
       variant: document.getElementById('h-variant').value,
@@ -78,6 +81,8 @@ export function initPanels(client) {
       straddle: document.getElementById('h-straddle').checked,
       rabbitHunt: document.getElementById('h-rabbit').checked,
       runItTwice: document.getElementById('h-rit').checked,
+      ante747: parseInt(document.getElementById('h-747-ante').value, 10) || 0,
+      penaltyCap747: Math.max(0, parseInt(document.getElementById('h-747-cap').value, 10) || 0),
     });
     showToast('Settings saved — they apply from the next hand', { ok: true });
   });
@@ -278,7 +283,7 @@ function renderLog(client) {
   const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
   list.innerHTML =
     (replayId
-      ? `<a class="replay-link" href="/hands/${replayId}" target="_blank" rel="noopener">▶ Replay the last hand</a>`
+      ? `<a class="replay-link" href="/hands/${replayId}" target="_blank" rel="noopener">Replay the last hand</a>`
       : '') +
     logs
       .map((l) => `<div class="log-line"><span class="log-no">#${l.handNo}</span> ${escapeHtml(l.text)}</div>`)
@@ -414,9 +419,9 @@ function updateSeatReqBadge(client, isHost, reqs) {
   if (seenSeatReqs !== null && isHost) {
     const fresh = waiting.filter((r) => !seenSeatReqs.has(r.playerId));
     if (fresh.length === 1) {
-      showToast(`${fresh[0].nickname} wants to join — tap 💬 to let them in`);
+      showToast(`${fresh[0].nickname} wants to join — tap Chat to let them in`);
     } else if (fresh.length > 1) {
-      showToast(`${fresh.length} players want to join — tap 💬 to let them in`);
+      showToast(`${fresh.length} players want to join — tap Chat to let them in`);
     }
   }
   seenSeatReqs = ids;
@@ -429,7 +434,7 @@ function renderSeatRequests(client) {
   const isHost = client.you?.isHost;
 
   // Surface pending requests where the host will actually notice them: a badge
-  // on the 💬 button (visible even with the panel closed, e.g. on a phone) and
+  // on the Chat button (visible even with the panel closed, e.g. on a phone) and
   // a toast the moment a new person asks to join. Without this the approve
   // buttons sit unseen inside a closed drawer.
   updateSeatReqBadge(client, isHost, reqs);
@@ -449,8 +454,8 @@ function renderSeatRequests(client) {
       <div class="sr-row">
         <span>${escapeHtml(r.nickname)} · ${r.buyIn}</span>
         <span>
-          <button class="btn btn-green sr-btn" data-approve="yes" data-player="${r.playerId}">✓</button>
-          <button class="btn btn-red sr-btn" data-approve="no" data-player="${r.playerId}">✕</button>
+          <button class="btn btn-green sr-btn" data-approve="yes" data-player="${r.playerId}">Approve</button>
+          <button class="btn btn-red sr-btn" data-approve="no" data-player="${r.playerId}">Decline</button>
         </span>
       </div>`
          )
@@ -463,12 +468,12 @@ function renderSeatRequests(client) {
          .map(
            (w) => `
       <div class="sr-row">
-        <span>${w.position}. ${escapeHtml(w.nickname)} · ${w.buyIn}${w.approved ? ' ✓' : ''}</span>
+        <span>${w.position}. ${escapeHtml(w.nickname)} · ${w.buyIn}${w.approved ? ' · approved' : ''}</span>
         ${
           isHost && !w.approved
             ? `<span>
-                 <button class="btn btn-green sr-btn" data-wait="yes" data-player="${w.playerId}">✓</button>
-                 <button class="btn btn-red sr-btn" data-wait="no" data-player="${w.playerId}">✕</button>
+                 <button class="btn btn-green sr-btn" data-wait="yes" data-player="${w.playerId}">Approve</button>
+                 <button class="btn btn-red sr-btn" data-wait="no" data-player="${w.playerId}">Remove</button>
                </span>`
             : ''
         }
@@ -482,9 +487,20 @@ function renderSeatRequests(client) {
 
 // ---- host modal ----
 
+// The 747 ante and penalty cap only mean anything on a 747 table, so they are
+// revealed by the variant picker rather than sitting dead on every other game.
+function sync747Fields() {
+  const on = document.getElementById('h-variant').value === '747';
+  document.getElementById('h-747-row').classList.toggle('hidden', !on);
+  document.getElementById('h-747-note').classList.toggle('hidden', !on);
+}
+
 function openHostModal(client) {
   const s = client.state.settings;
   document.getElementById('h-variant').value = s.variant;
+  document.getElementById('h-747-ante').value = String(s.ante747 || s.bigBlind);
+  document.getElementById('h-747-cap').value = String(s.penaltyCap747 ?? 0);
+  sync747Fields();
   document.getElementById('h-sb').value = s.smallBlind;
   document.getElementById('h-bb').value = s.bigBlind;
   document.getElementById('h-timer').value = String(s.actionTime);

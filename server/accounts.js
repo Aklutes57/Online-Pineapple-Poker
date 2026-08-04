@@ -125,6 +125,8 @@ function publicAccount(row) {
     email: row.email,
     displayName: row.display_name,
     createdAt: row.created_at,
+    // Lifted out of prefs so callers don't have to know where it lives.
+    avatarUrl: typeof prefs.avatarUrl === 'string' ? prefs.avatarUrl : null,
     prefs,
   };
 }
@@ -143,6 +145,23 @@ export function setPayments(accountId, raw) {
   const payments = cleanPayments(raw);
   const result = updatePrefs(accountId, { payments });
   return result.ok ? payments : {};
+}
+
+// The profile picture, stored against the account so it follows the player to
+// every table without being re-uploaded. Only a content-addressed same-origin
+// upload path is accepted — never an arbitrary URL.
+export const AVATAR_URL_RE = /^\/uploads\/[a-f0-9]{64}\.[a-z0-9]{2,5}$/;
+
+export function setAvatar(accountId, url) {
+  if (url === null || url === '') {
+    const cleared = updatePrefs(accountId, { avatarUrl: null });
+    return cleared.ok ? { ok: true, avatarUrl: null } : { ok: false, error: cleared.error };
+  }
+  if (typeof url !== 'string' || !AVATAR_URL_RE.test(url)) {
+    return { ok: false, error: 'bad picture' };
+  }
+  const result = updatePrefs(accountId, { avatarUrl: url });
+  return result.ok ? { ok: true, avatarUrl: url } : { ok: false, error: result.error };
 }
 
 export function updateDisplayName(accountId, displayName) {

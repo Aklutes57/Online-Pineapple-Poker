@@ -29,7 +29,9 @@ html, body.table-page {
   /* minmax(0, …) instead of a bare 1fr: a 1fr track is really minmax(auto,1fr),
      so a wide, non-wrapping row (the action bar) would force the whole grid —
      and the felt — wider than the screen. The 0 minimum lets it shrink to fit. */
-  grid-template-rows: 52px minmax(0, 1fr) auto;
+  /* The top bar sizes to its own content: word labels wrap to a second row on
+     a narrow screen, and a fixed track height would clip them. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-columns: minmax(0, 1fr) var(--panel-w);
   grid-template-areas:
     'top top'
@@ -63,13 +65,15 @@ body.disconnected::after {
   grid-area: top;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 14px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-height: 52px;
+  padding: 6px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
 }
 
-#top-bar .pineapple-mark {
+#top-bar .brand-mark {
   font-size: 15px;
   white-space: nowrap;
 }
@@ -1148,14 +1152,35 @@ td.dim { color: var(--text-dim); }
     --board-card-h: 56px;
   }
 
+  /* On a phone the word labels would wrap to four rows and swallow the felt,
+     so the bar stays on ONE row and scrolls sideways instead. */
   #top-bar {
+    flex-wrap: nowrap;
     gap: 8px;
-    padding: 0 8px;
+    padding: 5px 8px;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
   }
+  #top-bar::-webkit-scrollbar { display: none; }
 
-  #top-bar .pineapple-mark .pine,
+  #top-bar .brand-mark .brand-words,
   #game-badge {
     display: none;
+  }
+
+  .top-actions {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  /* Word labels are wider than the glyphs they replaced — tighten them up so
+     more of the bar is reachable without scrolling. */
+  .top-btn, .top-select {
+    padding: 5px 9px;
+    font-size: 11.5px;
+    white-space: nowrap;
   }
 
   #table-area { padding: 4px; }
@@ -1357,6 +1382,25 @@ td.dim { color: var(--text-dim); }
 .av-live { display: inline-flex; gap: 6px; align-items: center; }
 .av-live .av-off { opacity: 0.55; text-decoration: line-through; }
 
+/* The profile picture: same footprint as the webcam tile, so a pod looks the
+   same whether the camera is on or off. */
+.seat-avatar {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid var(--accent-dark);
+  background: var(--bg-raised);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  margin-bottom: -6px;
+  z-index: 1;
+}
+.seat.me .seat-avatar { border-color: var(--accent); }
+
+@media (max-width: 720px) {
+  .seat-avatar { width: 62px; height: 62px; }
+}
+
 /* The webcam feed sits where a seat's avatar would, just above the nameplate. */
 video.seat-cam {
   width: 192px;
@@ -1381,21 +1425,26 @@ video.seat-cam.cam-off { visibility: hidden; }
 }
 
 /* ---- per-player mute + muted styling ---- */
+/* A word, not a speaker icon — you should be able to tell what it does
+   without decoding a glyph. Small enough to sit on the nameplate's corner. */
 .np-mute {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  font-size: 11px;
-  line-height: 20px;
-  border-radius: 50%;
+  top: -9px;
+  right: -6px;
+  padding: 1px 7px;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 15px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(14, 17, 26, 0.95);
+  background: rgba(28, 7, 9, 0.95);
+  color: var(--text-dim);
   cursor: pointer;
 }
-.np-mute.on { background: var(--red); border-color: var(--red); }
+.np-mute.on { background: var(--red); border-color: var(--red); color: #fff; }
 video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
 
 /* ---- Boot cover: what you look at while the socket hands you your seat ---- */

@@ -140,7 +140,7 @@ export function wireInstallButton(buttonEl) {
       alert(
         'Install on your computer:\n\n' +
         'Click the install icon in your browser\'s address bar (Chrome/Edge), ' +
-        'or open the browser menu and choose "Install Pineapple Poker".'
+        'or open the browser menu and choose "Install Reg-Poker Online".'
       );
     }
   });

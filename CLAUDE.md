@@ -14,7 +14,7 @@
 
 ## Project
 
-Pineapple Poker — a PokerNow-style play-money poker web app. Node 22 +
+Reg-Poker Online — a PokerNow-style play-money poker web app. Node 22 +
 Express + Socket.IO server, vanilla-JS ES-module frontend (no build step),
 SQLite via built-in `node:sqlite`, installable PWA with Web Push.
 

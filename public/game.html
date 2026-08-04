@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Pineapple Poker — Table</title>
+  <title>Reg-Poker Online — Table</title>
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2c0a14">
@@ -18,7 +18,7 @@
        the first table state. Never blocks the table — purely a cover. -->
   <div id="boot">
     <div class="boot-inner">
-      <svg class="boot-mark" viewBox="0 0 520 146" role="img" aria-label="Pineapple Poker Room">
+      <svg class="boot-mark" viewBox="0 0 520 146" role="img" aria-label="Reg-Poker Online">
         <defs>
           <linearGradient id="bootGold" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#fff3c4" /><stop offset=".38" stop-color="#e8c65c" />
@@ -28,8 +28,8 @@
         </defs>
         <text class="boot-word" x="260" y="72" text-anchor="middle" font-size="62"
               fill="url(#bootGold)" stroke="#1c0709" stroke-width="18"
-              stroke-linejoin="round" paint-order="stroke">Pineapple</text>
-        <text class="boot-sub" x="260" y="126" text-anchor="middle" font-size="21" fill="#e2c9ad">POKER ROOM</text>
+              stroke-linejoin="round" paint-order="stroke">Reg-Poker</text>
+        <text class="boot-sub" x="264" y="126" text-anchor="middle" font-size="21" fill="#e2c9ad">ONLINE</text>
       </svg>
       <div class="boot-chips" aria-hidden="true"><i></i><i></i><i></i></div>
       <p class="boot-note">Dealing you in…</p>
@@ -38,33 +38,35 @@
 
   <div id="app">
     <header id="top-bar">
-      <a class="pineapple-mark" href="/">🍍 <span class="pine">Pineapple</span> Poker</a>
+      <a class="brand-mark" href="/"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></a>
       <span id="game-badge"></span>
       <button id="fair-chip" class="fair-chip hidden" title="Provably-fair shuffle — click for details"></button>
       <a id="account-chip" class="account-chip hidden" href="/me"></a>
       <div class="top-actions">
-        <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">🔗 Invite</button>
+        <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">Invite</button>
         <span class="react-wrap">
-          <button id="react-btn" class="btn-ghost btn top-btn" title="React">😀</button>
+          <button id="react-btn" class="btn-ghost btn top-btn" title="Send a reaction">React</button>
           <div id="react-picker" class="hidden"></div>
         </span>
-        <button id="av-join" class="btn-ghost btn top-btn hidden" title="Turn on your camera & mic">📹 Video</button>
+        <button id="av-join" class="btn-ghost btn top-btn hidden" title="Turn on your camera and mic">Start video</button>
         <span id="av-live" class="av-live hidden">
-          <button id="av-cam" class="btn-ghost btn top-btn" title="Turn camera off">📷</button>
-          <button id="av-mic" class="btn-ghost btn top-btn" title="Mute mic">🎙️</button>
-          <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">🖼️</button>
-          <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video &amp; voice">📹✕</button>
+          <button id="av-cam" class="btn-ghost btn top-btn" title="Turn your camera off">Camera</button>
+          <button id="av-mic" class="btn-ghost btn top-btn" title="Mute your mic">Mic</button>
+          <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">Frame</button>
+          <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video and voice">End video</button>
         </span>
         <select id="name-font" class="top-select" title="The font your name is shown in" aria-label="Your name font"></select>
-        <button id="table-img-btn" class="btn-ghost btn top-btn" title="Put a picture on the table (everyone sees it)">🖼️</button>
+        <button id="avatar-btn" class="btn-ghost btn top-btn" title="Your picture, shown in your seat when your camera is off">Profile pic</button>
+        <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        <button id="table-img-btn" class="btn-ghost btn top-btn" title="Put a picture on the table (everyone sees it)">Table pic</button>
         <input type="file" id="table-img-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <input type="file" id="cam-frame-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
-        <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on/off">🔊</button>
-        <button id="deck-toggle" class="btn-ghost btn top-btn" title="Four-color deck on/off">🃏</button>
-        <button id="push-bell" class="btn-ghost btn top-btn" title="Turn alerts when you're away">🔕</button>
-        <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">⚙️ Host</button>
+        <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on or off">Sound</button>
+        <button id="deck-toggle" class="btn-ghost btn top-btn" title="Four-colour deck on or off">Deck</button>
+        <button id="push-bell" class="btn-ghost btn top-btn" title="Alerts when it's your turn and you're away">Alerts</button>
+        <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">Host</button>
         <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
-        <button id="panel-toggle" class="btn-ghost btn top-btn" title="Chat and logs">💬<span id="unread-badge" class="hidden"></span><span id="seatreq-badge" class="req-badge hidden"></span></button>
+        <button id="panel-toggle" class="btn-ghost btn top-btn" title="Chat and logs">Chat<span id="unread-badge" class="hidden"></span><span id="seatreq-badge" class="req-badge hidden"></span></button>
       </div>
     </header>
 
@@ -89,7 +91,7 @@
         <button data-tab="log" class="tab">Log</button>
         <button data-tab="ledger" class="tab">Ledger</button>
         <button data-tab="fair" class="tab">Verifying Integrity</button>
-        <button id="panel-close" class="tab tab-close">✕</button>
+        <button id="panel-close" class="tab tab-close" title="Close this panel">Close</button>
       </div>
       <div id="tab-chat" class="tab-body">
         <div id="chat-list" class="scroll-list"></div>
@@ -182,6 +184,21 @@
           <input id="h-72" type="number" min="1" step="1" disabled>
         </div>
       </div>
+      <div class="row hidden" id="h-747-row">
+        <div class="field">
+          <label for="h-747-ante">747 ante (per hand)</label>
+          <input id="h-747-ante" type="number" min="1" step="1">
+        </div>
+        <div class="field">
+          <label for="h-747-cap">747 most you can pay</label>
+          <input id="h-747-cap" type="number" min="0" step="1">
+        </div>
+      </div>
+      <p class="hint hidden" id="h-747-note">
+        Everyone antes every hand. Only the best hand among the players who hold
+        plays the dealer — everyone else pays the pot, up to this cap, into the
+        <em>next</em> hand's pot. Losing to the dealer pays the same.
+      </p>
       <div class="option-toggles">
         <label class="toggle"><input type="checkbox" id="h-straddle"><span>Straddle</span></label>
         <label class="toggle"><input type="checkbox" id="h-rabbit"><span>Rabbit hunt</span></label>

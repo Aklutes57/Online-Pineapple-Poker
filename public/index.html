@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pineapple Poker — Play Poker with Friends</title>
+  <title>Reg-Poker Online — Play Poker with Friends</title>
   <meta name="description" content="Free private poker tables for you and your friends. No downloads, no sign-ups, no real money. Texas Hold'em, Pineapple, Crazy Pineapple, and Pot Limit Omaha.">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -17,7 +17,7 @@
 <body>
   <header class="site-header">
     <div class="wrap">
-      <span class="pineapple-mark">🍍 <span class="pine">Pineapple</span> Poker</span>
+      <span class="brand-mark"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></span>
       <nav>
         <a href="#how">How it works</a>
         <a href="#games">Games</a>
@@ -32,7 +32,7 @@
   <main>
     <section class="hero">
       <div class="wrap">
-        <svg class="hero-mark" viewBox="0 0 760 176" role="img" aria-label="Pineapple Poker Room">
+        <svg class="hero-mark" viewBox="0 0 760 176" role="img" aria-label="Reg-Poker Online">
           <defs>
             <linearGradient id="heroGold" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stop-color="#fff3c4" /><stop offset=".38" stop-color="#e8c65c" />
@@ -43,18 +43,20 @@
           <g class="hero-bubble">
             <text x="380" y="96" text-anchor="middle" font-size="84"
                   fill="url(#heroGold)" stroke="#1c0709" stroke-width="24"
-                  stroke-linejoin="round" paint-order="stroke">Pineapple</text>
+                  stroke-linejoin="round" paint-order="stroke">Reg-Poker</text>
             <text x="380" y="96" text-anchor="middle" font-size="84"
                   fill="none" stroke="#fff6d8" stroke-width="1.6" opacity=".9"
-                  stroke-linejoin="round" transform="translate(-2,-3)">Pineapple</text>
+                  stroke-linejoin="round" transform="translate(-2,-3)">Reg-Poker</text>
           </g>
-          <text class="hero-sub" x="380" y="150" text-anchor="middle" font-size="30" fill="#f0dfb6">POKER ROOM</text>
+          <!-- x is nudged by half the .hero-sub letter-spacing: the trailing space is in
+               the advance width but draws nothing, so text-anchor="middle" alone sits left. -->
+          <text class="hero-sub" x="386.3" y="150" text-anchor="middle" font-size="30" fill="#f0dfb6">ONLINE</text>
           <g stroke="#c9a227" stroke-width="2.5" stroke-linecap="round">
-            <line x1="62" y1="138" x2="192" y2="138" /><line x1="568" y1="138" x2="698" y2="138" />
+            <line x1="176" y1="138" x2="248" y2="138" /><line x1="512" y1="138" x2="584" y2="138" />
           </g>
           <g fill="#c9a227">
-            <rect x="196" y="134" width="8" height="8" transform="rotate(45 200 138)" />
-            <rect x="556" y="134" width="8" height="8" transform="rotate(45 560 138)" />
+            <rect x="258" y="134" width="8" height="8" transform="rotate(45 262 138)" />
+            <rect x="494" y="134" width="8" height="8" transform="rotate(45 498 138)" />
           </g>
         </svg>
         <h1 class="hero-line">Play poker with your friends.<br><span class="accent">Right now. Right here.</span></h1>
@@ -64,7 +66,7 @@
         </p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-xl" id="start-btn">Start a New Game</button>
-          <button class="btn btn-ghost btn-install hidden" id="install-btn">📲 Install the app</button>
+          <button class="btn btn-ghost btn-install hidden" id="install-btn">Install the app</button>
         </div>
         <p class="fine">Free play-money poker · works on iPhone, Android &amp; laptops</p>
       </div>
@@ -140,7 +142,7 @@
 
   <footer class="site-footer">
     <div class="wrap">
-      <span class="pineapple-mark">🍍 <span class="pine">Pineapple</span> Poker</span>
+      <span class="brand-mark"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></span>
       <p>Play-money poker for friends. No gambling, no real currency, just fun.</p>
     </div>
   </footer>
@@ -188,6 +190,21 @@
           </select>
         </div>
       </div>
+      <div class="row hidden" id="c-747-row">
+        <div class="field">
+          <label for="c-747-ante">747 ante (per hand)</label>
+          <input id="c-747-ante" type="number" min="1" step="1" value="2">
+        </div>
+        <div class="field">
+          <label for="c-747-cap">747 most you can pay</label>
+          <input id="c-747-cap" type="number" min="0" step="1" value="25">
+        </div>
+      </div>
+      <p class="hint hidden" id="c-747-note">
+        Everyone antes every hand. Only the best hand among the players who hold
+        gets to play the dealer — everyone else pays the pot, up to this cap,
+        into the <em>next</em> hand's pot. Losing to the dealer pays the same.
+      </p>
       <div class="row">
         <div class="field">
           <label class="check-label" for="c-72">

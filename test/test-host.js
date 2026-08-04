@@ -114,13 +114,18 @@ function check(name, cond) {
   const { game, host } = createGame({}, 'Host', null);
   const broke = game.addPlayer('Broke', null);
   const rich = game.addPlayer('Rich', null);
-  for (const [p, seat, stack] of [[host, 0, 200], [broke, 1, 200], [rich, 2, 200]]) {
+  for (const [p, seat, stack] of [[host, 0, 200], [rich, 2, 200]]) {
     p.connected = true;
     p.status = 'seated';
     p.seatIndex = seat;
     p.stack = stack;
     game.seats[seat] = p.id;
   }
+  // Broke goes in through the real door — request, host approves — because the
+  // "no second approval" rule keys off having been approved once.
+  broke.connected = true;
+  game.requestSeat(broke, 200, 1);
+  game.approveSeat(broke.id, true);
   check('everyone with chips is dealt in', game.eligiblePlayers().length === 3);
 
   broke.stack = 0;
@@ -137,14 +142,54 @@ function check(name, cond) {
   const ok = game.rebuy(broke, 200);
   check('a re-buy is accepted', ok.ok === true && broke.stack === 200);
   check('re-buying deals them back in', game.eligiblePlayers().some((p) => p.id === broke.id));
-  check('the re-buy lands on the ledger',
-    game.ledgerRows().find((r) => r.playerId === broke.id)?.buyIns === 200);
+  check('the re-buy lands on the ledger next to the first buy-in',
+    game.ledgerRows().find((r) => r.playerId === broke.id)?.buyIns === 400);
 
   // Or they can just leave the seat instead.
   broke.stack = 0;
   const left = game.removeFromSeat(broke, 'leave');
   check('a busted player can stand up instead', left.ok === true && broke.status !== 'seated');
   check('standing up frees the seat', game.seats[1] === null);
+
+  // …and sitting back down does NOT go back through the host: the host let
+  // them in once, and that holds for the rest of the session.
+  const back = game.requestSeat(broke, 200);
+  check('buying back in after standing up needs no host approval',
+    back.ok === true && broke.status === 'seated' && broke.stack === 200);
+  check('the buy-back-in is on the ledger too',
+    game.ledgerRows().find((r) => r.playerId === broke.id)?.buyIns === 600);
+  check('an auto-seated player never shows up in the host queue',
+    [...game.players.values()].every((p) => p.status !== 'requesting'));
+}
+
+// ---- a first-timer still waits, and a kicked player does not walk back in ----
+{
+  const { game, host } = createGame({}, 'Host', null);
+  host.connected = true;
+  host.status = 'seated';
+  host.seatIndex = 0;
+  host.stack = 200;
+  game.seats[0] = host.id;
+
+  const newcomer = game.addPlayer('Newcomer', null);
+  newcomer.connected = true;
+  const first = game.requestSeat(newcomer, 200);
+  check('a first-timer still waits for the host',
+    first.ok === true && newcomer.status === 'requesting');
+  game.approveSeat(newcomer.id, true);
+  check('the host can still approve a first-timer', newcomer.status === 'seated');
+
+  const troublemaker = game.addPlayer('Troublemaker', null);
+  troublemaker.connected = true;
+  game.requestSeat(troublemaker, 200);
+  game.approveSeat(troublemaker.id, true);
+  check('the kicked player was seated first', troublemaker.status === 'seated');
+  game.removeFromSeat(troublemaker, 'kick');
+  check('a kick unseats them', troublemaker.status === 'spectating');
+  const sneak = game.requestSeat(troublemaker, 200);
+  check('a kicked player goes back through the host',
+    sneak.ok === true && troublemaker.status === 'requesting');
+  check('a kicked player is not auto-seated', troublemaker.seatIndex === null);
 }
 
 // ---- any player at the table can put a picture on the felt ----

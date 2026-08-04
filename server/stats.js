@@ -101,7 +101,7 @@ export function ledgerCsvForGame(gameId) {
   const iso = new Date(session.started_at).toISOString().slice(0, 10);
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [
-    ['Pineapple Poker ledger'],
+    ['Reg-Poker Online ledger'],
     ['Game', gameId],
     ['Date', iso],
     ['Variant', session.variant],
@@ -126,8 +126,11 @@ export function recordHandStats(game, hand) {
     const delta = player.stack - (player.handStartStack ?? player.stack);
     const won = delta > 0 ? 1 : 0;
     const potSize = hand.results?.pots?.reduce((a, p) => a + p.amount, 0) ?? 0;
-    const bestScore = s.showdownScore ?? 0;
-    const bestDesc = player.handResult?.desc ?? null;
+    // "Best hand ever made": the strongest five this player actually held, even
+    // if the table never saw it. Falls back to the shown-down score for hands
+    // recorded before the engine tracked made hands.
+    const bestScore = s.madeScore || s.showdownScore || 0;
+    const bestDesc = s.madeScore ? s.madeDesc : (player.handResult?.desc ?? null);
 
     ensureStatsRow(player.accountId);
     run(

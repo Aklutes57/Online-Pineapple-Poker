@@ -59,6 +59,9 @@ export function buildViews(game) {
       // In the A/V session (webcam + mic shared with the table).
       mediaOn: !!p.mediaOn && p.connected,
       camFrame: p.camFrame || null,
+      // Shown in the pod whenever this player's webcam isn't. Public by
+      // design — everyone at the table needs to see who they're playing.
+      avatarUrl: p.avatarUrl || null,
       nameFont: p.nameFont || DEFAULT_NAME_FONT,
       sittingOut: p.sittingOut,
       inHand,
@@ -197,6 +200,9 @@ export function buildViews(game) {
         && (p.ritVote === null || p.ritVote === undefined),
       // Busted: offer a re-buy (or standing up) rather than leaving them stuck.
       canRebuy: p.status === 'seated' && p.stack <= 0,
+      // True once the host has let this player in: sitting back down after a
+      // bust is instant, so the client must not promise a wait that won't come.
+      seatOnRequest: game.seatsItself(p),
       timeBank: Math.round((p.timeBank || 0) / 1000),
       // Private: broadcasting that a seat has Check/Fold armed would be a
       // genuine tell, worse than anything available at a live table.

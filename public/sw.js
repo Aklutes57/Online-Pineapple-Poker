@@ -1,4 +1,4 @@
-// Service worker for Pineapple Poker.
+// Service worker for Reg-Poker Online.
 //
 // This is a REALTIME app, so the worker is deliberately conservative:
 //  - /socket.io/* is never touched. Websocket upgrades bypass service
@@ -151,7 +151,7 @@ self.addEventListener('push', (event) => {
   } catch {
     data = {};
   }
-  const title = data.title || 'Pineapple Poker';
+  const title = data.title || 'Reg-Poker Online';
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || '',

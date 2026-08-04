@@ -486,7 +486,7 @@ try {
   );
   await check('manifest is served and parses', !!manifest);
   await check('manifest declares name, start_url and icons',
-    manifest.name === 'Pineapple Poker' && manifest.start_url === '/' && manifest.icons.length >= 2);
+    manifest.name === 'Reg-Poker Online' && manifest.start_url === '/' && manifest.icons.length >= 2);
   await check('manifest is linked from the page',
     await anna.locator('link[rel="manifest"]').count() === 1);
   await check('app icon is reachable',

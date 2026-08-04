@@ -167,6 +167,9 @@ export function attachSockets(io) {
         // Linked payment handles travel with the player so table-mates can pay
         // them from the ledger. Opt-in: absent unless the account set them.
         player.payments = account.prefs?.payments || null;
+        // The account's profile picture follows them to every table, so it is
+        // re-applied on each join and each reconnect.
+        if (account.avatarUrl) player.avatarUrl = account.avatarUrl;
       }
 
       // This browser's push subscription, so turn alerts reach guests too.
@@ -419,6 +422,12 @@ export function attachSockets(io) {
 
     socket.on(EVENTS.SET_NAME_FONT, withGame((game, player, payload) => {
       result(game, game.setNameFont(player, payload.font));
+    }));
+
+    // Guests have no account to hang a picture on, so their browser re-asserts
+    // the upload URL it remembers on every connect. Validated in setAvatar.
+    socket.on(EVENTS.SET_AVATAR, withGame((game, player, payload) => {
+      result(game, game.setAvatar(player, payload?.url ?? null));
     }));
 
     socket.on(EVENTS.RUN_IT_TWICE_VOTE, withGame((game, player, payload) => {

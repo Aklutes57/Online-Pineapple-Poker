@@ -10,7 +10,7 @@
 import { VARIANTS, PHASES, TIMINGS } from '../shared/constants.js';
 import * as betting from './betting.js';
 import { buildPots, payoutPots, splitPotsForBoards } from './pots.js';
-import { best7, bestOmaha, describe } from './evaluator.js';
+import { best7, bestAny, bestOmaha, describe } from './evaluator.js';
 import { shuffledDeck } from './deck.js';
 import { equity } from './equity.js';
 import { detectCooler } from './cooler.js';
@@ -106,6 +106,11 @@ export class Hand {
         aggressive: 0,
         passive: 0,
         showdownScore: 0,
+        // The best five-card hand this player actually held, whether or not it
+        // was ever shown down — "best hand ever made" on the profile means the
+        // quads you took down uncontested too, not just the ones you tabled.
+        madeScore: 0,
+        madeDesc: null,
       };
     }
     this.preflopRaises = 0;
@@ -696,6 +701,9 @@ export class Hand {
       byFold: true,
     };
     winner.handResult = { desc: null, won: pot };
+    // Nobody saw it, but they still made it. Recorded privately, on their own
+    // stats row only — the table view and the saved hand stay untouched.
+    this.recordMadeHand(winner);
     this.results.bounty = this.applySevenDeuce(winner);
     // The bounty turns the winning hand face up — if that reveal shows a
     // 6-2 as well, it gets its moment too. An unshown fold-win stays
@@ -705,6 +713,26 @@ export class Hand {
     this.ctx.log(`${winner.nickname} wins ${pot}`);
     this.ctx.changed();
     this.ctx.finished();
+  }
+
+  // Score a live player's best five against the final board and file it under
+  // their private per-hand stats. A street that never reached five cards has no
+  // made hand at all, so it records nothing.
+  recordMadeHand(player) {
+    if (!player || player.folded || !player.handStats) return;
+    const cards = [...player.holeCards, ...this.board];
+    if (cards.length < 5) return;
+    try {
+      const score = this.variant.omaha && this.board.length >= 5
+        ? bestOmaha(player.holeCards, this.board)
+        : bestAny(cards);
+      if (score > player.handStats.madeScore) {
+        player.handStats.madeScore = score;
+        player.handStats.madeDesc = describe(score);
+      }
+    } catch {
+      /* a hand this engine can't score is simply not recorded */
+    }
   }
 
   showdown() {
@@ -766,6 +794,10 @@ export class Hand {
         p.handStats.wtsd = true;
         p.handStats.wsd = won > 0;
         p.handStats.showdownScore = scores.get(p.seatIndex);
+        if (scores.get(p.seatIndex) > p.handStats.madeScore) {
+          p.handStats.madeScore = scores.get(p.seatIndex);
+          p.handStats.madeDesc = describe(scores.get(p.seatIndex));
+        }
       }
     }
     const potTotal = pots.reduce((a, p) => a + p.amount, 0);
@@ -892,6 +924,7 @@ export class Hand {
     if (this.results?.byFold && this.results.winners?.[0]?.seat === player.seatIndex) {
       this.announceSixTwo(player);
     }
+    this.ctx.handShown?.();
     this.ctx.changed();
     return { ok: true };
   }

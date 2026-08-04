@@ -1,4 +1,4 @@
-// One-off: renders public/icons/pineapple.svg into the committed PNG icon
+// One-off: renders public/icons/regpoker.svg into the committed PNG icon
 // set. Not part of the test chain — run it again only if the SVG changes:
 //   node scripts/render-icons.mjs
 
@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const iconsDir = path.join(__dirname, '..', 'public', 'icons');
-const svg = readFileSync(path.join(iconsDir, 'pineapple.svg'), 'utf8');
+const svg = readFileSync(path.join(iconsDir, 'regpoker.svg'), 'utf8');
 const svgUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 
 let browser;
@@ -37,7 +37,7 @@ for (const [file, size, scale] of TARGETS) {
   await page.setContent(`
     <style>
       html, body { margin: 0; }
-      #canvas { width: ${size}px; height: ${size}px; background: #10131c;
+      #canvas { width: ${size}px; height: ${size}px; background: #2c0a14;
                 display: flex; align-items: center; justify-content: center; }
       img { width: ${inner}px; height: ${inner}px; display: block; margin: ${pad}px; }
     </style>
