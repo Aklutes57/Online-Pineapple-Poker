@@ -1,6 +1,6 @@
 // Table-page entry: socket lifecycle, token storage, state store, dispatch.
 
-import { EVENTS, NAME_FONTS, DEFAULT_NAME_FONT } from '/shared/constants.js';
+import { EVENTS, NAME_FONTS, DEFAULT_NAME_FONT, SKINS, DEFAULT_SKIN } from '/shared/constants.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { getAccountToken, loadAccount, currentAccount, authHeaders } from '/js/auth.js';
 import { initReactions, showReaction } from '/js/reactions.js';
@@ -353,6 +353,34 @@ document.getElementById('cam-frame-input')?.addEventListener('change', (e) => {
   uploadImage(e.target.files[0], 'cam-frame', 'Webcam frame updated');
   e.target.value = '';
 });
+
+// ---- how the table looks on YOUR screen ----
+// Nobody else is affected: this is a device preference, applied before the
+// first paint so the table never flashes the wrong room.
+const skinSel = document.getElementById('skin');
+function applySkin(key) {
+  const skin = SKINS[key] ? key : DEFAULT_SKIN;
+  // Set on <html>, matching what /js/skin.js does before first paint.
+  document.documentElement.dataset.skin = skin;
+  return skin;
+}
+{
+  // skin.js already applied it in <head>; read it back rather than guessing.
+  const saved = applySkin(document.documentElement.dataset.skin || DEFAULT_SKIN);
+  if (skinSel) {
+    skinSel.innerHTML = Object.entries(SKINS)
+      .map(([key, s]) => `<option value="${key}">${s.label}</option>`)
+      .join('');
+    skinSel.value = SKINS[saved] ? saved : DEFAULT_SKIN;
+    skinSel.addEventListener('change', () => {
+      const applied = applySkin(skinSel.value);
+      try {
+        localStorage.setItem('pp:skin', applied);
+      } catch { /* private browsing */ }
+      showToast(`Table look: ${SKINS[applied].label}`, { ok: true });
+    });
+  }
+}
 
 // ---- the font your name is shown in ----
 const fontSel = document.getElementById('name-font');

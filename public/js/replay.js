@@ -59,7 +59,7 @@ function renderFairness(f) {
   }
   const verifiable = !!(f.deckCommit && Array.isArray(f.slotCommits) && Array.isArray(f.openings));
   panel.innerHTML = `
-    <h3>🔒 Provably fair</h3>
+    <h3>Verifying integrity</h3>
     <p class="fp-float" title="A [0,1) fingerprint hashed from this hand's seeds">${fmtFloat(f.float)}</p>
     <dl class="fp-list">
       <dt>Server commit</dt><dd class="mono" title="${escapeHtml(f.serverCommit || '')}">${escapeHtml(short(f.serverCommit))}</dd>

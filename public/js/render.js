@@ -166,9 +166,46 @@ function renderHeader(client) {
   const handNo = state.hand ? ` · Hand #${state.hand.handNo}` : '';
   // 747 is an ante game — there are no blinds to advertise.
   const stakes = v?.engine === '747'
-    ? `Ante ${state.settings.bigBlind}`
+    ? `Ante ${state.settings.ante747 > 0 ? state.settings.ante747 : state.settings.bigBlind}`
     : `Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}`;
   badge.textContent = `${v ? v.label : variantKey} · ${stakes}${handNo}`;
+  renderTournamentClock(state);
+}
+
+// The tournament clock: which level, how long until the blinds go up, and
+// whether you can still buy in. Absent entirely on a cash game.
+function renderTournamentClock(state) {
+  const el = document.getElementById('tourney-clock');
+  if (!el) return;
+  const t = state.tournament;
+  el.classList.toggle('hidden', !t);
+  if (!t) {
+    tourneyDeadline = null;
+    return;
+  }
+  // Kept as a deadline rather than a countdown so the tick is local and the
+  // number doesn't jump around between broadcasts.
+  tourneyDeadline = t.started && t.msToNextLevel !== null ? Date.now() + t.msToNextLevel : null;
+  el.dataset.level = String(t.level);
+  el.dataset.rebuys = t.rebuysOpen ? 'open' : 'closed';
+  paintTourneyClock();
+}
+
+let tourneyDeadline = null;
+
+function paintTourneyClock() {
+  const el = document.getElementById('tourney-clock');
+  if (!el || el.classList.contains('hidden')) return;
+  const level = el.dataset.level || '1';
+  const rebuys = el.dataset.rebuys === 'open' ? '' : ' · registration closed';
+  if (tourneyDeadline === null) {
+    el.textContent = `Tournament · level ${level} — clock starts on the first hand`;
+    return;
+  }
+  const left = Math.max(0, tourneyDeadline - Date.now());
+  const mins = Math.floor(left / 60000);
+  const secs = Math.floor((left % 60000) / 1000);
+  el.textContent = `Level ${level} · ${mins}:${String(secs).padStart(2, '0')} to the next${rebuys}`;
 }
 
 // A player's chosen face for their own name, resolved through the shared list
@@ -585,6 +622,8 @@ export function startTimerLoop(client) {
       timerMemo.deadline = deadline;
       timerMemo.startedAt = Date.now();
     }
+
+    paintTourneyClock();
 
     // The 3-2-1 reveal countdown ticks here, between broadcasts.
     const cdNum = document.getElementById('cd747-num');

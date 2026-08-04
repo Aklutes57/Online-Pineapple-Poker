@@ -82,6 +82,15 @@ function sync747Fields() {
 document.getElementById('c-variant').addEventListener('change', sync747Fields);
 sync747Fields();
 
+// Cash game is the default; picking a tournament reveals its clock settings.
+function syncFormatFields() {
+  const on = document.getElementById('c-format').value === 'tournament';
+  document.getElementById('c-tourney-row').classList.toggle('hidden', !on);
+  document.getElementById('c-tourney-note').classList.toggle('hidden', !on);
+}
+document.getElementById('c-format').addEventListener('change', syncFormatFields);
+syncFormatFields();
+
 async function createGame() {
   const nickname = document.getElementById('c-nickname').value.trim();
   if (!nickname) {
@@ -102,6 +111,9 @@ async function createGame() {
     sevenDeuceBounty: document.getElementById('c-72').checked
       ? parseInt(document.getElementById('c-72-amount').value, 10) || 0
       : 0,
+    tournament: document.getElementById('c-format').value === 'tournament',
+    levelMinutes: parseInt(document.getElementById('c-level').value, 10) || 15,
+    rebuyMinutes: Math.max(0, parseInt(document.getElementById('c-rebuy').value, 10) || 0),
     ante747: parseInt(document.getElementById('c-747-ante').value, 10) || 0,
     penaltyCap747: Math.max(0, parseInt(document.getElementById('c-747-cap').value, 10) || 0),
   };

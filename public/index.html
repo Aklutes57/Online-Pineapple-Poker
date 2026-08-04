@@ -11,6 +11,7 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="/js/skin.js"></script>
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/landing.css">
 </head>
@@ -156,6 +157,28 @@
         <input id="c-nickname" maxlength="20" placeholder="e.g. AceHigh" autocomplete="off">
       </div>
       <div class="field">
+        <label for="c-format">Format</label>
+        <select id="c-format">
+          <option value="cash" selected>Cash game — buy in and out whenever</option>
+          <option value="tournament">Tournament — blinds go up, last one standing wins</option>
+        </select>
+      </div>
+      <div class="row hidden" id="c-tourney-row">
+        <div class="field">
+          <label for="c-level">Minutes a level</label>
+          <input id="c-level" type="number" min="1" max="240" value="15">
+        </div>
+        <div class="field">
+          <label for="c-rebuy">Re-buy period (minutes)</label>
+          <input id="c-rebuy" type="number" min="0" max="1440" value="60">
+        </div>
+      </div>
+      <p class="hint hidden" id="c-tourney-note">
+        The clock starts on the first hand. Blinds climb a level at a time from
+        the ones you set below, and once the re-buy period is up, busting means
+        you're out — set it to 0 for a freezeout.
+      </p>
+      <div class="field">
         <label for="c-variant">Game</label>
         <select id="c-variant">
           <option value="holdem">Texas Hold'em</option>
@@ -177,7 +200,7 @@
       </div>
       <div class="row">
         <div class="field">
-          <label for="c-buyin">Default buy-in</label>
+          <label for="c-buyin">Starting stack</label>
           <input id="c-buyin" type="number" min="1" value="200">
         </div>
         <div class="field">

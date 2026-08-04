@@ -8,7 +8,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-or-')), '
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
-const { EVENTS } = await import('../shared/constants.js');
+const { EVENTS, BET_COORDS, BET_COORDS_PORTRAIT } = await import('../shared/constants.js');
 const SHOT = process.env.PP_SHOT_DIR || '/tmp';
 
 const { httpServer } = buildServer();
@@ -31,7 +31,8 @@ function sock(token, nick, seat) {
 }
 const host = await sock(created.token, 'Host', 0);
 const others = [];
-for (let i = 1; i <= 5; i++) others.push(await sock(null, `P${i}`, i));
+// A full ten-handed table is the worst case for both clipping and overlap.
+for (let i = 1; i <= 9; i++) others.push(await sock(null, `P${i}`, i));
 await new Promise((r) => setTimeout(r, 300));
 for (const o of others) host.s.emit(EVENTS.HOST_APPROVE_SEAT, { playerId: o.r.playerId, approve: true });
 await new Promise((r) => setTimeout(r, 300));
@@ -51,6 +52,9 @@ const views = [
   ['laptop', 1366, 768, false],
 ];
 
+const landscapeCoords = BET_COORDS;
+const portraitCoords = BET_COORDS_PORTRAIT;
+
 let bad = 0;
 for (const [name, w, h, wantUpright] of views) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h } });
@@ -62,7 +66,7 @@ for (const [name, w, h, wantUpright] of views) {
   await page.waitForSelector('#table');
   await page.waitForTimeout(800);
 
-  const m = await page.evaluate(() => {
+  const m = await page.evaluate(([landscapeCoords, portraitCoords]) => {
     const de = document.documentElement;
     const t = document.getElementById('table');
     const r = t.getBoundingClientRect();
@@ -74,6 +78,33 @@ for (const [name, w, h, wantUpright] of views) {
       return { l: Math.round(b.left - area.left), r: Math.round(b.right - area.right),
                t: Math.round(b.top - area.top), b: Math.round(b.bottom - area.bottom) };
     });
+    // A bet chip sitting on top of somebody's name makes both unreadable, so
+    // every chip is checked against every nameplate, card fan and avatar.
+    const hits = (a, b) =>
+      a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+    // Only the blinds are actually live, so every remaining anchor is probed
+    // with a stand-in chip: the check is about geometry, not about the hand.
+    const layer = document.getElementById('bets-layer');
+    const probes = [];
+    const coords = t.classList.contains('upright') ? portraitCoords : landscapeCoords;
+    const taken = new Set([...layer.querySelectorAll('.bet-chip')].map((c) => c.style.left + c.style.top));
+    coords.forEach((c) => {
+      const key = `${c.left}%${c.top}%`;
+      if (taken.has(key)) return;
+      const el = document.createElement('div');
+      el.className = 'bet-chip probe';
+      el.style.left = `${c.left}%`;
+      el.style.top = `${c.top}%`;
+      el.textContent = '8888';
+      layer.appendChild(el);
+      probes.push(el);
+    });
+    const chips = [...layer.querySelectorAll('.bet-chip')].map((c) => c.getBoundingClientRect());
+    const pods = [...document.querySelectorAll('#seats-layer .nameplate, #seats-layer .card, #seats-layer .seat-avatar')]
+      .map((n) => n.getBoundingClientRect());
+    const collisions = chips.filter((c) => pods.some((n) => hits(c, n))).length;
+    for (const el of probes) el.remove();
+
     return {
       upright: t.classList.contains('upright'),
       tw: Math.round(r.width), th: Math.round(r.height),
@@ -82,18 +113,20 @@ for (const [name, w, h, wantUpright] of views) {
       seatsOut: seats.filter((s) => s.l < -1 || s.r > 1 || s.t < -1 || s.b > 1).length,
       worst: seats.reduce((m, s) => Math.max(m, -s.l, s.r, -s.t, s.b), 0),
       seatCount: seats.length,
+      chips: chips.length,
+      collisions,
     };
-  });
+  }, [landscapeCoords, portraitCoords]);
 
   const orientOk = m.upright === wantUpright;
   const tallerThanWide = m.th > m.tw;
   const shapeOk = wantUpright ? tallerThanWide : !tallerThanWide;
-  const fits = m.overflowX <= 2 && m.seatsOut === 0;
+  const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0;
   // How much of the screen the felt covers — the point of the whole change.
   const cover = ((m.tw * m.th) / (m.iw * m.ih) * 100).toFixed(0);
   const ok = orientOk && shapeOk && fits;
   if (!ok) bad++;
-  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px`);
+  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips}`);
   await page.screenshot({ path: `${SHOT}/orient-${name}.png` });
   await ctx.close();
 }

@@ -10,6 +10,7 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="/js/skin.js"></script>
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/table.css">
 </head>
@@ -40,6 +41,7 @@
     <header id="top-bar">
       <a class="brand-mark" href="/"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></a>
       <span id="game-badge"></span>
+      <span id="tourney-clock" class="tourney-clock hidden"></span>
       <button id="fair-chip" class="fair-chip hidden" title="Provably-fair shuffle — click for details"></button>
       <a id="account-chip" class="account-chip hidden" href="/me"></a>
       <div class="top-actions">
@@ -55,6 +57,7 @@
           <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">Frame</button>
           <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video and voice">End video</button>
         </span>
+        <select id="skin" class="top-select" title="How the table looks on your screen" aria-label="Table look"></select>
         <select id="name-font" class="top-select" title="The font your name is shown in" aria-label="Your name font"></select>
         <button id="avatar-btn" class="btn-ghost btn top-btn" title="Your picture, shown in your seat when your camera is off">Profile pic</button>
         <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
@@ -182,6 +185,16 @@
         <div class="field">
           <label for="h-72">7-2 bounty payout</label>
           <input id="h-72" type="number" min="1" step="1" disabled>
+        </div>
+      </div>
+      <div class="row hidden" id="h-tourney-row">
+        <div class="field">
+          <label for="h-level">Minutes a level</label>
+          <input id="h-level" type="number" min="1" max="240">
+        </div>
+        <div class="field">
+          <label for="h-rebuy">Re-buy period (minutes)</label>
+          <input id="h-rebuy" type="number" min="0" max="1440">
         </div>
       </div>
       <div class="row hidden" id="h-747-row">

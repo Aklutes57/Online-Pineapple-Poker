@@ -2,7 +2,10 @@
 // Owns the single pending flow timer (action / discard / run-out / next-hand).
 // The sockets layer sets game.onChanged and calls the public methods here.
 
-import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS, MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT } from '../shared/constants.js';
+import {
+  GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS,
+  MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT, blindsForLevel,
+} from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
 import { payoutPots } from './pots.js';
@@ -40,6 +43,15 @@ export class Game {
     this.buttonSeat = null;
     // 747: when the dealer beats everyone, the pot rides here between hands.
     this.carryPot = 0;
+    // Tournament clock. Null until the first hand is dealt, so a table that
+    // sits waiting for players doesn't burn through its blind levels.
+    this.tournamentStartedAt = null;
+    this.level = 0;
+    this.tournamentOver = false;
+    this.rebuysClosedLogged = false;
+    // The blinds the ladder is measured from — captured when the clock starts,
+    // so a later settings change can't retroactively rewrite the structure.
+    this.startingBigBlind = null;
     this.chat = [];
     this.logs = [];
     this.ledger = new Map(); // playerId -> { nickname, buyIns, cashOuts }
@@ -220,6 +232,12 @@ export class Game {
     // buying back in — they seat themselves. Every bound above (buy-in range,
     // seat free, table not full) has already run, so this path is validated
     // exactly as the approved one is.
+    if (!this.rebuysOpen()) {
+      player.status = 'spectating';
+      player.pendingBuyIn = 0;
+      player.requestedSeat = null;
+      return { ok: false, error: 'registration is closed — this one plays out' };
+    }
     if (player.id === this.hostId || this.seatsItself(player)) {
       return this.approveSeat(player.id, true);
     }
@@ -391,6 +409,9 @@ export class Game {
   // ledger so the books still balance.
   rebuy(player, amount) {
     if (player.status !== 'seated') return { ok: false, error: 'not seated' };
+    if (!this.rebuysOpen()) {
+      return { ok: false, error: 'the re-buy period is over — this one plays out' };
+    }
     const { minBuyIn, maxBuyIn } = this.settings;
     const want = Number.isInteger(amount) ? amount : this.settings.defaultBuyIn;
     if (!Number.isInteger(want) || want < minBuyIn || want > maxBuyIn) {
@@ -588,7 +609,8 @@ export class Game {
     if (patch.defaultBuyIn !== undefined) next.defaultBuyIn = patch.defaultBuyIn;
     if (patch.tableTheme !== undefined) next.tableTheme = patch.tableTheme;
     for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery',
-      'sevenDeuceBounty', 'ante747', 'penaltyCap747']) {
+      'sevenDeuceBounty', 'ante747', 'penaltyCap747',
+      'tournament', 'levelMinutes', 'rebuyMinutes']) {
       if (patch[key] !== undefined) next[key] = patch[key];
     }
     // The game can change mid-session; an unknown variant keeps the current
@@ -655,9 +677,86 @@ export class Game {
     return eligible[0];
   }
 
+  // ---- tournament clock ----
+
+  isTournament() {
+    return !!this.settings.tournament;
+  }
+
+  // Which blind level the clock is on right now. Levels only ever advance
+  // between hands: a hand always finishes on the blinds it was dealt with.
+  levelNow() {
+    if (!this.isTournament() || !this.tournamentStartedAt) return 0;
+    const minutes = this.settings.levelMinutes;
+    if (minutes <= 0) return 0;
+    return Math.floor((Date.now() - this.tournamentStartedAt) / (minutes * 60_000));
+  }
+
+  // Re-buys close once the re-buy period is up. 0 minutes means a freezeout:
+  // one bullet, from the very first hand.
+  rebuysOpen() {
+    if (!this.isTournament()) return true;
+    // Before the first hand nothing has started, so registration is open —
+    // including for a freezeout, where the window shuts the moment cards fly.
+    if (!this.tournamentStartedAt) return true;
+    return Date.now() - this.tournamentStartedAt < this.settings.rebuyMinutes * 60_000;
+  }
+
+  // Milliseconds until the blinds go up; null when there is no clock running.
+  msToNextLevel() {
+    if (!this.isTournament() || !this.tournamentStartedAt) return null;
+    const each = this.settings.levelMinutes * 60_000;
+    if (each <= 0) return null;
+    const elapsed = Date.now() - this.tournamentStartedAt;
+    return each - (elapsed % each);
+  }
+
+  // Called between hands only. Starts the clock on the first hand, then raises
+  // the blinds whenever the level has ticked over.
+  advanceTournamentClock() {
+    if (!this.isTournament()) return;
+    if (!this.tournamentStartedAt) {
+      this.tournamentStartedAt = Date.now();
+      this.startingBigBlind = this.settings.bigBlind;
+      this.level = 0;
+      this.addLog(
+        `Tournament clock started — level 1, blinds ${this.settings.smallBlind}/${this.settings.bigBlind}, ` +
+        `${this.settings.levelMinutes} minutes a level`
+      );
+      return;
+    }
+    const now = this.levelNow();
+    if (now === this.level) return;
+    this.level = now;
+    const { smallBlind, bigBlind } = blindsForLevel(this.startingBigBlind, now);
+    this.settings = { ...this.settings, smallBlind, bigBlind };
+    this.addLog(`Level ${now + 1} — blinds up to ${smallBlind}/${bigBlind}`);
+    if (!this.rebuysOpen() && !this.rebuysClosedLogged) {
+      this.rebuysClosedLogged = true;
+      this.addLog('Re-buy period is over — from here it plays out to one winner');
+    }
+  }
+
+  // The end of a tournament: nobody else can buy in, so the last player with
+  // chips has won it. The table pauses rather than closing, so the ledger and
+  // the hand history stay right there to look at.
+  declareTournamentWinner(winner) {
+    if (this.tournamentOver) return;
+    this.tournamentOver = true;
+    this.status = GAME_STATUS.PAUSED;
+    this.clearTimer();
+    this.addLog(
+      winner
+        ? `${winner.nickname} wins the tournament with ${winner.stack} chips`
+        : 'The tournament is over'
+    );
+    this.emitChanged();
+  }
+
   startHand() {
     if (this.status !== GAME_STATUS.RUNNING || this.closed) return;
     if (this.currentHand && !this.currentHand.finished) return;
+    this.advanceTournamentClock();
     const s = this.settings;
     const is747 = VARIANTS[s.variant]?.engine === '747';
 
@@ -671,6 +770,12 @@ export class Game {
     }
     if (players.length < 2) {
       this.currentHand = null;
+      // A tournament past its re-buy window can't refill, so one player left
+      // with chips is the finish, not a table waiting for company.
+      if (this.isTournament() && !this.rebuysOpen() && this.tournamentStartedAt) {
+        this.declareTournamentWinner(players[0] ?? null);
+        return;
+      }
       this.addLog(
         is747
           ? 'Waiting for at least 2 players who can cover the ante…'
@@ -1089,6 +1194,9 @@ export function sanitizeSettings(s) {
     sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, MAX_CHIPS, 0),
     ante747: bounded(s.ante747, 0, MAX_CHIPS, DEFAULT_SETTINGS.ante747),
     penaltyCap747: bounded(s.penaltyCap747, 0, MAX_CHIPS, DEFAULT_SETTINGS.penaltyCap747),
+    tournament: !!s.tournament,
+    levelMinutes: bounded(s.levelMinutes, 1, 240, DEFAULT_SETTINGS.levelMinutes),
+    rebuyMinutes: bounded(s.rebuyMinutes, 0, 1440, DEFAULT_SETTINGS.rebuyMinutes),
   };
 }
 

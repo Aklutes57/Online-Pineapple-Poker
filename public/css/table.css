@@ -107,7 +107,7 @@ body.disconnected::after {
   font-size: 13px;
   border-radius: 999px;
   border: 2px solid var(--accent);
-  background: rgba(28, 7, 9, 0.55);
+  background: var(--ghost-bg);
   color: var(--text);
 }
 
@@ -174,14 +174,14 @@ body.disconnected::after {
   height: 504px;
   transform-origin: center center;
   background:
-    radial-gradient(ellipse at 50% 36%, #1a8f68 0%, var(--felt) 52%, var(--felt-dark) 100%);
+    radial-gradient(ellipse at 50% 36%, var(--felt-hi) 0%, var(--felt) 52%, var(--felt-dark) 100%);
   /* Walnut rail with a polished brass ring on its inside edge. */
   border: 16px solid var(--rail);
   border-radius: 50% / 52%;
   box-shadow:
-    inset 0 0 0 4px var(--accent),
+    inset 0 0 0 4px var(--rail-ring),
     inset 0 0 70px rgba(0, 0, 0, 0.5),
-    0 0 0 2px var(--accent-dark),
+    0 0 0 2px var(--rail-edge),
     0 20px 64px rgba(0, 0, 0, 0.6);
 }
 
@@ -198,7 +198,7 @@ body.disconnected::after {
   content: '';
   position: absolute;
   inset: 26px;
-  border: 1px solid rgba(201, 162, 39, 0.42);
+  border: 1px solid var(--rail-ring);
   border-radius: 50% / 52%;
   pointer-events: none;
 }
@@ -233,9 +233,9 @@ body.disconnected::after {
 
 /* Two boards means half the vertical room each. */
 #board.two-boards .card {
+  --face: calc(var(--board-card-w) * 0.74);
   width: calc(var(--board-card-w) * 0.74);
   height: calc(var(--board-card-h) * 0.74);
-  font-size: calc(var(--board-card-w) * 0.32);
 }
 
 .card.rabbit {
@@ -245,9 +245,9 @@ body.disconnected::after {
 }
 
 #board .card {
+  --face: var(--board-card-w);
   width: var(--board-card-w);
   height: var(--board-card-h);
-  font-size: calc(var(--board-card-w) * 0.42);
 }
 
 #board.two-boards .board-row:nth-child(2) {
@@ -261,7 +261,7 @@ body.disconnected::after {
   padding: 4px 16px;
   font-size: 15px;
   font-weight: 600;
-  color: #ffe9a8;
+  color: var(--chip-ink);
 }
 
 #center-message {
@@ -278,7 +278,7 @@ body.disconnected::after {
 #center-message .win-line {
   font-size: 18px;
   font-weight: 700;
-  color: #ffe9a8;
+  color: var(--chip-ink);
 }
 
 /* ---- seats ---- */
@@ -346,14 +346,14 @@ body.disconnected::after {
 }
 
 .cards-fan.mine .card {
+  --face: calc(var(--card-w) * 1.42);
   width: calc(var(--card-w) * 1.42);
   height: calc(var(--card-h) * 1.42);
-  font-size: calc(var(--card-w) * 0.58);
 }
 
 .nameplate {
   position: relative;
-  background: linear-gradient(rgba(93, 17, 34, .96), rgba(58, 15, 27, .96));
+  background: linear-gradient(var(--plate-a), var(--plate-b));
   border: 2px solid var(--accent);
   border-radius: 999px;
   padding: 6px 14px;
@@ -483,9 +483,9 @@ body.disconnected::after {
 .bet-chip {
   position: absolute;
   transform: translate(-50%, -50%);
-  background: rgba(10, 12, 18, 0.85);
+  background: var(--plate-b);
   border: 1.5px solid var(--accent);
-  color: #ffe9a8;
+  color: var(--chip-ink);
   border-radius: 14px;
   padding: 2px 10px;
   font-size: 12.5px;
@@ -502,30 +502,46 @@ body.disconnected::after {
 
 /* ---- cards ---- */
 
+/* Every card face is sized from --face, so a seat card, your own bigger cards
+   and the board all keep the same proportions. Rank and suit are set to fill
+   the face the way a real card's index does, rather than floating small in the
+   middle of it. */
 .card {
+  --face: var(--card-w);
   width: var(--card-w);
   height: var(--card-h);
-  background: #f4f6fb;
-  color: #1c2230;
+  background: var(--card-face);
+  color: var(--card-ink);
   border-radius: 6px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
   align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: calc(var(--card-w) * 0.44);
+  padding: 3% 0 5%;
+  font-weight: 900;
   line-height: 1;
+  letter-spacing: -0.04em;
   user-select: none;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.card .rank {
+  font-size: calc(var(--face) * 0.86);
+  line-height: 0.82;
 }
 
 .card .suit {
-  font-size: 1.1em;
+  font-size: calc(var(--face) * 0.62);
+  line-height: 0.8;
+  letter-spacing: 0;
+  margin-top: calc(var(--face) * -0.04);
 }
 
-/* "10" is the only two-character rank — shrink it a touch to fit. */
+/* "10" is the only two-character rank — it gets the width to itself. */
 .card[data-card^='T'] .rank {
-  font-size: 0.82em;
+  font-size: calc(var(--face) * 0.56);
+  letter-spacing: -0.08em;
 }
 
 /* Four-color deck: spades stay black, hearts red, diamonds go blue and
@@ -539,13 +555,13 @@ body.disconnected::after {
 }
 
 .card.red {
-  color: #c0392b;
+  color: var(--card-red);
 }
 
 .card.back {
   background:
-    repeating-linear-gradient(45deg, #27427c 0 6px, #1d3260 6px 12px);
-  border: 3px solid #f4f6fb;
+    repeating-linear-gradient(45deg, var(--card-back-a) 0 6px, var(--card-back-b) 6px 12px);
+  border: 3px solid var(--card-face);
 }
 
 .card.dealt {
@@ -632,7 +648,7 @@ body.disconnected::after {
   display: block;
   font-size: 10.5px;
   color: var(--text-dim);
-  background: rgba(10, 12, 18, 0.7);
+  background: var(--plate-b);
   border-radius: 8px;
   padding: 0 6px;
   margin-top: 2px;
@@ -1291,7 +1307,7 @@ td.dim { color: var(--text-dim); }
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #ffe9a8;
+  color: var(--chip-ink);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
@@ -1299,12 +1315,12 @@ td.dim { color: var(--text-dim); }
 .hand-now {
   margin-top: 3px;
   background: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(255, 233, 168, 0.35);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1px 10px;
   font-size: 11.5px;
   font-weight: 600;
-  color: #ffe9a8;
+  color: var(--chip-ink);
   white-space: nowrap;
   z-index: 2;
 }
@@ -1320,7 +1336,7 @@ td.dim { color: var(--text-dim); }
 .countdown-747 {
   font-size: 64px;
   font-weight: 800;
-  color: #ffe9a8;
+  color: var(--chip-ink);
   text-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
   animation: natural-pulse 0.5s ease-in-out infinite alternate;
 }
@@ -1340,15 +1356,15 @@ td.dim { color: var(--text-dim); }
 
 /* ---- provably-fair chip + panel ---- */
 .fair-chip {
-  background: rgba(245,197,66,0.14); color: #f5c542; border: 1px solid rgba(245,197,66,0.35);
+  background: var(--ghost-hover); color: var(--accent-lite); border: 1px solid var(--accent);
   border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.fair-chip:hover { background: rgba(245,197,66,0.24); }
+.fair-chip:hover { background: var(--ghost-bg); border-color: var(--accent-lite); }
 #fair-panel { padding: 4px 2px; }
 #fair-panel .fp-lead { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 12px; }
 #fair-panel .fp-float {
-  font-size: 24px; font-weight: 700; color: #f5c542; margin: 0 0 12px;
+  font-size: 24px; font-weight: 700; color: var(--accent-lite); margin: 0 0 12px;
   font-variant-numeric: tabular-nums;
 }
 #fair-panel .fp-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; margin: 0 0 14px; }
@@ -1440,7 +1456,7 @@ video.seat-cam.cam-off { visibility: hidden; }
   line-height: 15px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(28, 7, 9, 0.95);
+  background: var(--bg-panel);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -1458,7 +1474,7 @@ video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
   background:
     radial-gradient(78% 60% at 50% 34%, rgba(255, 214, 140, .16), transparent 66%),
     repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 9px),
-    linear-gradient(#4a1524, #2c0a14 62%, #1c0709);
+    linear-gradient(var(--bg-raised), var(--bg) 62%, var(--ink));
   transition: opacity .45s ease;
 }
 #boot.gone { opacity: 0; pointer-events: none; }
@@ -1504,3 +1520,18 @@ video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
   .boot-chips i { animation: none; opacity: .85; }
   #boot { transition: none; }
 }
+
+/* ---- tournament clock ---- */
+.tourney-clock {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--accent-lite);
+  background: var(--ghost-bg);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tourney-clock[data-rebuys='closed'] { border-color: var(--red); }

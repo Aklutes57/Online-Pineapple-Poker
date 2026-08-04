@@ -81,6 +81,8 @@ export function initPanels(client) {
       straddle: document.getElementById('h-straddle').checked,
       rabbitHunt: document.getElementById('h-rabbit').checked,
       runItTwice: document.getElementById('h-rit').checked,
+      levelMinutes: parseInt(document.getElementById('h-level').value, 10) || 15,
+      rebuyMinutes: Math.max(0, parseInt(document.getElementById('h-rebuy').value, 10) || 0),
       ante747: parseInt(document.getElementById('h-747-ante').value, 10) || 0,
       penaltyCap747: Math.max(0, parseInt(document.getElementById('h-747-cap').value, 10) || 0),
     });
@@ -181,7 +183,7 @@ function renderFairness(client) {
   const floatStr = hand ? Number(hand.float).toFixed(6) : '—';
   if (chip) {
     chip.classList.remove('hidden');
-    chip.textContent = `🔒 ${floatStr}`;
+    chip.textContent = `Shuffle ${floatStr}`;
   }
   if (!panel) return;
 
@@ -498,6 +500,9 @@ function sync747Fields() {
 function openHostModal(client) {
   const s = client.state.settings;
   document.getElementById('h-variant').value = s.variant;
+  document.getElementById('h-level').value = String(s.levelMinutes ?? 15);
+  document.getElementById('h-rebuy').value = String(s.rebuyMinutes ?? 60);
+  document.getElementById('h-tourney-row').classList.toggle('hidden', !s.tournament);
   document.getElementById('h-747-ante').value = String(s.ante747 || s.bigBlind);
   document.getElementById('h-747-cap').value = String(s.penaltyCap747 ?? 0);
   sync747Fields();

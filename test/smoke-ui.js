@@ -306,7 +306,7 @@ try {
   await check('the live table shows a provably-fair chip',
     !(await anna.locator('#fair-chip').getAttribute('class')).includes('hidden'));
   const fairFloat = await anna.textContent('#fair-chip');
-  await check('the fair chip shows a hashed float for the hand', /🔒\s*0\.\d{4}/.test(fairFloat));
+  await check('the fair chip shows a hashed float for the hand', /Shuffle\s*0\.\d{4}/.test(fairFloat));
 
   await anna.click('#fair-chip');
   await anna.waitForSelector('#tab-fair:not(.hidden)');
@@ -323,7 +323,7 @@ try {
   // confirms every shown card — while folded hands stay sealed.
   await replay.waitForSelector('#rp-fairness h3');
   await check('the replay fairness panel renders with the commitment',
-    /Provably fair/.test(await replay.textContent('#rp-fairness')));
+    /Verifying integrity/i.test(await replay.textContent('#rp-fairness')));
   await replay.click('#fp-verify');
   await replay.waitForSelector('#fp-result .fp-checks');
   await check('the in-browser verifier confirms the deal',
@@ -499,6 +499,58 @@ try {
   );
   await check('vapid public key served', typeof vapid.key === 'string' && vapid.key.length > 80);
   await check('push bell is present at the table', await anna.locator('#push-bell').count() === 1);
+
+  // ---- per-player table skins: same room, three different looks ----
+  const skinOptions = await anna.locator('#skin option').count();
+  await check('every table skin is offered', skinOptions === 3);
+  const geometry = async () => anna.evaluate(() => {
+    const r = (sel) => [...document.querySelectorAll(sel)].map((e) => {
+      const b = e.getBoundingClientRect();
+      return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
+    });
+    return JSON.stringify({ btns: r('#top-bar button'), seats: r('#seats-layer .seat') });
+  });
+  const velvetGeo = await geometry();
+  const velvetFelt = await anna.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--felt').trim());
+  await anna.selectOption('#skin', 'tour');
+  await anna.waitForTimeout(300);
+  const tourFelt = await anna.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--felt').trim());
+  await check('picking a skin repaints the room', tourFelt !== velvetFelt && tourFelt.length > 0);
+  await check('a skin never moves anything', (await geometry()) === velvetGeo);
+  await anna.reload();
+  await anna.waitForSelector('#top-bar');
+  await check('the chosen skin survives a reload',
+    await anna.evaluate(() => document.documentElement.dataset.skin === 'tour'));
+  await check('the skin is applied before the first paint, not after',
+    await anna.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--felt').trim() !== ''));
+  await anna.selectOption('#skin', 'velvet');
+  await anna.waitForTimeout(200);
+
+  // ---- tournament format lives in the create pop-up, cash game is default ----
+  const tess = await newPage('tess');
+  await tess.goto(base);
+  await tess.click('#start-btn');
+  await check('a new table is a cash game by default',
+    await tess.inputValue('#c-format') === 'cash');
+  await check('the tournament clock settings stay hidden for a cash game',
+    (await tess.locator('#c-tourney-row').getAttribute('class')).includes('hidden'));
+  await tess.selectOption('#c-format', 'tournament');
+  await check('picking a tournament reveals its clock settings',
+    !(await tess.locator('#c-tourney-row').getAttribute('class')).includes('hidden'));
+  await tess.fill('#c-nickname', 'Tess');
+  await tess.fill('#c-level', '12');
+  await tess.fill('#c-rebuy', '30');
+  await tess.click('#c-create');
+  await tess.waitForURL('**/games/**');
+  await tess.click('.empty-seat-btn');
+  await tess.click('#j-request');
+  await tess.waitForSelector('.seat.me .nameplate');
+  await tess.waitForSelector('#tourney-clock:not(.hidden)');
+  const clockText = await tess.textContent('#tourney-clock');
+  await check('a tournament table shows its clock', /level 1/i.test(clockText));
 
   console.log('smoke-ui: all checks passed');
 } catch (err) {

@@ -143,7 +143,29 @@ export const DEFAULT_SETTINGS = {
   ante747: 0,
   // Cap on the 747 penalty. A loser pays min(pot, cap); 0 turns penalties off.
   penaltyCap747: 25,
+  // Tournament. Off means a cash game, which is what every table was before
+  // this existed and still is unless you ask for otherwise.
+  tournament: false,
+  levelMinutes: 15,   // how long each blind level lasts
+  rebuyMinutes: 60,   // re-buys allowed for this long; 0 = freezeout from hand 1
 };
+
+// A tournament's blind ladder, as multiples of the starting big blind. Each
+// level's small blind is half its big blind, rounded up, so the ratio holds at
+// every level without carrying a second table of numbers.
+export const BLIND_LADDER = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256];
+
+// The blinds for a level index, from the table's starting big blind. Past the
+// end of the ladder each further level doubles, so a long tournament never
+// stalls at a fixed level.
+export function blindsForLevel(startingBigBlind, level) {
+  const last = BLIND_LADDER.length - 1;
+  const mult = level <= last
+    ? BLIND_LADDER[level]
+    : BLIND_LADDER[last] * 2 ** (level - last);
+  const bigBlind = Math.max(2, Math.round(startingBigBlind * mult));
+  return { smallBlind: Math.max(1, Math.ceil(bigBlind / 2)), bigBlind };
+}
 
 // Not a gameplay cap — blinds and buy-ins are host's choice, uncapped. This
 // only bounds chip amounts so a full table's pot always sums in exact
@@ -223,17 +245,21 @@ export const BET_COORDS = [
 ];
 
 // Bet chip anchors for the upright (portrait) table.
+// Kept clear of two things at once: the seat pod the chip belongs to (whose
+// cards stack upward, well past the nameplate) and the board in the middle of
+// the felt. On the upright table the board fills the waist of the oval, so the
+// side seats' chips sit above or below it rather than beside it.
 export const BET_COORDS_PORTRAIT = [
-  { left: 50, top: 80 },
-  { left: 36, top: 74 },
-  { left: 27, top: 59 },
-  { left: 27, top: 41 },
-  { left: 36, top: 26 },
-  { left: 50, top: 20 },
-  { left: 64, top: 26 },
-  { left: 73, top: 41 },
-  { left: 73, top: 59 },
-  { left: 64, top: 74 },
+  { left: 50, top: 76 },
+  { left: 37, top: 72 },
+  { left: 38, top: 62 },
+  { left: 38, top: 31 },
+  { left: 37, top: 20 },
+  { left: 50, top: 24 },
+  { left: 63, top: 20 },
+  { left: 62, top: 31 },
+  { left: 62, top: 62 },
+  { left: 63, top: 72 },
 ];
 
 // Fonts a player can display their own name in. Every stack is built from
@@ -250,6 +276,17 @@ export const NAME_FONTS = {
 };
 
 export const DEFAULT_NAME_FONT = 'classic';
+
+// Table skins. Purely a look: every skin redefines the same custom properties
+// in base.css, so seats, buttons and cards land in identical places whichever
+// one you pick. Chosen per player, on their own screen — two people at the same
+// table can be looking at two different rooms.
+export const SKINS = {
+  velvet: { label: 'Velvet Lounge' },
+  tour: { label: 'Tour Circuit' },
+  series: { label: 'Championship' },
+};
+export const DEFAULT_SKIN = 'velvet';
 
 // The reaction palette. Server-validated, so a client can't inject arbitrary
 // text through the reaction channel.

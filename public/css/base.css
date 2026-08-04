@@ -25,8 +25,106 @@
   --radius: 10px;
   --shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
 
+  /* Everything a skin needs to repaint a button, so no rule downstream hard-
+     codes a colour. Placement never changes — only these values do. */
+  --btn-ink: #2b1b03;              /* type on a filled primary button */
+  --ghost-bg: rgba(28, 7, 9, 0.55);
+  --ghost-hover: rgba(201, 162, 39, 0.18);
+  --green-lite: #12805e;
+  --red-lite: #a3283f;
+  --red-deep: #6d1527;
+  --felt-hi: #1a8f68;              /* the lit centre of the felt */
+  --rail-ring: var(--accent);      /* the ring on the rail's inside edge */
+  --rail-edge: var(--accent-dark); /* the hairline around the outside */
+  --card-face: #f7f8fc;
+  --card-ink: #14181f;
+  --plate-a: rgba(93, 17, 34, .96);   /* nameplate, lit edge */
+  --plate-b: rgba(58, 15, 27, .96);
+  --chip-ink: #ffe9a8;                /* type on bet chips and pot pills */
+  --card-red: #c0392b;
+  --card-back-a: #27427c;
+  --card-back-b: #1d3260;
+
   /* Playing cards, at the real 2.5 x 3.5 proportion (1 : 1.4). */
   --card-ratio: 1.4;
+}
+
+/* ---- Tour Circuit ----
+   The televised-final look: gloss-black rail with a cyan hairline over a cool
+   blue felt, and a red action colour. Chosen per player, on their screen only. */
+:root[data-skin='tour'] {
+  --bg: #0e131c;
+  --bg-raised: #1a2433;
+  --bg-panel: #101825;
+  --border: #2a3949;
+  --text: #e9f1f8;
+  --text-dim: #8ea3b8;
+  --accent: #5fc6f5;
+  --accent-lite: #b8e8ff;
+  --accent-dark: #1f6f9c;
+  --green: #13699f;
+  --green-dark: #0c4869;
+  --red: #b0202f;
+  --felt: #14506e;
+  --felt-dark: #0a2c3f;
+  --felt-hi: #1c6489;
+  --rail: #0b0f16;
+  --ink: #04070c;
+  --btn-ink: #04121d;
+  --ghost-bg: rgba(4, 10, 16, 0.6);
+  --ghost-hover: rgba(95, 198, 245, 0.16);
+  --green-lite: #2ba0e6;
+  --red-lite: #e2384a;
+  --red-deep: #9c1526;
+  --rail-ring: rgba(95, 198, 245, 0.55);
+  --rail-edge: #1b2635;
+  --card-face: #f7f9fc;
+  --card-ink: #0d1420;
+  --plate-a: rgba(16, 24, 37, .94);
+  --plate-b: rgba(6, 12, 20, .94);
+  --chip-ink: #dbeefb;
+  --card-red: #c8102e;
+  --card-back-a: #12385a;
+  --card-back-b: #0d2a44;
+}
+
+/* ---- Championship ----
+   The felt-and-gold room: casino green under a stitched leather rail with a
+   gold double-trim, red/green/gold action colours. */
+:root[data-skin='series'] {
+  --bg: #171009;
+  --bg-raised: #2b1d0c;
+  --bg-panel: #241809;
+  --border: #4a3418;
+  --text: #f5ecd8;
+  --text-dim: #b39b78;
+  --accent: #d4af37;
+  --accent-lite: #f3dd9a;
+  --accent-dark: #8a6d1c;
+  --green: #15794a;
+  --green-dark: #0c5231;
+  --red: #8d1c2c;
+  --felt: #0f6039;
+  --felt-dark: #062d1c;
+  --felt-hi: #17784a;
+  --rail: #4a2e17;
+  --ink: #0b0805;
+  --btn-ink: #231703;
+  --ghost-bg: rgba(11, 8, 5, 0.6);
+  --ghost-hover: rgba(212, 175, 55, 0.18);
+  --green-lite: #1c9159;
+  --red-lite: #a72232;
+  --red-deep: #65101c;
+  --rail-ring: var(--accent);
+  --rail-edge: var(--accent-dark);
+  --card-face: #fdfbf5;
+  --card-ink: #171310;
+  --plate-a: rgba(36, 24, 9, .96);
+  --plate-b: rgba(18, 12, 5, .96);
+  --chip-ink: #f3dd9a;
+  --card-red: #b3121f;
+  --card-back-a: #a3202f;
+  --card-back-b: #6d0f1b;
 }
 
 * {
@@ -113,25 +211,25 @@ label {
 
 .btn-primary {
   background: linear-gradient(var(--accent-lite), var(--accent));
-  color: #2b1b03;
+  color: var(--btn-ink);
   box-shadow: 0 3px 0 var(--ink);
 }
 
 .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
 
 .btn-ghost {
-  background: rgba(28, 7, 9, 0.55);
+  background: var(--ghost-bg);
   border: 2px solid var(--accent);
   color: var(--text);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(201, 162, 39, 0.18);
+  background: var(--ghost-hover);
   border-color: var(--accent-lite);
 }
 
-.btn-green { background: linear-gradient(#12805e, var(--green-dark)); color: var(--text); }
-.btn-red { background: linear-gradient(#a3283f, #6d1527); color: var(--text); }
+.btn-green { background: linear-gradient(var(--green-lite), var(--green-dark)); color: var(--text); }
+.btn-red { background: linear-gradient(var(--red-lite), var(--red-deep)); color: var(--text); }
 
 /* ---- modal ---- */
 

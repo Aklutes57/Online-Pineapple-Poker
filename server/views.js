@@ -148,6 +148,16 @@ export function buildViews(game) {
     status: game.status,
     pauseRequested: game.pauseRequested,
     settings: { ...game.settings },
+    // Tournament clock. Null on a cash game, which is every table by default.
+    tournament: game.isTournament()
+      ? {
+        level: game.level + 1,
+        started: !!game.tournamentStartedAt,
+        msToNextLevel: game.msToNextLevel(),
+        rebuysOpen: game.rebuysOpen(),
+        levelMinutes: game.settings.levelMinutes,
+      }
+      : null,
     hostId: game.hostId,
     hostName: game.players.get(game.hostId)?.nickname ?? null,
     seats,
