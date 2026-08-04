@@ -11,9 +11,9 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <script src="/js/skin.js"></script>
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/landing.css">
+  <script src="/js/skin.js"></script>
 </head>
 <body>
   <header class="site-header">
@@ -35,27 +35,29 @@
       <div class="wrap">
         <svg class="hero-mark" viewBox="0 0 760 176" role="img" aria-label="Reg-Poker Online">
           <defs>
+            <!-- Reads the skin's accent tokens, so the wordmark is brass in
+                 the Velvet room, chrome in Tour Circuit and gold in Championship. -->
             <linearGradient id="heroGold" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#fff3c4" /><stop offset=".38" stop-color="#e8c65c" />
-              <stop offset=".52" stop-color="#a97d1c" /><stop offset=".62" stop-color="#f6e39b" />
-              <stop offset="1" stop-color="#b3891f" />
+              <stop offset="0" stop-color="var(--accent-lite)" /><stop offset=".38" stop-color="var(--accent)" />
+              <stop offset=".52" stop-color="var(--accent-dark)" /><stop offset=".62" stop-color="var(--accent-lite)" />
+              <stop offset="1" stop-color="var(--accent-dark)" />
             </linearGradient>
           </defs>
           <g class="hero-bubble">
             <text x="380" y="96" text-anchor="middle" font-size="84"
-                  fill="url(#heroGold)" stroke="#1c0709" stroke-width="24"
+                  fill="url(#heroGold)" stroke="var(--ink)" stroke-width="24"
                   stroke-linejoin="round" paint-order="stroke">Reg-Poker</text>
             <text x="380" y="96" text-anchor="middle" font-size="84"
-                  fill="none" stroke="#fff6d8" stroke-width="1.6" opacity=".9"
+                  fill="none" stroke="var(--accent-lite)" stroke-width="1.6" opacity=".9"
                   stroke-linejoin="round" transform="translate(-2,-3)">Reg-Poker</text>
           </g>
           <!-- x is nudged by half the .hero-sub letter-spacing: the trailing space is in
                the advance width but draws nothing, so text-anchor="middle" alone sits left. -->
-          <text class="hero-sub" x="386.3" y="150" text-anchor="middle" font-size="30" fill="#f0dfb6">ONLINE</text>
-          <g stroke="#c9a227" stroke-width="2.5" stroke-linecap="round">
+          <text class="hero-sub" x="386.3" y="150" text-anchor="middle" font-size="30" fill="currentColor">ONLINE</text>
+          <g stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round">
             <line x1="176" y1="138" x2="248" y2="138" /><line x1="512" y1="138" x2="584" y2="138" />
           </g>
-          <g fill="#c9a227">
+          <g fill="var(--accent)">
             <rect x="258" y="134" width="8" height="8" transform="rotate(45 262 138)" />
             <rect x="494" y="134" width="8" height="8" transform="rotate(45 498 138)" />
           </g>

@@ -62,7 +62,7 @@
   overflow: hidden;
   background:
     radial-gradient(ellipse 900px 420px at 50% -80px, rgba(46, 158, 91, 0.18), transparent),
-    radial-gradient(ellipse 600px 300px at 85% 100%, rgba(245, 197, 66, 0.07), transparent);
+    radial-gradient(ellipse 600px 300px at 85% 100%, rgba(var(--pulse), 0.07), transparent);
 }
 
 .hero h1 {
@@ -85,7 +85,7 @@
 .btn-xl {
   font-size: 19px;
   padding: 16px 36px;
-  box-shadow: 0 10px 34px rgba(245, 197, 66, 0.25);
+  box-shadow: 0 10px 34px rgba(var(--pulse), 0.25);
 }
 
 .hero .fine {
@@ -277,20 +277,22 @@
   .hero-actions .btn { width: 100%; max-width: 320px; }
 }
 
-/* ---- Velvet Lounge: the room you walk into ---- */
+/* ---- The room you walk into ----
+   Every surface reads a token, so the landing page turns with the skin the
+   player picked at the table instead of staying stuck in one room. */
 .hero {
   background:
-    radial-gradient(90% 70% at 50% -12%, rgba(255, 214, 140, .20), transparent 62%),
+    radial-gradient(90% 70% at 50% -12%, var(--glow), transparent 62%),
     repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 3px, transparent 3px 9px),
-    linear-gradient(#4a1524, #2c0a14);
+    linear-gradient(var(--bg-raised), var(--bg));
 }
-.hero-mark { width: min(660px, 92%); height: auto; margin: 0 auto 10px; display: block; }
+.hero-mark { width: min(660px, 92%); height: auto; margin: 0 auto 10px; display: block; color: var(--text-dim); }
 .hero-bubble text { font-family: 'Arial Black','Arial Bold','Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: 900; letter-spacing: -.015em; }
 .hero-sub { font-family: Impact, Haettenschweiler, 'Franklin Gothic Bold', 'Arial Narrow Bold', sans-serif; letter-spacing: .42em; }
 .hero-line { font-size: clamp(20px, 3vw, 30px); line-height: 1.25; margin-bottom: 14px; font-weight: 600; }
 .hero .accent { color: var(--accent); }
-.hero .sub { color: #e2c9ad; }
-.site-header { background: rgba(28, 7, 9, .72); border-bottom: 1px solid var(--border); }
-.features, .variants, .faq { background: linear-gradient(#2c0a14, #24070f); }
-.feature, .variant { border: 1px solid var(--border); border-radius: 14px; background: rgba(74, 21, 36, .5); }
-.hcard { border: 2px solid #c9a227; }
+.hero .sub { color: var(--text-dim); }
+.site-header { background: var(--ghost-bg); border-bottom: 1px solid var(--border); }
+.features, .variants, .faq { background: linear-gradient(var(--bg), var(--ink)); }
+.feature, .variant { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-panel); }
+.hcard { border: 2px solid var(--accent); }

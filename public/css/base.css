@@ -17,7 +17,7 @@
   --green: #0e6a4d;
   --green-dark: #08402f;
   --red: #8d2036;
-  --blue: #4a90d9;
+  --blue: #2f74bd;    /* Check/Call — dark enough for white type on it */
   --felt: #127455;        /* emerald */
   --felt-dark: #063527;
   --rail: #4a2e18;        /* walnut */
@@ -30,11 +30,14 @@
   --btn-ink: #2b1b03;              /* type on a filled primary button */
   --ghost-bg: rgba(28, 7, 9, 0.55);
   --ghost-hover: rgba(201, 162, 39, 0.18);
-  --green-lite: #12805e;
+  --green-lite: #0f7355;
   --red-lite: #a3283f;
   --red-deep: #6d1527;
   --felt-hi: #1a8f68;              /* the lit centre of the felt */
-  --rail-ring: var(--accent);      /* the ring on the rail's inside edge */
+  --rail-ring: var(--accent);      /* the solid ring on the rail's inside edge */
+  --felt-line: rgba(201, 162, 39, 0.42); /* the faint hairline drawn on the felt */
+  --glow: rgba(255, 214, 140, .16);      /* the warm bloom over the boot cover */
+  --pulse: 245, 197, 66;                 /* the halo around whoever is to act, as r,g,b */
   --rail-edge: var(--accent-dark); /* the hairline around the outside */
   --card-face: #f7f8fc;
   --card-ink: #14181f;
@@ -62,6 +65,7 @@
   --accent: #5fc6f5;
   --accent-lite: #b8e8ff;
   --accent-dark: #1f6f9c;
+  --blue: #1f6f9c;
   --green: #13699f;
   --green-dark: #0c4869;
   --red: #b0202f;
@@ -73,11 +77,14 @@
   --btn-ink: #04121d;
   --ghost-bg: rgba(4, 10, 16, 0.6);
   --ghost-hover: rgba(95, 198, 245, 0.16);
-  --green-lite: #2ba0e6;
-  --red-lite: #e2384a;
-  --red-deep: #9c1526;
+  --green-lite: #17709f;
+  --red-lite: #c01f31;
+  --red-deep: #85101f;
   --rail-ring: rgba(95, 198, 245, 0.55);
   --rail-edge: #1b2635;
+  --felt-line: rgba(95, 198, 245, 0.22);
+  --glow: rgba(120, 200, 245, .14);
+  --pulse: 95, 198, 245;
   --card-face: #f7f9fc;
   --card-ink: #0d1420;
   --plate-a: rgba(16, 24, 37, .94);
@@ -101,6 +108,7 @@
   --accent: #d4af37;
   --accent-lite: #f3dd9a;
   --accent-dark: #8a6d1c;
+  --blue: #1b5c8a;
   --green: #15794a;
   --green-dark: #0c5231;
   --red: #8d1c2c;
@@ -112,11 +120,14 @@
   --btn-ink: #231703;
   --ghost-bg: rgba(11, 8, 5, 0.6);
   --ghost-hover: rgba(212, 175, 55, 0.18);
-  --green-lite: #1c9159;
+  --green-lite: #15794a;
   --red-lite: #a72232;
   --red-deep: #65101c;
   --rail-ring: var(--accent);
   --rail-edge: var(--accent-dark);
+  --felt-line: rgba(243, 221, 154, 0.28);
+  --glow: rgba(255, 226, 150, .15);
+  --pulse: 212, 175, 55;
   --card-face: #fdfbf5;
   --card-ink: #171310;
   --plate-a: rgba(36, 24, 9, .96);

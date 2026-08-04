@@ -414,8 +414,18 @@ try {
   await dana.waitForURL('**/games/**');
   // #table is static markup, so it exists before the first state arrives —
   // wait for the theme to actually be applied rather than racing it.
+  //
+  // The felt is an opaque gradient built from --felt, so a host colour has to
+  // move the gradient; asserting background-color would pass while the felt
+  // stayed the skin's own green, which is exactly the bug this now guards.
   const feltIsPink = (page) => page.waitForFunction(
-    () => document.getElementById('table')?.style.backgroundColor === 'rgb(122, 31, 75)',
+    () => {
+      const t = document.getElementById('table');
+      if (!t) return false;
+      if (t.style.getPropertyValue('--felt').trim() !== '#7a1f4b') return false;
+      // …and it is genuinely what gets painted, not just a variable that is set.
+      return getComputedStyle(t).backgroundImage.includes('122, 31, 75');
+    },
     { timeout: 10000 }
   ).then(() => true, () => false);
 
@@ -526,6 +536,42 @@ try {
   await check('the skin is applied before the first paint, not after',
     await anna.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--felt').trim() !== ''));
+  // A skin is a complete palette, not a patch: any colour token that resolves
+  // to the same value in all three skins is one a skin forgot to override, and
+  // the Velvet value leaks into the other rooms. (Structural tokens — radii,
+  // widths, ratios — are shared on purpose and are not colours.)
+  const sharedColours = await anna.evaluate(() => {
+    const declared = new Set();
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try { rules = sheet.cssRules; } catch { continue; }
+      for (const r of rules) {
+        if (!r.selectorText || !r.style) continue;
+        if (!/^:root/.test(r.selectorText)) continue;
+        for (let i = 0; i < r.style.length; i++) {
+          const prop = r.style[i];
+          if (prop.startsWith('--')) declared.add(prop);
+        }
+      }
+    }
+    const root = document.documentElement;
+    const before = root.dataset.skin;
+    const values = {};
+    for (const skin of ['velvet', 'tour', 'series']) {
+      root.dataset.skin = skin;
+      const cs = getComputedStyle(root);
+      values[skin] = Object.fromEntries([...declared].map((t) => [t, cs.getPropertyValue(t).trim()]));
+    }
+    root.dataset.skin = before;
+    return [...declared].filter((t) => {
+      const v = values.velvet[t];
+      if (!v || !CSS.supports('color', v)) return false;
+      return values.tour[t] === v && values.series[t] === v;
+    });
+  });
+  await check(`no colour token is left on the Velvet value in every skin (${JSON.stringify(sharedColours)})`,
+    sharedColours.length === 0);
+
   await anna.selectOption('#skin', 'velvet');
   await anna.waitForTimeout(200);
 

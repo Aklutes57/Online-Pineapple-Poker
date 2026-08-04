@@ -142,18 +142,34 @@ function renderTheme(client) {
   if (table.dataset.themeSig === sig) return;
   table.dataset.themeSig = sig;
 
-  if (!theme) {
+  const clearFelt = () => {
     table.style.backgroundImage = '';
-    table.style.backgroundColor = '';
+    table.style.backgroundSize = '';
     table.style.borderColor = '';
+    for (const v of ['--felt', '--felt-hi', '--felt-dark']) table.style.removeProperty(v);
+  };
+
+  if (!theme) {
+    clearFelt();
     return;
   }
-  // The image wins when there is one; the colour is the fallback underneath.
-  table.style.backgroundImage = theme.feltImage ? `url("${theme.feltImage}")` : '';
-  table.style.backgroundSize = theme.feltImage ? 'cover' : '';
-  table.style.backgroundPosition = 'center';
-  table.style.backgroundColor = theme.feltColor || '';
-  table.style.borderColor = theme.railColor || '';
+  clearFelt();
+  // The felt is painted by an opaque gradient built from --felt, so a host
+  // colour has to move the gradient rather than sit behind it — setting
+  // background-color alone would never show. cleanTheme has already proved
+  // the value is a plain #rrggbb, so it is safe to build a colour from it.
+  if (theme.feltColor) {
+    table.style.setProperty('--felt', theme.feltColor);
+    table.style.setProperty('--felt-hi', `color-mix(in srgb, ${theme.feltColor} 82%, #ffffff)`);
+    table.style.setProperty('--felt-dark', `color-mix(in srgb, ${theme.feltColor} 62%, #000000)`);
+  }
+  // A picture on the felt is shared table decoration, so it wins over both.
+  if (theme.feltImage) {
+    table.style.backgroundImage = `url("${theme.feltImage}")`;
+    table.style.backgroundSize = 'cover';
+    table.style.backgroundPosition = 'center';
+  }
+  if (theme.railColor) table.style.borderColor = theme.railColor;
 }
 
 function renderHeader(client) {

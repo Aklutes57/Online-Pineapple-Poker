@@ -86,12 +86,64 @@ body.disconnected::after {
   text-overflow: ellipsis;
 }
 
+/* The identity track and the counterweight share the leftover width equally,
+   which is what puts the buttons on the screen's centre line rather than on
+   the centre of whatever space the badges happened to leave. */
+.top-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 0;
+  min-width: 0;
+  /* Clipped rather than spilling: the buttons own the centre, and nothing in
+     here is allowed to slide underneath them. */
+  overflow: hidden;
+}
+
+/* The brand and the badges keep their size; the game badge is the one that
+   gives, and it already ellipses. */
+.top-meta > * {
+  flex: 0 0 auto;
+}
+
+.top-meta > #game-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.top-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .top-actions {
-  margin-left: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 10px;
+  /* Capped so the controls wrap to a second row instead of squeezing the
+     tracks either side of them — which is what keeps them on the screen's
+     centre line rather than merely centred in what was left over. 352px a
+     side is what the brand plus the shuffle chip actually need. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 704px);
+}
+
+/* Below ~1300px, reserving 352px either side would push the controls into four
+   or five rows and eat the felt. Rather than pay that, the tracks collapse to
+   their content and the controls centre in what is left. */
+@media (max-width: 1300px) {
+  .top-meta {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .top-spacer { display: none; }
+  .top-actions {
+    max-width: none;
+    margin: 0 auto;
+  }
 }
 
 .top-btn {
@@ -198,7 +250,9 @@ body.disconnected::after {
   content: '';
   position: absolute;
   inset: 26px;
-  border: 1px solid var(--rail-ring);
+  /* A faint hairline drawn on the felt — deliberately not the solid ring on
+     the rail, which is why it has a token of its own. */
+  border: 1px solid var(--felt-line);
   border-radius: 50% / 52%;
   pointer-events: none;
 }
@@ -316,7 +370,7 @@ body.disconnected::after {
 .seat.empty .empty-seat-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(245, 197, 66, 0.08);
+  background: rgba(var(--pulse), 0.08);
 }
 
 .seat.empty .empty-label {
@@ -370,12 +424,12 @@ body.disconnected::after {
 
 .seat.to-act .nameplate {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.6), 0 0 24px rgba(245, 197, 66, 0.35);
+  box-shadow: 0 0 0 2px rgba(var(--pulse), 0.6), 0 0 24px rgba(var(--pulse), 0.35);
   animation: pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  50% { box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.25), 0 0 10px rgba(245, 197, 66, 0.15); }
+  50% { box-shadow: 0 0 0 2px rgba(var(--pulse), 0.25), 0 0 10px rgba(var(--pulse), 0.15); }
 }
 
 .seat.folded .cards-fan,
@@ -695,7 +749,7 @@ body.disconnected::after {
 
 .cooler-quads {
   border-color: var(--accent) !important;
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.22), var(--bg-raised)) !important;
+  background: linear-gradient(180deg, rgba(var(--pulse), 0.22), var(--bg-raised)) !important;
 }
 
 @keyframes banner-in {
@@ -738,7 +792,7 @@ body.disconnected::after {
 #seat-requests {
   border-bottom: 1px solid var(--border);
   padding: 10px 12px;
-  background: rgba(245, 197, 66, 0.06);
+  background: rgba(var(--pulse), 0.06);
 }
 
 .sr-title {
@@ -1186,6 +1240,15 @@ td.dim { color: var(--text-dim); }
     display: none;
   }
 
+  /* No room to centre anything on a phone: the bar is one scrolling row, so
+     the tracks stop competing for width and simply follow each other. */
+  .top-meta, .top-spacer {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .top-spacer { display: none; }
+  .top-actions { max-width: none; }
+
   .top-actions {
     flex-wrap: nowrap;
     gap: 6px;
@@ -1472,13 +1535,13 @@ video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(78% 60% at 50% 34%, rgba(255, 214, 140, .16), transparent 66%),
+    radial-gradient(78% 60% at 50% 34%, var(--glow), transparent 66%),
     repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 9px),
     linear-gradient(var(--bg-raised), var(--bg) 62%, var(--ink));
   transition: opacity .45s ease;
 }
 #boot.gone { opacity: 0; pointer-events: none; }
-.boot-inner { text-align: center; padding: 0 24px; }
+.boot-inner { text-align: center; padding: 0 24px; color: var(--text-dim); }
 .boot-mark { width: min(430px, 78vw); height: auto; display: block; margin: 0 auto; }
 .boot-word {
   font-family: 'Arial Black', 'Arial Bold', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -1511,7 +1574,7 @@ video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
 }
 .boot-note {
   margin: 0;
-  color: #d8b898;
+  color: var(--text-dim);
   font-size: 14px;
   letter-spacing: .1em;
   text-transform: uppercase;

@@ -365,8 +365,14 @@ function applySkin(key) {
   return skin;
 }
 {
-  // skin.js already applied it in <head>; read it back rather than guessing.
-  const saved = applySkin(document.documentElement.dataset.skin || DEFAULT_SKIN);
+  // localStorage is the source of truth; skin.js only got there first so the
+  // first paint is right. Reading it here too means the picker is correct even
+  // if that script never ran.
+  let stored = null;
+  try {
+    stored = localStorage.getItem('pp:skin');
+  } catch { /* private browsing */ }
+  const saved = applySkin(stored || document.documentElement.dataset.skin || DEFAULT_SKIN);
   if (skinSel) {
     skinSel.innerHTML = Object.entries(SKINS)
       .map(([key, s]) => `<option value="${key}">${s.label}</option>`)
@@ -377,6 +383,11 @@ function applySkin(key) {
       try {
         localStorage.setItem('pp:skin', applied);
       } catch { /* private browsing */ }
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.setAttribute('content',
+          getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+      }
       showToast(`Table look: ${SKINS[applied].label}`, { ok: true });
     });
   }
