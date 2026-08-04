@@ -221,6 +221,13 @@ export class Game {
       }
       if (this.seats[seatIndex] !== null) return { ok: false, error: 'seat taken' };
     }
+    // Checked before the full-table diversion below: a closed tournament turns
+    // people away, it does not quietly park them in a queue they can never come
+    // off. Nothing has been mutated yet at this point, so there is nothing to
+    // unwind either.
+    if (!this.rebuysOpen()) {
+      return { ok: false, error: 'registration is closed — this one plays out' };
+    }
     // Table full: join the queue instead of being turned away.
     if (!this.seats.includes(null)) {
       return this.joinWaitlist(player, buyIn, seatIndex);
@@ -230,14 +237,8 @@ export class Game {
     player.requestedSeat = seatIndex;
     // The host approves a player once. After that — busting out, standing up,
     // buying back in — they seat themselves. Every bound above (buy-in range,
-    // seat free, table not full) has already run, so this path is validated
-    // exactly as the approved one is.
-    if (!this.rebuysOpen()) {
-      player.status = 'spectating';
-      player.pendingBuyIn = 0;
-      player.requestedSeat = null;
-      return { ok: false, error: 'registration is closed — this one plays out' };
-    }
+    // seat free, table not full, registration open) has already run, so this
+    // path is validated exactly as the approved one is.
     if (player.id === this.hostId || this.seatsItself(player)) {
       return this.approveSeat(player.id, true);
     }
@@ -555,6 +556,14 @@ export class Game {
       .filter((p) => p && p.status === 'seated' && p.stack > 0 && !p.sittingOut);
   }
 
+  // Everyone still holding chips, awake or not. eligiblePlayers() answers "who
+  // is in the next hand"; this answers "who is still in the tournament".
+  seatedPlayersWithChips() {
+    return this.seats
+      .map((id) => (id ? this.players.get(id) : null))
+      .filter((p) => p && p.status === 'seated' && p.stack > 0);
+  }
+
   playerInLiveHand(player) {
     return !!(
       this.currentHand &&
@@ -771,10 +780,15 @@ export class Game {
     if (players.length < 2) {
       this.currentHand = null;
       // A tournament past its re-buy window can't refill, so one player left
-      // with chips is the finish, not a table waiting for company.
+      // with chips is the finish. Measured on chips, never on who happens to be
+      // dealt in — two people stepping away must not end the tournament for the
+      // rest of the table.
       if (this.isTournament() && !this.rebuysOpen() && this.tournamentStartedAt) {
-        this.declareTournamentWinner(players[0] ?? null);
-        return;
+        const withChips = this.seatedPlayersWithChips();
+        if (withChips.length < 2) {
+          this.declareTournamentWinner(withChips[0] ?? null);
+          return;
+        }
       }
       this.addLog(
         is747
@@ -1067,6 +1081,16 @@ export class Game {
   // seat map from the hand's own player list.
   seatFromWaitlist() {
     if (this.currentHand && !this.currentHand.finished) return;
+    // Someone who queued while registration was open must not be seated with a
+    // fresh full stack after it shut — that is a new entrant, not a returning
+    // one, and the field has been playing without them.
+    if (!this.rebuysOpen()) {
+      if (this.waitlist.length) {
+        this.addLog('Registration is closed — the seat queue is done for this one');
+        this.waitlist = [];
+      }
+      return;
+    }
     const { minBuyIn, maxBuyIn } = this.settings;
     for (let i = 0; i < this.waitlist.length && this.seats.includes(null); ) {
       const entry = this.waitlist[i];

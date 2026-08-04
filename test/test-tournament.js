@@ -10,7 +10,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-tourney-'
 
 const { createGame } = await import('../server/gameManager.js');
 const { sanitizeSettings } = await import('../server/game.js');
-const { blindsForLevel, DEFAULT_SETTINGS, GAME_STATUS } = await import('../shared/constants.js');
+const { blindsForLevel, DEFAULT_SETTINGS, GAME_STATUS, SEAT_COUNT } = await import('../shared/constants.js');
 
 let failures = 0;
 let passes = 0;
@@ -196,6 +196,89 @@ function check(name, cond) {
   const logsBefore = game.logs.length;
   game.startHand();
   check('the finish is announced exactly once', game.logs.length === logsBefore);
+}
+
+// Stepping away is not busting out: a tournament ends when one player has all
+// the chips, never because everyone else went to get a drink.
+{
+  const { game, host } = createGame(
+    { smallBlind: 25, bigBlind: 50, tournament: true, levelMinutes: 20, rebuyMinutes: 0,
+      minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const away = [];
+  for (const [i, name] of ['Ann', 'Ben'].entries()) {
+    const p = game.addPlayer(name, null);
+    p.connected = true;
+    game.requestSeat(p, 200, i + 1);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+    away.push(p);
+  }
+  game.status = GAME_STATUS.RUNNING;
+  game.advanceTournamentClock();
+  for (const p of away) p.sittingOut = true;
+  game.startHand();
+  check('players sitting out do not end the tournament', game.tournamentOver !== true);
+  check('the table keeps running while they are away', game.status === GAME_STATUS.RUNNING);
+  check('nobody was crowned on a full table of chips',
+    away.every((p) => p.stack === 200) && host.stack === 200);
+
+  // Now actually bust them, and it does finish.
+  for (const p of away) {
+    p.sittingOut = false;
+    p.stack = 0;
+  }
+  game.startHand();
+  check('busting the field does end it', game.tournamentOver === true);
+}
+
+// The seat queue is not a back door into a closed tournament.
+{
+  const { game, host } = createGame(
+    { smallBlind: 25, bigBlind: 50, tournament: true, levelMinutes: 20, rebuyMinutes: 0,
+      minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  for (let i = 1; i < SEAT_COUNT; i++) {
+    const p = game.addPlayer(`P${i}`, null);
+    p.connected = true;
+    game.requestSeat(p, 200, i);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+  }
+  check('the table is full', !game.seats.includes(null));
+
+  // Queued and waved in while registration is still open.
+  const queued = game.addPlayer('Queued', null);
+  queued.connected = true;
+  check('a full table still queues you before the clock starts',
+    game.requestSeat(queued, 200).ok === true && queued.status === 'waitlisted');
+  game.approveWaitlist(queued.id, true);
+
+  game.status = GAME_STATUS.RUNNING;
+  game.advanceTournamentClock();
+  const chipsBefore = [...game.ledger.values()].reduce((n, e) => n + e.buyIns, 0);
+
+  // A seat frees up after the window shut.
+  const victim = game.players.get(game.seats[3]);
+  victim.stack = 0;
+  game.removeFromSeat(victim, 'busted');
+  game.seatFromWaitlist();
+  check('a queued player is not seated after registration closes',
+    queued.status !== 'seated' && queued.stack === 0);
+  check('no fresh stack is minted into a closed tournament',
+    [...game.ledger.values()].reduce((n, e) => n + e.buyIns, 0) === chipsBefore);
+  check('the dead queue is cleared rather than left hanging', game.waitlist.length === 0);
+
+  // And a newcomer at a full, closed table is turned away, not parked.
+  const late = game.addPlayer('Late', null);
+  late.connected = true;
+  const r = game.requestSeat(late, 200);
+  check('a newcomer is refused rather than queued',
+    r.ok === false && late.status === 'spectating' && game.waitlist.length === 0);
 }
 
 // A cash game with one player left just waits — it never declares a winner.
