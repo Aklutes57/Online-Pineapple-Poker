@@ -1,10 +1,13 @@
 /* Table page layout: header / table + side panel / action bar. */
 
 :root {
-  --card-w: 44px;
-  --card-h: 62px;
-  --board-card-w: 58px;
-  --board-card-h: 82px;
+  /* Real playing-card proportion (2.5 x 3.5 = 1 : 1.4), sized to fill the
+     felt the way PokerNow's do. The board is the hero; hole cards sit a step
+     under it, and your own get a further 18% in the seat rules below. */
+  --card-w: 48px;
+  --card-h: 67px;
+  --board-card-w: 86px;
+  --board-card-h: 120px;
   --panel-w: 320px;
 }
 
@@ -82,13 +85,26 @@ body.disconnected::after {
 .top-actions {
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 .top-btn {
-  padding: 5px 10px;
+  padding: 6px 14px;
   font-size: 13px;
   position: relative;
+}
+
+/* The name-font picker wears the same brass ring as the buttons beside it. */
+.top-select {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  background: rgba(28, 7, 9, 0.55);
+  color: var(--text);
 }
 
 #unread-badge {
@@ -154,12 +170,15 @@ body.disconnected::after {
   height: 504px;
   transform-origin: center center;
   background:
-    radial-gradient(ellipse at 50% 38%, #2a8c58 0%, var(--felt) 55%, var(--felt-dark) 100%);
-  border: 14px solid var(--rail);
+    radial-gradient(ellipse at 50% 36%, #1a8f68 0%, var(--felt) 52%, var(--felt-dark) 100%);
+  /* Walnut rail with a polished brass ring on its inside edge. */
+  border: 16px solid var(--rail);
   border-radius: 50% / 52%;
   box-shadow:
-    inset 0 0 60px rgba(0, 0, 0, 0.45),
-    0 18px 60px rgba(0, 0, 0, 0.5);
+    inset 0 0 0 4px var(--accent),
+    inset 0 0 70px rgba(0, 0, 0, 0.5),
+    0 0 0 2px var(--accent-dark),
+    0 20px 64px rgba(0, 0, 0, 0.6);
 }
 
 /* Phone held upright: the same table stood on its end, so a portrait screen
@@ -175,7 +194,7 @@ body.disconnected::after {
   content: '';
   position: absolute;
   inset: 26px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(201, 162, 39, 0.42);
   border-radius: 50% / 52%;
   pointer-events: none;
 }
@@ -312,7 +331,9 @@ body.disconnected::after {
   display: flex;
   gap: 3px;
   min-height: calc(var(--card-h) * 0.9);
-  margin-bottom: -12px;
+  /* The fan used to tuck under the nameplate; with cards this size that hid
+     the name, so they now stack clear of it. */
+  margin-bottom: 4px;
   z-index: 1;
 }
 
@@ -321,19 +342,19 @@ body.disconnected::after {
 }
 
 .cards-fan.mine .card {
-  width: calc(var(--card-w) * 1.18);
-  height: calc(var(--card-h) * 1.18);
-  font-size: calc(var(--card-w) * 0.5);
+  width: calc(var(--card-w) * 1.42);
+  height: calc(var(--card-h) * 1.42);
+  font-size: calc(var(--card-w) * 0.58);
 }
 
 .nameplate {
   position: relative;
-  background: rgba(14, 17, 26, 0.92);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 6px 12px;
-  min-width: 110px;
-  max-width: 150px;
+  background: linear-gradient(rgba(93, 17, 34, .96), rgba(58, 15, 27, .96));
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  padding: 6px 14px;
+  min-width: 118px;
+  max-width: 164px;
   text-align: center;
   z-index: 2;
   transition: box-shadow 0.2s, border-color 0.2s;
@@ -1180,10 +1201,10 @@ td.dim { color: var(--text-dim); }
      scale alone decides how big it lands; the shrinks above are for the replay
      page, which sizes by width instead. */
   body.table-page {
-    --card-w: 44px;
-    --card-h: 62px;
-    --board-card-w: 58px;
-    --board-card-h: 82px;
+    --card-w: 48px;
+    --card-h: 67px;
+    --board-card-w: 86px;
+    --board-card-h: 120px;
   }
 
   .table-page #table {
@@ -1376,3 +1397,61 @@ video.seat-cam.cam-off { visibility: hidden; }
 }
 .np-mute.on { background: var(--red); border-color: var(--red); }
 video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
+
+/* ---- Boot cover: what you look at while the socket hands you your seat ---- */
+#boot {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(78% 60% at 50% 34%, rgba(255, 214, 140, .16), transparent 66%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 9px),
+    linear-gradient(#4a1524, #2c0a14 62%, #1c0709);
+  transition: opacity .45s ease;
+}
+#boot.gone { opacity: 0; pointer-events: none; }
+.boot-inner { text-align: center; padding: 0 24px; }
+.boot-mark { width: min(430px, 78vw); height: auto; display: block; margin: 0 auto; }
+.boot-word {
+  font-family: 'Arial Black', 'Arial Bold', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 900;
+  letter-spacing: -.015em;
+}
+.boot-sub {
+  font-family: Impact, Haettenschweiler, 'Franklin Gothic Bold', 'Arial Narrow Bold', sans-serif;
+  letter-spacing: .38em;
+}
+.boot-chips {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 22px 0 14px;
+}
+.boot-chips i {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--ink), 0 2px 8px rgba(0, 0, 0, .55);
+  animation: bootChip 1.05s ease-in-out infinite;
+}
+.boot-chips i:nth-child(2) { animation-delay: .14s; }
+.boot-chips i:nth-child(3) { animation-delay: .28s; }
+@keyframes bootChip {
+  0%, 70%, 100% { transform: translateY(0); opacity: .55; }
+  35% { transform: translateY(-9px); opacity: 1; }
+}
+.boot-note {
+  margin: 0;
+  color: #d8b898;
+  font-size: 14px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot-chips i { animation: none; opacity: .85; }
+  #boot { transition: none; }
+}

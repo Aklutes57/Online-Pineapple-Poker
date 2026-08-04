@@ -1,6 +1,6 @@
 // Table-page entry: socket lifecycle, token storage, state store, dispatch.
 
-import { EVENTS } from '/shared/constants.js';
+import { EVENTS, NAME_FONTS, DEFAULT_NAME_FONT } from '/shared/constants.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { getAccountToken, loadAccount, currentAccount, authHeaders } from '/js/auth.js';
 import { initReactions, showReaction } from '/js/reactions.js';
@@ -83,6 +83,20 @@ let lastCoolerHandId = null;
 let lastResultHandId = null;
 let priorIsHost = null;
 
+// The boot cover only ever comes down — a later state must not re-run the fade.
+let bootCleared = false;
+function clearBoot() {
+  if (bootCleared) return;
+  bootCleared = true;
+  const boot = document.getElementById('boot');
+  if (!boot) return;
+  boot.classList.add('gone');
+  setTimeout(() => boot.remove(), 500);
+}
+// If the socket never answers, don't sit behind the cover forever — the
+// reconnect banner and the table underneath are more useful than a spinner.
+setTimeout(clearBoot, 10000);
+
 function applyState(state) {
   if (!state || state.seq <= client.lastSeq) return;
   client.lastSeq = state.seq;
@@ -91,6 +105,7 @@ function applyState(state) {
   const previousStack = client.you?.stack;
   client.state = state;
   client.you = state.you;
+  clearBoot();
   renderAll(client);
   notifyStateForPanels(client);
   syncAvSeats(state); // put each live webcam back into its (re-rendered) seat
@@ -306,6 +321,25 @@ document.getElementById('cam-frame-input')?.addEventListener('change', (e) => {
   uploadImage(e.target.files[0], 'cam-frame', 'Webcam frame updated');
   e.target.value = '';
 });
+
+// ---- the font your name is shown in ----
+const fontSel = document.getElementById('name-font');
+if (fontSel) {
+  fontSel.innerHTML = Object.entries(NAME_FONTS)
+    .map(([key, f]) => `<option value="${key}" style="font-family:${f.stack}">${f.label}</option>`)
+    .join('');
+  const savedFont = localStorage.getItem('pp:nameFont') || DEFAULT_NAME_FONT;
+  fontSel.value = NAME_FONTS[savedFont] ? savedFont : DEFAULT_NAME_FONT;
+  fontSel.style.fontFamily = NAME_FONTS[fontSel.value].stack;
+  const pushFont = () => {
+    localStorage.setItem('pp:nameFont', fontSel.value);
+    fontSel.style.fontFamily = NAME_FONTS[fontSel.value].stack;
+    client.send(EVENTS.SET_NAME_FONT, { font: fontSel.value });
+  };
+  fontSel.addEventListener('change', pushFont);
+  // Re-assert it on every (re)connect so the table sees your choice.
+  socket.on('connect', () => setTimeout(pushFont, 250));
+}
 
 initWebrtc(client, socket);
 setOnChange(renderAvControls);

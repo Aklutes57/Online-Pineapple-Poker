@@ -7,7 +7,7 @@
   <meta name="description" content="Free private poker tables for you and your friends. No downloads, no sign-ups, no real money. Texas Hold'em, Pineapple, Crazy Pineapple, and Pot Limit Omaha.">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#10131c">
+  <meta name="theme-color" content="#2c0a14">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -32,7 +32,32 @@
   <main>
     <section class="hero">
       <div class="wrap">
-        <h1>Play poker with your friends.<br><span class="accent">Right now. Right here.</span></h1>
+        <svg class="hero-mark" viewBox="0 0 760 176" role="img" aria-label="Pineapple Poker Room">
+          <defs>
+            <linearGradient id="heroGold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#fff3c4" /><stop offset=".38" stop-color="#e8c65c" />
+              <stop offset=".52" stop-color="#a97d1c" /><stop offset=".62" stop-color="#f6e39b" />
+              <stop offset="1" stop-color="#b3891f" />
+            </linearGradient>
+          </defs>
+          <g class="hero-bubble">
+            <text x="380" y="96" text-anchor="middle" font-size="84"
+                  fill="url(#heroGold)" stroke="#1c0709" stroke-width="24"
+                  stroke-linejoin="round" paint-order="stroke">Pineapple</text>
+            <text x="380" y="96" text-anchor="middle" font-size="84"
+                  fill="none" stroke="#fff6d8" stroke-width="1.6" opacity=".9"
+                  stroke-linejoin="round" transform="translate(-2,-3)">Pineapple</text>
+          </g>
+          <text class="hero-sub" x="380" y="150" text-anchor="middle" font-size="30" fill="#f0dfb6">POKER ROOM</text>
+          <g stroke="#c9a227" stroke-width="2.5" stroke-linecap="round">
+            <line x1="62" y1="138" x2="192" y2="138" /><line x1="568" y1="138" x2="698" y2="138" />
+          </g>
+          <g fill="#c9a227">
+            <rect x="196" y="134" width="8" height="8" transform="rotate(45 200 138)" />
+            <rect x="556" y="134" width="8" height="8" transform="rotate(45 560 138)" />
+          </g>
+        </svg>
+        <h1 class="hero-line">Play poker with your friends.<br><span class="accent">Right now. Right here.</span></h1>
         <p class="sub">
           Spin up a private table in seconds and send your friends the link.
           No downloads, no accounts, no real money — just cards.

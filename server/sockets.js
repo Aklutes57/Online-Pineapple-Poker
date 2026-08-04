@@ -417,6 +417,10 @@ export function attachSockets(io) {
       }
     }));
 
+    socket.on(EVENTS.SET_NAME_FONT, withGame((game, player, payload) => {
+      result(game, game.setNameFont(player, payload.font));
+    }));
+
     socket.on(EVENTS.RUN_IT_TWICE_VOTE, withGame((game, player, payload) => {
       const hand = game.currentHand;
       if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {

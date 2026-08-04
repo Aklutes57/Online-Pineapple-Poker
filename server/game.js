@@ -2,7 +2,7 @@
 // Owns the single pending flow timer (action / discard / run-out / next-hand).
 // The sockets layer sets game.onChanged and calls the public methods here.
 
-import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS, MAX_CHIPS } from '../shared/constants.js';
+import { GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS, MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
 import { payoutPots } from './pots.js';
@@ -314,6 +314,17 @@ export class Game {
     player.sittingOut = false;
     this.addLog(`${player.nickname} is back`);
     this.maybeStartHand();
+    return { ok: true };
+  }
+
+  // Each player chooses the face their own name is set in. Validated against
+  // the shared list so a client can't inject arbitrary CSS through it.
+  setNameFont(player, key) {
+    if (!player || !this.players.has(player.id)) return { ok: false, error: 'not at this table' };
+    if (!Object.prototype.hasOwnProperty.call(NAME_FONTS, key)) {
+      return { ok: false, error: 'unknown font' };
+    }
+    player.nameFont = key;
     return { ok: true };
   }
 

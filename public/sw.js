@@ -13,7 +13,7 @@
 //  - Updates never force a reload: a waiting worker stays waiting until the
 //    player asks for it (see pwa.js) or the next natural navigation.
 
-const VERSION = 'v1';
+const VERSION = 'v2-velvet';
 const STATIC_CACHE = `pp-static-${VERSION}`;
 const MEDIA_CACHE = 'pp-media'; // content-addressed, survives versions
 const MEDIA_LIMIT = 40;

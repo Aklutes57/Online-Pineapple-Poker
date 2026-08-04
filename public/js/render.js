@@ -5,7 +5,7 @@
 
 import {
   SEAT_COUNT, SEAT_COORDS, BET_COORDS, SEAT_COORDS_PORTRAIT, BET_COORDS_PORTRAIT,
-  VARIANTS, GAME_STATUS, PHASES, EVENTS,
+  VARIANTS, GAME_STATUS, PHASES, EVENTS, NAME_FONTS, DEFAULT_NAME_FONT,
 } from '/shared/constants.js';
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { escapeHtml } from '/js/ui.js';
@@ -54,8 +54,8 @@ export function renderAll(client) {
 // each shape gets its own allowance. A webcam tile makes every pod taller, so
 // that cost is only paid when cameras are actually on.
 const OVERHANG = {
-  landscape: { x: 44, y: 80 },
-  upright: { x: 16, y: 68 },
+  landscape: { x: 44, y: 98 },
+  upright: { x: 16, y: 88 },
 };
 const CAM_EXTRA_Y = 74; // half a webcam tile, top and bottom
 const FELT_LONG = 900;
@@ -164,6 +164,12 @@ function renderHeader(client) {
   badge.textContent = `${v ? v.label : variantKey} · ${stakes}${handNo}`;
 }
 
+// A player's chosen face for their own name, resolved through the shared list
+// so nothing a client sends can reach the style attribute directly.
+function nameFontStack(key) {
+  return (NAME_FONTS[key] || NAME_FONTS[DEFAULT_NAME_FONT]).stack;
+}
+
 // ---- seats ----
 
 function displaySlot(seatIndex, client) {
@@ -242,7 +248,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
     seat.isDealer, toAct, waitingDiscard, seat.handResult,
     isMe, you?.canDiscard, you?.hasDiscarded,
-    seat.mediaOn, seat.camFrame, isMuted(seat.playerId),
+    seat.mediaOn, seat.camFrame, isMuted(seat.playerId), seat.nameFont,
     decisionPhase ? seat.decided : null, myHandNow,
     hand && !hand.finished ? hand.lastAction?.seat === seatIndex && JSON.stringify(hand.lastAction) : null,
   ]);
@@ -295,7 +301,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   }
   plate.innerHTML = `
     <div class="np-row">
-      <span class="np-name">${escapeHtml(seat.nickname)}</span>
+      <span class="np-name" style="font-family: ${nameFontStack(seat.nameFont)}">${escapeHtml(seat.nickname)}</span>
       <span class="np-stack">${seat.stack}</span>
     </div>
     ${statusBits.length ? `<div class="np-status">${statusBits.join(' · ')}</div>` : ''}

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Offline — Pineapple Poker</title>
+  <meta name="theme-color" content="#2c0a14">
   <style>
     /* Self-contained on purpose: this page must render with zero other requests. */
     body {
@@ -12,32 +13,50 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #10131c;
-      color: #e8ebf4;
+      background:
+        radial-gradient(80% 60% at 50% 26%, rgba(255, 214, 140, .16), transparent 66%),
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 9px),
+        linear-gradient(#4a1524, #2c0a14 62%, #1c0709);
+      color: #f6edd9;
       font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
       text-align: center;
     }
     .card {
-      max-width: 420px;
+      max-width: 430px;
       padding: 40px 32px;
-      background: #151927;
-      border: 1px solid #2a3146;
+      background: rgba(58, 15, 27, .82);
+      border: 1px solid #7a3346;
       border-radius: 16px;
+      box-shadow: inset 0 0 0 2px rgba(201, 162, 39, .35), 0 22px 60px rgba(0, 0, 0, .55);
     }
     .mark { font-size: 52px; }
-    h1 { font-size: 22px; margin: 14px 0 8px; }
-    p { color: #9aa3ba; font-size: 15px; line-height: 1.5; margin: 0 0 22px; }
+    h1 {
+      font-family: 'Arial Black', 'Arial Bold', 'Helvetica Neue', Arial, sans-serif;
+      font-size: 24px;
+      margin: 12px 0 6px;
+      color: #f3dc9a;
+      letter-spacing: -.01em;
+    }
+    .room {
+      font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+      letter-spacing: .38em;
+      font-size: 13px;
+      color: #c9a58c;
+      margin: 0 0 16px;
+    }
+    p { color: #c9a58c; font-size: 15px; line-height: 1.5; margin: 0 0 22px; }
     .retry {
       font: inherit;
-      font-weight: 600;
-      background: #f5c542;
-      color: #1a1405;
-      border: none;
-      border-radius: 10px;
-      padding: 12px 26px;
+      font-weight: 700;
+      background: linear-gradient(#f3dc9a, #c9a227 58%, #a97d1c);
+      color: #1c0709;
+      border: 2px solid #1c0709;
+      border-radius: 999px;
+      padding: 12px 28px;
       cursor: pointer;
       display: inline-block;
       text-decoration: none;
+      box-shadow: 0 0 0 2px rgba(201, 162, 39, .55), 0 8px 22px rgba(0, 0, 0, .5);
     }
   </style>
 </head>
@@ -45,6 +64,7 @@
   <div class="card">
     <div class="mark">🍍</div>
     <h1>You're offline</h1>
+    <p class="room">POKER ROOM</p>
     <p>Poker needs a live connection — your table is still running on the server,
        and your seat and chips are safe. Reconnect and you'll land right back in it.</p>
     <!-- An empty href retries the current URL — no inline script, so a strict

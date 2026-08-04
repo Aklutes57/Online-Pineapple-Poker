@@ -2,7 +2,7 @@
 // forPlayer(playerId) tailored `you` block. Hole cards appear in the public
 // view ONLY once revealed (all-in run-out, showdown, or a voluntary show).
 
-import { SEAT_COUNT, PHASES } from '../shared/constants.js';
+import { SEAT_COUNT, PHASES, DEFAULT_NAME_FONT } from '../shared/constants.js';
 import { availableActionsFor } from './betting.js';
 import { bestAny, bestOmaha, describe, describePartial } from './evaluator.js';
 import { evaluate747, describe747, describePartial747, isNaturalSeven, NATURAL_SEVEN_SCORE } from './evaluator747.js';
@@ -59,6 +59,7 @@ export function buildViews(game) {
       // In the A/V session (webcam + mic shared with the table).
       mediaOn: !!p.mediaOn && p.connected,
       camFrame: p.camFrame || null,
+      nameFont: p.nameFont || DEFAULT_NAME_FONT,
       sittingOut: p.sittingOut,
       inHand,
       folded: inHand ? p.folded : false,
@@ -176,6 +177,7 @@ export function buildViews(game) {
       nickname: p.nickname,
       accountId: p.accountId ?? null,
       isHost: game.hostId === p.id,
+      nameFont: p.nameFont || DEFAULT_NAME_FONT,
       spectator: p.status !== 'seated',
       status: p.status,
       seatIndex: p.seatIndex,

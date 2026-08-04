@@ -20,6 +20,7 @@ export const EVENTS = {
   RABBIT_HUNT: 'rabbitHunt',
   DECISION_747: 'decision747',
   SET_CLIENT_SEED: 'setClientSeed',
+  SET_NAME_FONT: 'setNameFont',
   RUN_IT_TWICE_VOTE: 'runItTwiceVote',
   REBUY: 'rebuy',
   LEAVE_WAITLIST: 'leaveWaitlist',
@@ -168,15 +169,15 @@ export const TIMINGS = {
 // Index 0 is bottom-center; clockwise when viewed on screen.
 export const SEAT_COORDS = [
   { left: 50, top: 97 },
-  { left: 23, top: 90 },
-  { left: 7, top: 66 },
-  { left: 7, top: 32 },
-  { left: 23, top: 8 },
+  { left: 25, top: 90 },
+  { left: 11, top: 66 },
+  { left: 11, top: 32 },
+  { left: 25, top: 8 },
   { left: 50, top: 1 },
-  { left: 77, top: 8 },
-  { left: 93, top: 32 },
-  { left: 93, top: 66 },
-  { left: 77, top: 90 },
+  { left: 75, top: 8 },
+  { left: 89, top: 32 },
+  { left: 89, top: 66 },
+  { left: 75, top: 90 },
 ];
 
 // The same ring for a table stood on its end — used when the screen is taller
@@ -202,15 +203,15 @@ export const SEAT_COORDS_PORTRAIT = [
 // Where each seat's bet chips render, pulled toward the table center.
 export const BET_COORDS = [
   { left: 50, top: 76 },
-  { left: 30, top: 72 },
-  { left: 17, top: 58 },
-  { left: 17, top: 38 },
-  { left: 30, top: 24 },
+  { left: 32, top: 72 },
+  { left: 21, top: 58 },
+  { left: 21, top: 38 },
+  { left: 32, top: 24 },
   { left: 50, top: 22 },
-  { left: 70, top: 24 },
-  { left: 83, top: 38 },
-  { left: 83, top: 58 },
-  { left: 70, top: 72 },
+  { left: 68, top: 24 },
+  { left: 79, top: 38 },
+  { left: 79, top: 58 },
+  { left: 68, top: 72 },
 ];
 
 // Bet chip anchors for the upright (portrait) table.
@@ -226,6 +227,21 @@ export const BET_COORDS_PORTRAIT = [
   { left: 73, top: 59 },
   { left: 64, top: 74 },
 ];
+
+// Fonts a player can display their own name in. Every stack is built from
+// faces that ship with Windows, macOS/iOS or Android — no webfont to download,
+// so a name renders instantly and identically for everyone at the table.
+export const NAME_FONTS = {
+  classic: { label: 'Classic', stack: "'Segoe UI','Helvetica Neue',Arial,sans-serif" },
+  bubble: { label: 'Bubble', stack: "'Arial Black','Arial Bold',Gadget,'Helvetica Neue',sans-serif" },
+  stencil: { label: 'Stencil', stack: "Impact,Haettenschweiler,'Arial Narrow Bold',sans-serif" },
+  slab: { label: 'Slab', stack: "Rockwell,'Rockwell Nova',Georgia,'Times New Roman',serif" },
+  typewriter: { label: 'Typewriter', stack: "'Courier New',Courier,monospace" },
+  script: { label: 'Script', stack: "'Segoe Script','Brush Script MT','Snell Roundhand',cursive" },
+  deco: { label: 'Deco', stack: "'Copperplate','Copperplate Gothic Light','Palatino Linotype',serif" },
+};
+
+export const DEFAULT_NAME_FONT = 'classic';
 
 // The reaction palette. Server-validated, so a client can't inject arbitrary
 // text through the reaction channel.
