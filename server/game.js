@@ -47,8 +47,15 @@ export class Game {
     // sits waiting for players doesn't burn through its blind levels.
     this.tournamentStartedAt = null;
     this.level = 0;
+    // When the CURRENT level began. The level is stepped from this rather than
+    // divided out of the total elapsed time, so lengthening a level mid-event
+    // pushes the next one further out instead of rewinding the ladder, and a
+    // backwards wall-clock step can never produce a negative level.
+    this.levelStartedAt = null;
     this.tournamentOver = false;
-    this.rebuysClosedLogged = false;
+    // Registration latches shut. Without this, raising the re-buy period after
+    // the window closed would re-open a tournament that has been playing out.
+    this.registrationClosed = false;
     // The blinds the ladder is measured from — captured when the clock starts,
     // so a later settings change can't retroactively rewrite the structure.
     this.startingBigBlind = null;
@@ -692,40 +699,42 @@ export class Game {
     return !!this.settings.tournament;
   }
 
-  // Which blind level the clock is on right now. Levels only ever advance
-  // between hands: a hand always finishes on the blinds it was dealt with.
-  levelNow() {
-    if (!this.isTournament() || !this.tournamentStartedAt) return 0;
+  // How long the current level lasts. Guarded because a level of 0 (or NaN)
+  // would make the step loop below never terminate.
+  levelMs() {
     const minutes = this.settings.levelMinutes;
-    if (minutes <= 0) return 0;
-    return Math.floor((Date.now() - this.tournamentStartedAt) / (minutes * 60_000));
+    return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : 15 * 60_000;
   }
 
   // Re-buys close once the re-buy period is up. 0 minutes means a freezeout:
-  // one bullet, from the very first hand.
+  // one bullet, from the very first hand. Once shut it stays shut for the
+  // session — a settings change can't let the field back in.
   rebuysOpen() {
     if (!this.isTournament()) return true;
+    if (this.registrationClosed) return false;
     // Before the first hand nothing has started, so registration is open —
     // including for a freezeout, where the window shuts the moment cards fly.
     if (!this.tournamentStartedAt) return true;
-    return Date.now() - this.tournamentStartedAt < this.settings.rebuyMinutes * 60_000;
+    const mins = Number.isFinite(this.settings.rebuyMinutes) ? this.settings.rebuyMinutes : 0;
+    if (Date.now() - this.tournamentStartedAt < mins * 60_000) return true;
+    this.registrationClosed = true;
+    return false;
   }
 
   // Milliseconds until the blinds go up; null when there is no clock running.
   msToNextLevel() {
-    if (!this.isTournament() || !this.tournamentStartedAt) return null;
-    const each = this.settings.levelMinutes * 60_000;
-    if (each <= 0) return null;
-    const elapsed = Date.now() - this.tournamentStartedAt;
-    return each - (elapsed % each);
+    if (!this.isTournament() || !this.levelStartedAt) return null;
+    return Math.max(0, this.levelStartedAt + this.levelMs() - Date.now());
   }
 
   // Called between hands only. Starts the clock on the first hand, then raises
   // the blinds whenever the level has ticked over.
   advanceTournamentClock() {
     if (!this.isTournament()) return;
+    const now = Date.now();
     if (!this.tournamentStartedAt) {
-      this.tournamentStartedAt = Date.now();
+      this.tournamentStartedAt = now;
+      this.levelStartedAt = now;
       this.startingBigBlind = this.settings.bigBlind;
       this.level = 0;
       this.addLog(
@@ -734,15 +743,23 @@ export class Game {
       );
       return;
     }
-    const now = this.levelNow();
-    if (now === this.level) return;
-    this.level = now;
-    const { smallBlind, bigBlind } = blindsForLevel(this.startingBigBlind, now);
-    this.settings = { ...this.settings, smallBlind, bigBlind };
-    this.addLog(`Level ${now + 1} — blinds up to ${smallBlind}/${bigBlind}`);
-    if (!this.rebuysOpen() && !this.rebuysClosedLogged) {
-      this.rebuysClosedLogged = true;
-      this.addLog('Re-buy period is over — from here it plays out to one winner');
+    // Stepped one level at a time from when the current one began, so the
+    // ladder only ever climbs. 200 is a runaway guard, not a real bound — it is
+    // more levels than any home tournament will see.
+    let raised = 0;
+    while (now - this.levelStartedAt >= this.levelMs() && raised < 200) {
+      this.levelStartedAt += this.levelMs();
+      this.level += 1;
+      raised += 1;
+    }
+    if (raised > 0) {
+      const { smallBlind, bigBlind } = blindsForLevel(this.startingBigBlind, this.level);
+      this.settings = { ...this.settings, smallBlind, bigBlind };
+      this.addLog(`Level ${this.level + 1} — blinds up to ${smallBlind}/${bigBlind}`);
+    }
+    if (!this.rebuysOpen() && !this.registrationClosedLogged) {
+      this.registrationClosedLogged = true;
+      this.addLog('Registration is closed — from here it plays out to one winner');
     }
   }
 
@@ -750,15 +767,19 @@ export class Game {
   // chips has won it. The table pauses rather than closing, so the ledger and
   // the hand history stay right there to look at.
   declareTournamentWinner(winner) {
-    if (this.tournamentOver) return;
-    this.tournamentOver = true;
     this.status = GAME_STATUS.PAUSED;
     this.clearTimer();
-    this.addLog(
-      winner
-        ? `${winner.nickname} wins the tournament with ${winner.stack} chips`
-        : 'The tournament is over'
-    );
+    // Announced once, but the pause and the broadcast happen every time we get
+    // here. Latching the whole method would leave a resumed table stopped dead
+    // with no log line and no state going out.
+    if (!this.tournamentOver) {
+      this.tournamentOver = true;
+      this.addLog(
+        winner
+          ? `${winner.nickname} wins the tournament with ${winner.stack} chips`
+          : 'The tournament is over'
+      );
+    }
     this.emitChanged();
   }
 

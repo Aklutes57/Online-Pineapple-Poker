@@ -66,7 +66,7 @@ for (const [name, w, h, wantUpright] of views) {
   await page.waitForSelector('#table');
   await page.waitForTimeout(800);
 
-  const m = await page.evaluate(([landscapeCoords, portraitCoords]) => {
+  const m = await page.evaluate(async ([landscapeCoords, portraitCoords]) => {
     const de = document.documentElement;
     const t = document.getElementById('table');
     const r = t.getBoundingClientRect();
@@ -82,6 +82,28 @@ for (const [name, w, h, wantUpright] of views) {
     // every chip is checked against every nameplate, card fan and avatar.
     const hits = (a, b) =>
       a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+    // The probe has to measure the pod at its TALLEST, not at its emptiest.
+    // A bare table has no last-action bubble and no webcam tile, so probing one
+    // proves nothing about the layout people actually see — a chip can only
+    // ever collide with the things that appear once a hand is under way.
+    const stand = [];
+    for (const pod of document.querySelectorAll('#seats-layer .seat.occupied')) {
+      const plate = pod.querySelector('.nameplate');
+      if (plate && !plate.querySelector('.np-bubble')) {
+        const bubble = document.createElement('div');
+        bubble.className = 'np-bubble probe';
+        bubble.textContent = 'raise 200';
+        plate.appendChild(bubble);
+        stand.push(bubble);
+      }
+      if (!pod.querySelector('video.seat-cam')) {
+        const cam = document.createElement('video');
+        cam.className = 'seat-cam probe';
+        pod.insertBefore(cam, pod.firstChild);
+        stand.push(cam);
+      }
+    }
+
     // Only the blinds are actually live, so every remaining anchor is probed
     // with a stand-in chip: the check is about geometry, not about the hand.
     const layer = document.getElementById('bets-layer');
@@ -99,11 +121,21 @@ for (const [name, w, h, wantUpright] of views) {
       layer.appendChild(el);
       probes.push(el);
     });
+    // Placing the chips is the app's job, so the gate asks the app to do it
+    // against the pod it just built — measuring anchors alone would only prove
+    // the constants are what the constants are.
+    await (await import('/js/render.js')).clearChipsOfPods();
     const chips = [...layer.querySelectorAll('.bet-chip')].map((c) => c.getBoundingClientRect());
-    const pods = [...document.querySelectorAll('#seats-layer .nameplate, #seats-layer .card, #seats-layer .seat-avatar')]
-      .map((n) => n.getBoundingClientRect());
+    // Everything a chip could land on, including the absolutely-positioned
+    // action bubble (which is NOT inside its nameplate's rect) and the webcam
+    // tile, which is the tallest thing a pod ever holds.
+    const pods = [...document.querySelectorAll(
+      '#seats-layer .nameplate, #seats-layer .card, #seats-layer .seat-avatar,'
+      + ' #seats-layer .np-bubble, #seats-layer video.seat-cam'
+    )].map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
     const collisions = chips.filter((c) => pods.some((n) => hits(c, n))).length;
     for (const el of probes) el.remove();
+    for (const el of stand) el.remove();
 
     return {
       upright: t.classList.contains('upright'),

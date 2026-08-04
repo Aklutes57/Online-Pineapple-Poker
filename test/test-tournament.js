@@ -85,9 +85,9 @@ function check(name, cond) {
     game.level === 0 && game.settings.bigBlind === 50 && game.settings.smallBlind === 25);
   check('the countdown is at most one full level', game.msToNextLevel() <= 15 * 60_000);
 
-  // Wind the start time back so the clock reads as two levels in.
+  // Wind the clock back so two levels have elapsed.
+  game.levelStartedAt -= 31 * 60_000;
   game.tournamentStartedAt -= 31 * 60_000;
-  check('the level is read from the wall clock', game.levelNow() === 2);
   check('blinds do not move until a hand boundary', game.settings.bigBlind === 50);
   game.advanceTournamentClock();
   const l2 = blindsForLevel(50, 2);
@@ -102,10 +102,81 @@ function check(name, cond) {
 
   // The ladder is measured from the STARTING blind, not the current one, so a
   // level never compounds on a level.
-  game.tournamentStartedAt -= 15 * 60_000;
+  game.levelStartedAt -= 15 * 60_000;
   game.advanceTournamentClock();
   check('the ladder is measured from the starting blind, never compounded',
     game.settings.bigBlind === blindsForLevel(50, 3).bigBlind);
+}
+
+// ---- the clock only ever climbs ----
+{
+  const { game } = createGame(
+    { smallBlind: 25, bigBlind: 50, tournament: true, levelMinutes: 15, rebuyMinutes: 90 },
+    'Host', null
+  );
+  game.advanceTournamentClock();
+  game.levelStartedAt -= 61 * 60_000; // four levels of catching up to do
+  game.advanceTournamentClock();
+  check('a long gap catches every level up in one go', game.level === 4);
+  const atLevel4 = game.settings.bigBlind;
+  check('and lands on the right rung', atLevel4 === blindsForLevel(50, 4).bigBlind);
+
+  // The host lengthens the levels mid-event. That must push the NEXT level
+  // further out, never rewind the ladder.
+  game.updateSettings({ levelMinutes: 60 });
+  game.advanceTournamentClock();
+  check('lengthening a level never walks the blinds back down',
+    game.level === 4 && game.settings.bigBlind === atLevel4);
+  check('the countdown runs to the new length', game.msToNextLevel() <= 60 * 60_000);
+
+  // A backwards wall-clock step (an NTP correction) must not produce a negative
+  // level, and must never put a NaN anywhere near a blind.
+  game.levelStartedAt += 5;
+  game.advanceTournamentClock();
+  check('a backwards clock step leaves the level alone', game.level === 4);
+  check('the blinds are always real numbers',
+    Number.isFinite(game.settings.smallBlind) && Number.isFinite(game.settings.bigBlind)
+    && game.settings.bigBlind >= 2);
+}
+
+// Raising the re-buy period does not re-open a tournament that already shut.
+{
+  const { game } = createGame(
+    { smallBlind: 25, bigBlind: 50, tournament: true, levelMinutes: 15, rebuyMinutes: 0 },
+    'Host', null
+  );
+  game.advanceTournamentClock();
+  check('the freezeout is shut', game.rebuysOpen() === false);
+  game.updateSettings({ rebuyMinutes: 240 });
+  check('a later settings change cannot re-open registration', game.rebuysOpen() === false);
+}
+
+// The finish is announced once, but a resumed table never dies silently.
+{
+  const { game, host } = createGame(
+    { smallBlind: 25, bigBlind: 50, tournament: true, levelMinutes: 15, rebuyMinutes: 0,
+      minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const rival = game.addPlayer('Rival', null);
+  rival.connected = true;
+  game.requestSeat(rival, 200, 1);
+  if (rival.status === 'requesting') game.approveSeat(rival.id, true);
+  game.status = GAME_STATUS.RUNNING;
+  game.advanceTournamentClock();
+  rival.stack = 0;
+  game.startHand();
+  const logsAfterFirst = game.logs.length;
+  check('the finish pauses the table', game.status === GAME_STATUS.PAUSED);
+
+  // Host resumes and it reaches the same finish again.
+  game.status = GAME_STATUS.RUNNING;
+  game.startHand();
+  check('a resumed finished table pauses again rather than dying quietly',
+    game.status === GAME_STATUS.PAUSED);
+  check('but the winner is only announced once', game.logs.length === logsAfterFirst);
 }
 
 // ---- the re-buy window ----

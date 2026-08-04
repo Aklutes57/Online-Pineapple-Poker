@@ -158,12 +158,20 @@ export const BLIND_LADDER = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 
 // The blinds for a level index, from the table's starting big blind. Past the
 // end of the ladder each further level doubles, so a long tournament never
 // stalls at a fixed level.
+//
+// Total about the inputs: a negative or non-integer level would index off the
+// end of the ladder, and `Math.round(bb * undefined)` is NaN — which would be
+// posted as a blind and turn a stack into NaN, taking chip conservation with
+// it. Nothing downstream would catch that, so it is caught here.
 export function blindsForLevel(startingBigBlind, level) {
+  const base = Number.isFinite(startingBigBlind) && startingBigBlind >= 2
+    ? Math.floor(startingBigBlind)
+    : 2;
+  const idx = Number.isFinite(level) ? Math.max(0, Math.floor(level)) : 0;
   const last = BLIND_LADDER.length - 1;
-  const mult = level <= last
-    ? BLIND_LADDER[level]
-    : BLIND_LADDER[last] * 2 ** (level - last);
-  const bigBlind = Math.max(2, Math.round(startingBigBlind * mult));
+  const mult = idx <= last ? BLIND_LADDER[idx] : BLIND_LADDER[last] * 2 ** (idx - last);
+  const raw = Math.round(base * mult);
+  const bigBlind = Number.isFinite(raw) ? Math.max(2, Math.min(raw, MAX_CHIPS)) : base;
   return { smallBlind: Math.max(1, Math.ceil(bigBlind / 2)), bigBlind };
 }
 

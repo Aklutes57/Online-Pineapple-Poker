@@ -172,6 +172,20 @@ function renderTheme(client) {
   if (theme.railColor) table.style.borderColor = theme.railColor;
 }
 
+// The top bar is three tracks: identity, controls, counterweight. CSS can size
+// the first from its content but cannot mirror that width onto the third, so it
+// is measured here. Without it the controls centre on whatever the badges left
+// over, which is not the middle of the screen.
+export function syncTopBar() {
+  const meta = document.querySelector('.top-meta');
+  const spacer = document.querySelector('.top-spacer');
+  if (!meta || !spacer) return;
+  // Measured with the counterweight collapsed, so it never measures itself.
+  spacer.style.width = '0px';
+  const want = Math.round(meta.getBoundingClientRect().width);
+  spacer.style.width = `${want}px`;
+}
+
 function renderHeader(client) {
   const { state } = client;
   // A live hand always shows the game it was dealt as, even if the host has
@@ -186,6 +200,7 @@ function renderHeader(client) {
     : `Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}`;
   badge.textContent = `${v ? v.label : variantKey} · ${stakes}${handNo}`;
   renderTournamentClock(state);
+  syncTopBar();
 }
 
 // The tournament clock: which level, how long until the blinds go up, and
@@ -458,6 +473,78 @@ function renderBets(client) {
     chip.textContent = amount;
     layer.appendChild(chip);
   }
+  clearChipsOfPods();
+}
+
+// Move each bet chip off everything in its seat pod. The anchors are tuned for
+// a bare pod, but a pod grows: a last-action bubble appears, a webcam tile is
+// twice the height of anything else, a profile picture sits above the cards.
+// Rather than hand-tune twenty coordinates for every combination, a chip that
+// is covered searches outward from its anchor for the nearest clear spot —
+// correct at any pod height, and what the orientation gate asserts.
+//
+// Done arithmetically on one set of measurements rather than by nudging the
+// element and re-reading it, so a crowded ten-handed table costs one layout
+// read per chip instead of a hundred.
+export function clearChipsOfPods() {
+  const layer = betsLayer();
+  const table = document.getElementById('table');
+  if (!table || !layer.children.length) return;
+  const box = layer.getBoundingClientRect();
+  const felt = table.getBoundingClientRect();
+  if (!box.width || !box.height) return;
+
+  const obstacles = [
+    ...document.querySelectorAll(
+      '#seats-layer .nameplate, #seats-layer .card, #seats-layer .seat-avatar,'
+      + ' #seats-layer .np-bubble, #seats-layer video.seat-cam'
+    ),
+  ].map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+  // The middle of the felt is not somewhere to hide either — the board and the
+  // pot live there — and nothing may leave the felt.
+  const centre = document.getElementById('table-center');
+  if (centre) {
+    const r = centre.getBoundingClientRect();
+    if (r.width > 0) obstacles.push(r);
+  }
+  if (!obstacles.length) return;
+
+  const clash = (x, y, w, h) => obstacles.some((o) =>
+    x - w / 2 < o.right - 1 && x + w / 2 > o.left + 1
+    && y - h / 2 < o.bottom - 1 && y + h / 2 > o.top + 1);
+
+  const cx = felt.left + felt.width / 2;
+  const cy = felt.top + felt.height / 2;
+  const stepPx = Math.max(6, Math.min(felt.width, felt.height) * 0.02);
+
+  for (const chip of layer.children) {
+    const r = chip.getBoundingClientRect();
+    if (!r.width) continue;
+    const x0 = r.left + r.width / 2;
+    const y0 = r.top + r.height / 2;
+    if (!clash(x0, y0, r.width, r.height)) continue;
+
+    // Search outward, trying the direction of the middle of the felt first so
+    // a displaced chip still reads as belonging to the seat it came from.
+    const toCentre = Math.atan2(cy - y0, cx - x0);
+    let best = null;
+    for (let ring = 1; ring <= 12 && !best; ring++) {
+      for (let i = 0; i < 12 && !best; i++) {
+        // 0, +30, -30, +60, -60 … around the line to the centre.
+        const turn = (Math.ceil(i / 2) * (Math.PI / 6)) * (i % 2 === 0 ? 1 : -1);
+        const a = toCentre + turn;
+        const x = x0 + Math.cos(a) * stepPx * ring;
+        const y = y0 + Math.sin(a) * stepPx * ring;
+        // Stay on the felt: a chip pushed off the table is no better than one
+        // sitting on a name.
+        if (x < felt.left + 8 || x > felt.right - 8 || y < felt.top + 8 || y > felt.bottom - 8) continue;
+        if (!clash(x, y, r.width, r.height)) best = { x, y };
+      }
+    }
+    if (!best) continue; // nowhere clear — leave it on its anchor
+    chip.style.left = `${((best.x - box.left) / box.width) * 100}%`;
+    chip.style.top = `${((best.y - box.top) / box.height) * 100}%`;
+  }
 }
 
 // ---- board & pot ----
@@ -640,6 +727,7 @@ export function startTimerLoop(client) {
     }
 
     paintTourneyClock();
+    syncTopBar();
 
     // The 3-2-1 reveal countdown ticks here, between broadcasts.
     const cdNum = document.getElementById('cd747-num');

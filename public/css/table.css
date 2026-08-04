@@ -65,7 +65,10 @@ body.disconnected::after {
   grid-area: top;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  /* The three tracks stay on one flex line — the CONTROLS wrap, inside their
+     own track. Letting the bar itself wrap pushed the counterweight onto a
+     second line on a wide screen, which quietly un-centred everything. */
+  flex-wrap: nowrap;
   gap: 8px 14px;
   min-height: 52px;
   padding: 6px 14px;
@@ -89,31 +92,32 @@ body.disconnected::after {
 /* The identity track and the counterweight share the leftover width equally,
    which is what puts the buttons on the screen's centre line rather than on
    the centre of whatever space the badges happened to leave. */
+/* The identity track keeps whatever width its content needs — clipping it hid
+   the account chip completely, which is the table's only link to /me. The
+   counterweight opposite is matched to it in JS (syncTopBar), so the controls
+   land on the screen's centre line without anything being cut off. */
 .top-meta {
   display: flex;
   align-items: center;
   gap: 14px;
-  flex: 1 1 0;
-  min-width: 0;
-  /* Clipped rather than spilling: the buttons own the centre, and nothing in
-     here is allowed to slide underneath them. */
+  flex: 0 0 auto;
+  max-width: 46%;
   overflow: hidden;
 }
 
-/* The brand and the badges keep their size; the game badge is the one that
-   gives, and it already ellipses. */
 .top-meta > * {
   flex: 0 0 auto;
 }
 
+/* The game badge is the designated shrinker — it already ellipses, and it is
+   the one thing here that is repeated elsewhere in the UI. */
 .top-meta > #game-badge {
   flex: 0 1 auto;
   min-width: 0;
 }
 
 .top-spacer {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .top-actions {
@@ -122,28 +126,10 @@ body.disconnected::after {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  /* Capped so the controls wrap to a second row instead of squeezing the
-     tracks either side of them — which is what keeps them on the screen's
-     centre line rather than merely centred in what was left over. 352px a
-     side is what the brand plus the shuffle chip actually need. */
-  flex: 0 1 auto;
+  /* Takes whatever is left between the two matched tracks and centres in it,
+     wrapping to another row rather than crowding them. */
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: calc(100% - 704px);
-}
-
-/* Below ~1300px, reserving 352px either side would push the controls into four
-   or five rows and eat the felt. Rather than pay that, the tracks collapse to
-   their content and the controls centre in what is left. */
-@media (max-width: 1300px) {
-  .top-meta {
-    flex: 0 0 auto;
-    overflow: visible;
-  }
-  .top-spacer { display: none; }
-  .top-actions {
-    max-width: none;
-    margin: 0 auto;
-  }
 }
 
 .top-btn {
@@ -571,7 +557,10 @@ body.disconnected::after {
   grid-template-rows: 1fr auto;
   justify-items: center;
   align-items: center;
-  padding: 3% 0 5%;
+  /* Sized off the card's own face, never a percentage: percentage padding
+     resolves against the PARENT's inline size, so the index slid down the card
+     every time another one was dealt into the row. */
+  padding: calc(var(--face) * 0.04) 0 calc(var(--face) * 0.07);
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -1214,6 +1203,26 @@ td.dim { color: var(--text-dim); }
   #table-area { padding: 4px; }
 }
 
+/* Below ~1500px, reserving the identity track's full width on both sides
+   pushes the controls into five or six rows and eats the felt. The wordmark
+   drops to its chip and the controls tighten up, which buys the room back
+   without giving up the centre line or hiding anything that says what game
+   you are in. */
+@media (max-width: 1500px) {
+  #top-bar .brand-mark .brand-words {
+    display: none;
+  }
+
+  .top-btn, .top-select {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .top-actions {
+    gap: 7px;
+  }
+}
+
 @media (max-width: 720px) {
   :root {
     --card-w: 30px;
@@ -1250,6 +1259,11 @@ td.dim { color: var(--text-dim); }
   .top-actions { max-width: none; }
 
   .top-actions {
+    /* Centring inside a nowrap scrolling bar splits the overflow to BOTH
+       sides, and the left half lands before the scroll origin where no scroll
+       position can reach it. On a phone the row simply starts at the start. */
+    justify-content: flex-start;
+    flex: 0 0 auto;
     flex-wrap: nowrap;
     gap: 6px;
   }
