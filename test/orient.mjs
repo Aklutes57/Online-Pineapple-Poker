@@ -102,6 +102,21 @@ for (const [name, w, h, wantUpright] of views) {
         pod.insertBefore(cam, pod.firstChild);
         stand.push(cam);
       }
+      // The wide-fan shape: PLO and 747 deal four cards, which is when the
+      // fans beside yours reach furthest. Pad every fan out to four, with the
+      // class render.js would give a real four-card deal.
+      const fan = pod.querySelector('.cards-fan');
+      if (fan && fan.children.length > 0) {
+        while (fan.children.length < 4) {
+          const back = document.createElement('div');
+          back.className = 'card back probe';
+          fan.appendChild(back);
+          stand.push(back);
+        }
+        if (!fan.classList.contains('fan-4')) {
+          fan.classList.add('fan-4', 'probe-class');
+        }
+      }
     }
 
     // Only the blinds are actually live, so every remaining anchor is probed
@@ -134,8 +149,21 @@ for (const [name, w, h, wantUpright] of views) {
       + ' #seats-layer .np-bubble, #seats-layer video.seat-cam'
     )].map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
     const collisions = chips.filter((c) => pods.some((n) => hits(c, n))).length;
+    // Whatever else overlaps, YOUR cards must be the thing on top: hit-test
+    // the centre of each of my cards and require my own seat to answer.
+    let myCardsBlocked = 0;
+    for (const card of document.querySelectorAll('#seats-layer .seat.me .cards-fan .card')) {
+      const r = card.getBoundingClientRect();
+      if (!r.width) continue;
+      const topEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (topEl && !topEl.closest('.seat.me')) myCardsBlocked++;
+    }
+
     for (const el of probes) el.remove();
     for (const el of stand) el.remove();
+    for (const fan of document.querySelectorAll('.cards-fan.probe-class')) {
+      fan.classList.remove('fan-4', 'probe-class');
+    }
 
     return {
       upright: t.classList.contains('upright'),
@@ -147,18 +175,19 @@ for (const [name, w, h, wantUpright] of views) {
       seatCount: seats.length,
       chips: chips.length,
       collisions,
+      myCardsBlocked,
     };
   }, [landscapeCoords, portraitCoords]);
 
   const orientOk = m.upright === wantUpright;
   const tallerThanWide = m.th > m.tw;
   const shapeOk = wantUpright ? tallerThanWide : !tallerThanWide;
-  const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0;
+  const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0 && m.myCardsBlocked === 0;
   // How much of the screen the felt covers — the point of the whole change.
   const cover = ((m.tw * m.th) / (m.iw * m.ih) * 100).toFixed(0);
   const ok = orientOk && shapeOk && fits;
   if (!ok) bad++;
-  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips}`);
+  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked}`);
   await page.screenshot({ path: `${SHOT}/orient-${name}.png` });
   await ctx.close();
 }

@@ -391,6 +391,14 @@ body.disconnected::after {
   flex-direction: column;
   align-items: center;
   width: 150px;
+  z-index: 1;
+}
+
+/* Your own seat always paints on top: in the wide-fan games a neighbour's
+   cards or plate can geometrically reach your hand, and whatever else gives,
+   YOUR cards are never the thing that gets covered. */
+.seat.me {
+  z-index: 5;
 }
 
 .seat.empty .empty-seat-btn {
@@ -444,6 +452,35 @@ body.disconnected::after {
   --face: calc(var(--card-w) * 1.66);
   width: calc(var(--card-w) * 1.66);
   height: calc(var(--card-h) * 1.66);
+}
+
+/* Four- and five-card games: everyone's fan doubles in width, and on the ring
+   the seats beside yours reach straight into your hand. The flexible thing in
+   a pod is the CARDS — never the webcam tile, which keeps its full size — so a
+   neighbour's backs shrink until their fan is no wider than a two-card one,
+   and your own gives back a step of its big-screen bonus. */
+.cards-fan.fan-4,
+.cards-fan.fan-5 {
+  gap: 2px;
+}
+
+.cards-fan.fan-4:not(.mine) .card {
+  --face: calc(var(--card-w) * 0.62);
+  width: calc(var(--card-w) * 0.62);
+  height: calc(var(--card-h) * 0.62);
+}
+
+.cards-fan.fan-5:not(.mine) .card {
+  --face: calc(var(--card-w) * 0.5);
+  width: calc(var(--card-w) * 0.5);
+  height: calc(var(--card-h) * 0.5);
+}
+
+.cards-fan.mine.fan-4 .card,
+.cards-fan.mine.fan-5 .card {
+  --face: calc(var(--card-w) * 1.18);
+  width: calc(var(--card-w) * 1.18);
+  height: calc(var(--card-h) * 1.18);
 }
 
 .nameplate {
@@ -1338,6 +1375,15 @@ td.dim { color: var(--text-dim); }
     --face: calc(var(--card-w) * 1.42);
     width: calc(var(--card-w) * 1.42);
     height: calc(var(--card-h) * 1.42);
+  }
+
+  /* Five cards across a phone: your fan still has to fit between the two
+     seats beside it, so it drops to barely over seat size. */
+  .cards-fan.mine.fan-4 .card,
+  .cards-fan.mine.fan-5 .card {
+    --face: calc(var(--card-w) * 1.05);
+    width: calc(var(--card-w) * 1.05);
+    height: calc(var(--card-h) * 1.05);
   }
 
   /* The sheet's grid is roomy on a phone; full-width cells read as a list. */

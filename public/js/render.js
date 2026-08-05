@@ -362,6 +362,11 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     }
   }
 
+  // Four- and five-card games (PLO, 747) deal fans wide enough to reach into
+  // the next seat, so the fan carries its size for the CSS to shrink by.
+  const dealt = fan.children.length;
+  if (dealt >= 4) fan.classList.add(dealt >= 5 ? 'fan-5' : 'fan-4');
+
   // Nameplate.
   const plate = document.createElement('div');
   plate.className = 'nameplate';
@@ -528,7 +533,7 @@ export function clearChipsOfPods() {
     // a displaced chip still reads as belonging to the seat it came from.
     const toCentre = Math.atan2(cy - y0, cx - x0);
     let best = null;
-    for (let ring = 1; ring <= 12 && !best; ring++) {
+    for (let ring = 1; ring <= 24 && !best; ring++) {
       for (let i = 0; i < 12 && !best; i++) {
         // 0, +30, -30, +60, -60 … around the line to the centre.
         const turn = (Math.ceil(i / 2) * (Math.PI / 6)) * (i % 2 === 0 ? 1 : -1);
