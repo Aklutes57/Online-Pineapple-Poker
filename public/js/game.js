@@ -354,6 +354,50 @@ document.getElementById('cam-frame-input')?.addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+// ---- the caret menu ----
+// The bar keeps three things: the shuffle chip, Chat (whose badges must stay
+// visible), and this caret. Everything else lives in the sheet below it.
+const menuToggle = document.getElementById('menu-toggle');
+const topMenu = document.getElementById('top-menu');
+
+function setMenu(open) {
+  if (!menuToggle || !topMenu) return;
+  menuToggle.setAttribute('aria-expanded', String(open));
+  topMenu.classList.toggle('hidden', !open);
+  if (open) {
+    // Fixed-positioned so nothing clips it; anchored to the bar's real bottom.
+    topMenu.style.top = `${document.getElementById('top-bar').getBoundingClientRect().bottom}px`;
+  }
+}
+
+function menuOpen() {
+  return menuToggle?.getAttribute('aria-expanded') === 'true';
+}
+
+menuToggle?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setMenu(!menuOpen());
+});
+
+// A one-shot action closes the sheet behind it; pickers and file inputs stay
+// open, because choosing from them is not "done with the menu".
+topMenu?.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.id === 'react-btn') return; // opens its own picker inside the sheet
+  setMenu(false);
+});
+
+document.addEventListener('click', (e) => {
+  if (!menuOpen()) return;
+  if (topMenu.contains(e.target) || menuToggle.contains(e.target)) return;
+  setMenu(false);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && menuOpen()) setMenu(false);
+});
+
 // ---- how the table looks on YOUR screen ----
 // Nobody else is affected: this is a device preference, applied before the
 // first paint so the table never flashes the wrong room.

@@ -46,6 +46,16 @@ async function check(name, cond) {
   }
 }
 
+// The table controls live behind the Menu caret; anything inside the sheet
+// needs it open before Playwright can see it. One-shot buttons close it again.
+async function openMenu(page) {
+  const open = await page.evaluate(
+    () => document.getElementById('menu-toggle')?.getAttribute('aria-expanded') === 'true'
+  );
+  if (!open) await page.click('#menu-toggle');
+  await page.waitForSelector('#top-menu:not(.hidden)');
+}
+
 // ---- boot server ----
 
 const { httpServer } = buildServer();
@@ -121,8 +131,10 @@ try {
     await anna.evaluate(() => !document.getElementById('table').classList.contains('upright')));
 
   // ---- in-app webcam + voice: a seated player can turn it on ----
+  await openMenu(anna);
   await anna.waitForSelector('#av-join:not(.hidden)');
   await anna.click('#av-join');
+  await openMenu(anna);
   await anna.waitForSelector('#av-live:not(.hidden)');
   await anna.waitForFunction(() => {
     const v = document.querySelector('#seats-layer video.seat-cam.mine');
@@ -130,8 +142,10 @@ try {
   }, { timeout: 15000 });
   await check('a seated player can turn on their webcam at their seat', true);
   await anna.click('#av-leave');
+  await openMenu(anna);
   await anna.waitForSelector('#av-join:not(.hidden)');
   await check('leaving video restores the Video button', true);
+  await anna.keyboard.press('Escape');
 
   // ---- two friends join via the invite link ----
   const ben = await newPage('ben');
@@ -191,6 +205,7 @@ try {
   await check('a hand played to a finish (winner shown)', winnerSeen);
 
   // ---- 747 Poker: switch the game mid-session and play a dealer hand ----
+  await openMenu(anna);
   await anna.click('#host-menu-btn');
   await anna.waitForSelector('#host-modal:not(.hidden)');
   await anna.selectOption('#h-variant', '747');
@@ -241,6 +256,7 @@ try {
 
   // Back to hold'em for the rest of the run — and the riding pot (if the
   // dealer swept) must liquidate without breaking anything.
+  await openMenu(anna);
   await anna.click('#host-menu-btn');
   await anna.waitForSelector('#host-modal:not(.hidden)');
   await anna.selectOption('#h-variant', 'holdem');
@@ -248,6 +264,7 @@ try {
   await anna.click('#h-done');
 
   // ---- emoji reactions reach the other players ----
+  await openMenu(ben);
   await ben.click('#react-btn');
   await ben.waitForSelector('#react-picker:not(.hidden)');
   await ben.click('.react-option[data-emoji="🔥"]');
@@ -462,6 +479,7 @@ try {
   await check('wrong password shows an error and does not sign in', true);
 
   // ---- four-color deck toggle ----
+  await openMenu(anna);
   await anna.click('#deck-toggle');
   await check('four-color deck toggles on',
     await anna.evaluate(() => document.body.classList.contains('four-color')));
@@ -473,6 +491,7 @@ try {
     (await anna.locator('.card[class*="suit-"]').count()) > 0);
 
   // ---- host can change the game mid-session ----
+  await openMenu(anna);
   await anna.click('#host-menu-btn');
   await anna.waitForSelector('#host-modal:not(.hidden)');
   await check('host modal offers a game selector',
@@ -523,7 +542,9 @@ try {
   const velvetGeo = await geometry();
   const velvetFelt = await anna.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--felt').trim());
+  await openMenu(anna);
   await anna.selectOption('#skin', 'tour');
+  await anna.keyboard.press('Escape'); // geometry is compared with the sheet shut, like the baseline
   await anna.waitForTimeout(300);
   const tourFelt = await anna.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--felt').trim());
@@ -572,7 +593,9 @@ try {
   await check(`no colour token is left on the Velvet value in every skin (${JSON.stringify(sharedColours)})`,
     sharedColours.length === 0);
 
+  await openMenu(anna);
   await anna.selectOption('#skin', 'velvet');
+  await anna.keyboard.press('Escape');
   await anna.waitForTimeout(200);
 
   // ---- tournament format lives in the create pop-up, cash game is default ----

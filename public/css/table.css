@@ -92,6 +92,59 @@ body.disconnected::after {
 /* The identity track and the counterweight share the leftover width equally,
    which is what puts the buttons on the screen's centre line rather than on
    the centre of whatever space the badges happened to leave. */
+/* The caret on the Menu button turns when the sheet is open. */
+#menu-toggle .caret {
+  display: inline-block;
+  margin-left: 2px;
+  transition: transform 0.18s ease;
+}
+
+#menu-toggle[aria-expanded='true'] .caret {
+  transform: rotate(180deg);
+}
+
+#menu-toggle[aria-expanded='true'] {
+  background: var(--ghost-hover);
+  border-color: var(--accent-lite);
+}
+
+/* The dropdown sheet: every control that used to crowd the bar, laid out as a
+   grid under it. Fixed-positioned (top set in JS from the bar's real height)
+   so neither the bar's own scrolling on a phone nor the grid row can clip it. */
+.top-menu {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 150;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--bg-panel);
+  border-bottom: 2px solid var(--accent);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.top-menu.hidden {
+  display: none;
+}
+
+/* Inside the sheet every control stretches to its cell, so the grid reads as
+   tidy rows rather than a ragged pile of pills. */
+.top-menu .top-btn,
+.top-menu .top-select,
+.top-menu .react-wrap,
+.top-menu .react-wrap .top-btn {
+  width: 100%;
+}
+
+/* The live-video cluster keeps its buttons together on one grid row span. */
+.top-menu .av-live {
+  display: contents;
+}
+
 /* The identity track keeps whatever width its content needs — clipping it hid
    the account chip completely, which is the table's only link to /me. The
    counterweight opposite is matched to it in JS (syncTopBar), so the controls
@@ -385,10 +438,12 @@ body.disconnected::after {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 
+/* Your own hand is the main pair on the table — with the controls folded away
+   behind the caret, the height the bar gave back goes to these. */
 .cards-fan.mine .card {
-  --face: calc(var(--card-w) * 1.42);
-  width: calc(var(--card-w) * 1.42);
-  height: calc(var(--card-h) * 1.42);
+  --face: calc(var(--card-w) * 1.66);
+  width: calc(var(--card-w) * 1.66);
+  height: calc(var(--card-h) * 1.66);
 }
 
 .nameplate {
@@ -1274,6 +1329,22 @@ td.dim { color: var(--text-dim); }
     padding: 5px 9px;
     font-size: 11.5px;
     white-space: nowrap;
+  }
+
+  /* A phone's bar was already one row, so the caret freed no height here — and
+     at 1.66x your own cards start brushing the neighbouring seat's. The bigger
+     hand is a big-screen luxury. */
+  .cards-fan.mine .card {
+    --face: calc(var(--card-w) * 1.42);
+    width: calc(var(--card-w) * 1.42);
+    height: calc(var(--card-h) * 1.42);
+  }
+
+  /* The sheet's grid is roomy on a phone; full-width cells read as a list. */
+  .top-menu {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+    padding: 10px;
   }
 
   #table-area { padding: 4px; }

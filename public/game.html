@@ -51,6 +51,15 @@
       </div>
       <div class="top-actions">
         <button id="fair-chip" class="fair-chip hidden" title="Provably-fair shuffle — click for details"></button>
+        <button id="panel-toggle" class="btn-ghost btn top-btn" title="Chat and logs">Chat<span id="unread-badge" class="hidden"></span><span id="seatreq-badge" class="req-badge hidden"></span></button>
+        <button id="menu-toggle" class="btn-ghost btn top-btn" title="Everything else about the table"
+                aria-expanded="false" aria-controls="top-menu" aria-haspopup="true">Menu <span class="caret" aria-hidden="true">▾</span></button>
+      </div>
+      <div class="top-spacer" aria-hidden="true"></div>
+
+      <!-- Everything that used to crowd the bar lives behind the caret, so the
+           bar stays one row and the felt gets the height back. -->
+      <div id="top-menu" class="top-menu hidden">
         <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">Invite</button>
         <span class="react-wrap">
           <button id="react-btn" class="btn-ghost btn top-btn" title="Send a reaction">React</button>
@@ -75,9 +84,7 @@
         <button id="push-bell" class="btn-ghost btn top-btn" title="Alerts when it's your turn and you're away">Alerts</button>
         <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">Host</button>
         <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
-        <button id="panel-toggle" class="btn-ghost btn top-btn" title="Chat and logs">Chat<span id="unread-badge" class="hidden"></span><span id="seatreq-badge" class="req-badge hidden"></span></button>
       </div>
-      <div class="top-spacer" aria-hidden="true"></div>
     </header>
 
     <main id="table-area">
