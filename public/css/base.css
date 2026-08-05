@@ -48,6 +48,18 @@
   --card-back-a: #27427c;
   --card-back-b: #1d3260;
 
+  /* The client-format chrome: money readouts, the felt watermark, the room
+     behind the table, and the campus/backdrop silhouette layer. Strings and
+     colours both live in the skin, so a look owns its whole scene. */
+  --money: #f3dc9a;
+  --wm-a: 'REG-POKER';
+  --wm-b: 'ONLINE';
+  --wm-ink: rgba(246, 237, 217, 0.5);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #47101f 0%, #2c0a14 50%, #16050a 100%);
+  --scape-a: #3a0f1b;
+  --scape-b: #4a1524;
+  --scape-o: 0;
+
   /* Playing cards, at the real 2.5 x 3.5 proportion (1 : 1.4). */
   --card-ratio: 1.4;
 }
@@ -93,6 +105,14 @@
   --card-red: #c8102e;
   --card-back-a: #12385a;
   --card-back-b: #0d2a44;
+  --money: #9fe3ff;
+  --wm-a: 'TOUR CIRCUIT';
+  --wm-b: 'FINAL TABLE';
+  --wm-ink: rgba(184, 232, 255, 0.4);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #16283c 0%, #0e131c 50%, #05080d 100%);
+  --scape-a: #101825;
+  --scape-b: #1a2433;
+  --scape-o: 0;
 }
 
 /* ---- Championship ----
@@ -136,6 +156,167 @@
   --card-red: #b3121f;
   --card-back-a: #a3202f;
   --card-back-b: #6d0f1b;
+  --money: #ffe08a;
+  --wm-a: 'CHAMPIONSHIP';
+  --wm-b: 'SERIES';
+  --wm-ink: rgba(243, 221, 154, 0.38);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #33230f 0%, #171009 50%, #0a0704 100%);
+  --scape-a: #241809;
+  --scape-b: #2b1d0c;
+  --scape-o: 0;
+}
+
+/* ---- CWRU Spartans ----
+   The approved client look: CWRU Blue felt under a gloss-black rail, sky-blue
+   trim, the campus skyline dim behind the table, money in pale green. */
+:root[data-skin='cwru'] {
+  --bg: #0a1626;
+  --bg-raised: #16283e;
+  --bg-panel: #0b1524;
+  --border: #24384f;
+  --text: #e8eef5;
+  --text-dim: #93a5b8;
+  --accent: #a6d2e6;
+  --accent-lite: #d5ecf7;
+  --accent-dark: #4d7f9a;
+  --blue: #12518f;
+  --green: #1f7a52;
+  --green-dark: #124a32;
+  --red: #8d2036;
+  --felt: #12294a;
+  --felt-dark: #0b1d38;
+  --felt-hi: #1a3a66;
+  --rail: #10161f;
+  --ink: #04070c;
+  --btn-ink: #052342;
+  --ghost-bg: rgba(4, 10, 18, 0.6);
+  --ghost-hover: rgba(166, 210, 230, 0.16);
+  --green-lite: #27915f;
+  --red-lite: #a3283f;
+  --red-deep: #6d1527;
+  --rail-ring: rgba(166, 210, 230, 0.5);
+  --rail-edge: #2a3548;
+  --felt-line: rgba(166, 210, 230, 0.24);
+  --glow: rgba(166, 210, 230, .14);
+  --pulse: 63, 142, 247;
+  --card-face: #f7fafc;
+  --card-ink: #10233c;
+  --plate-a: rgba(14, 24, 38, .96);
+  --plate-b: rgba(7, 13, 22, .96);
+  --chip-ink: #d5e6f2;
+  --card-red: #b3232e;
+  --card-back-a: #1c3a63;
+  --card-back-b: #102340;
+  --money: #cdeb8b;
+  --wm-a: 'CASE WESTERN\a RESERVE';
+  --wm-b: 'UNIVERSITY';
+  --wm-ink: rgba(159, 182, 204, 0.5);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #16304f 0%, #0c1c33 45%, #060d18 100%);
+  --scape-a: #101f35;
+  --scape-b: #1a2e4c;
+  --scape-o: 0.5;
+}
+
+/* ---- Wabash Scarlet ----
+   Scarlet felt in a black-leather room: the chapel steeple behind the table,
+   bone type, gold money. */
+:root[data-skin='wabash'] {
+  --bg: #0d0708;
+  --bg-raised: #2b1a1c;
+  --bg-panel: #180d0e;
+  --border: #4a2c2c;
+  --text: #f5ecec;
+  --text-dim: #bb9d9a;
+  --accent: #da291c;
+  --accent-lite: #f0a9a2;
+  --accent-dark: #8f1310;
+  --blue: #3a3134;
+  --green: #1d6f4b;
+  --green-dark: #114630;
+  --red: #a01b1c;
+  --felt: #7e1216;
+  --felt-dark: #560c0f;
+  --felt-hi: #a01b1c;
+  --rail: #17100f;
+  --ink: #0a0505;
+  --btn-ink: #fff5f0;
+  --ghost-bg: rgba(14, 6, 7, 0.6);
+  --ghost-hover: rgba(218, 41, 28, 0.16);
+  --green-lite: #268257;
+  --red-lite: #c8281c;
+  --red-deep: #7a0f0d;
+  --rail-ring: rgba(218, 41, 28, 0.5);
+  --rail-edge: #382423;
+  --felt-line: rgba(246, 239, 230, 0.22);
+  --glow: rgba(218, 41, 28, .14);
+  --pulse: 218, 41, 28;
+  --card-face: #f6efe6;
+  --card-ink: #1c1517;
+  --plate-a: rgba(36, 20, 21, .96);
+  --plate-b: rgba(19, 9, 10, .96);
+  --chip-ink: #f6e5db;
+  --card-red: #b3232e;
+  --card-back-a: #38292c;
+  --card-back-b: #20191b;
+  --money: #ffd977;
+  --wm-a: 'WABASH';
+  --wm-b: 'COLLEGE';
+  --wm-ink: rgba(227, 185, 178, 0.5);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #3d1a1c 0%, #240e10 45%, #0d0607 100%);
+  --scape-a: #2b1416;
+  --scape-b: #40201f;
+  --scape-o: 0.5;
+}
+
+/* ---- Classic Card Room ----
+   Casino green under varnished mahogany in a wood-panelled room: the look of
+   the rooms everybody learned in. */
+:root[data-skin='classic'] {
+  --bg: #120c06;
+  --bg-raised: #32281a;
+  --bg-panel: #14100a;
+  --border: #3d3324;
+  --text: #f0ece2;
+  --text-dim: #b3a893;
+  --accent: #d8b56a;
+  --accent-lite: #f0dbaa;
+  --accent-dark: #96793e;
+  --blue: #2b4f7d;
+  --green: #147444;
+  --green-dark: #0b4a2a;
+  --red: #8f2f2f;
+  --felt: #0e6b42;
+  --felt-dark: #07502f;
+  --felt-hi: #178a58;
+  --rail: #3d2712;
+  --ink: #0b0703;
+  --btn-ink: #241a06;
+  --ghost-bg: rgba(14, 10, 5, 0.6);
+  --ghost-hover: rgba(216, 181, 106, 0.16);
+  --green-lite: #2c9e63;
+  --red-lite: #a83a3a;
+  --red-deep: #6f1f1f;
+  --rail-ring: rgba(216, 181, 106, 0.55);
+  --rail-edge: #6b4622;
+  --felt-line: rgba(240, 236, 226, 0.2);
+  --glow: rgba(255, 226, 150, .13);
+  --pulse: 255, 217, 119;
+  --card-face: #ffffff;
+  --card-ink: #17202a;
+  --plate-a: rgba(74, 80, 88, .96);
+  --plate-b: rgba(42, 47, 54, .96);
+  --chip-ink: #f4eeda;
+  --card-red: #c0212b;
+  --card-back-a: #29456b;
+  --card-back-b: #16294a;
+  --money: #ffe9a0;
+  --wm-a: 'REG-POKER';
+  --wm-b: 'ONLINE';
+  --wm-ink: rgba(159, 208, 180, 0.45);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #3a2914 0%, #221809 45%, #0e0a05 100%);
+  --scape-a: #1c1309;
+  --scape-b: #291d0e;
+  --scape-o: 0.4;
 }
 
 * {

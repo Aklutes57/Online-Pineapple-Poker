@@ -27,6 +27,16 @@ export function initPanels(client) {
   // The header fairness chip opens the Fair tab.
   document.getElementById('fair-chip')?.addEventListener('click', () => openPanel('fair'));
 
+  // The ledger pop-up: a button beside the chat tabs, Close, backdrop, Escape.
+  document.getElementById('ledger-tab-btn')?.addEventListener('click', openLedger);
+  document.getElementById('ledger-close')?.addEventListener('click', closeLedger);
+  document.getElementById('ledger-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'ledger-modal') closeLedger();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLedger();
+  });
+
   // The Chat button is exactly that: it opens the panel ON the chat tab.
   // (Log, ledger and shuffle-verification have their own doors now, so a
   // toggle that landed on whatever tab was last open just reads as broken.)
@@ -194,13 +204,23 @@ export function initPanels(client) {
   });
 }
 
-// Open the side panel on a named tab, from anywhere: the Ledger button, the
-// menu's Game log / Verify shuffle entries, the fairness chip, the Chat button.
+// Open the side panel on a named tab, from anywhere: the menu's Game log /
+// Verify shuffle entries, the fairness chip, the Chat button.
 export function openPanel(tabName) {
   const p = document.getElementById('side-panel');
   p.classList.add('open');
   p.classList.remove('collapsed');
   document.querySelector(`.tab[data-tab="${tabName}"]`)?.click();
+}
+
+// The ledger is a pop-up: openable from the top bar or beside the chat tabs,
+// closable from its Close button, the backdrop, or Escape.
+export function openLedger() {
+  document.getElementById('ledger-modal')?.classList.remove('hidden');
+}
+
+export function closeLedger() {
+  document.getElementById('ledger-modal')?.classList.add('hidden');
 }
 
 export function notifyStateForPanels(client) {

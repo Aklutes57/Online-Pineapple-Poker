@@ -689,6 +689,19 @@ function renderBoard(client) {
         firstRow.appendChild(el);
       }
     }
+    // The streets still to come: dashed outlines where cards will land, so
+    // the board always shows its shape. Community games only — 747's dealer
+    // area draws itself, and a second run-out board fills all five at once.
+    const communityGame = hand
+      ? !hand.dealer
+      : VARIANTS[state.settings.variant]?.engine !== '747';
+    if (!second && communityGame) {
+      for (let i = cards.length + (rabbit ? rabbit.length : 0); i < 5; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'board-slot';
+        firstRow.appendChild(slot);
+      }
+    }
     board.appendChild(firstRow);
 
     if (second) {

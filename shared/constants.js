@@ -293,6 +293,9 @@ export const SKINS = {
   velvet: { label: 'Velvet Lounge' },
   tour: { label: 'Tour Circuit' },
   series: { label: 'Championship' },
+  cwru: { label: 'CWRU Spartans' },
+  wabash: { label: 'Wabash Scarlet' },
+  classic: { label: 'Classic Card Room' },
 };
 export const DEFAULT_SKIN = 'velvet';
 

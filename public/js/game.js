@@ -10,7 +10,7 @@ import {
 } from '/js/pwa.js';
 import { renderAll, startTimerLoop, fitTableStage } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
-import { initPanels, onChatMessage, notifyStateForPanels, openPanel } from '/js/panels.js';
+import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger } from '/js/panels.js';
 import {
   initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic, toggleDeafen,
   syncSeats as syncAvSeats, avState, setOnChange,
@@ -415,9 +415,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && menuOpen()) setMenu(false);
 });
 
-// The bar's Ledger button and the menu's panel doors: each opens the side
-// panel already turned to the right tab.
-document.getElementById('ledger-btn')?.addEventListener('click', () => openPanel('ledger'));
+// The bar's Ledger button opens the ledger pop-up; the menu's panel doors
+// open the side panel already turned to the right tab.
+document.getElementById('ledger-btn')?.addEventListener('click', openLedger);
 document.getElementById('open-log')?.addEventListener('click', () => openPanel('log'));
 document.getElementById('open-fair')?.addEventListener('click', () => openPanel('fair'));
 

@@ -327,12 +327,14 @@ try {
   await anna.waitForSelector('.chat-msg:has-text("good game everyone")');
   await check('chat message delivered to other players', true);
 
-  // ---- ledger ----
-  await anna.click('.tab[data-tab="ledger"]');
+  // ---- ledger: a pop-up, opened beside the chat tabs, closable ----
+  await anna.click('#ledger-tab-btn');
+  await anna.waitForSelector('#ledger-modal:not(.hidden)');
   await anna.waitForSelector('table.ledger tbody tr');
   const nets = await anna.$$eval('table.ledger tbody tr td:last-child', (tds) =>
     tds.map((td) => parseInt(td.textContent, 10))
   );
+  await check('ledger pop-up opens from the chat-side button', true);
   await check('ledger has 3 rows', nets.length === 3);
   await check('ledger nets sum to zero', nets.reduce((a, b) => a + b, 0) === 0);
 
@@ -348,13 +350,33 @@ try {
 
   // The books-balance line is the ledger auditing itself, for everyone.
   await check('ledger books balance for the host', await anna.locator('#books-line.ok').isVisible());
+  await anna.click('#ledger-close');
+  await check('the ledger pop-up closes',
+    await anna.locator('#ledger-modal').evaluate((el) => el.classList.contains('hidden')));
 
-  // The Ledger button on the top bar opens the same view for a non-host.
+  // The Ledger button on the top bar opens the same pop-up for a non-host.
   await ben.click('#ledger-btn');
+  await ben.waitForSelector('#ledger-modal:not(.hidden)');
   await ben.waitForSelector('#books-line');
-  await check('Ledger button opens the ledger for a guest',
-    await ben.locator('.tab[data-tab="ledger"]').evaluate((el) => el.classList.contains('active')));
+  await check('the top-bar Ledger button opens the pop-up for a guest', true);
   await check('ledger books balance for a guest too', await ben.locator('#books-line.ok').isVisible());
+  await ben.click('#ledger-close');
+
+  // The client-format frame: chat docked bottom-left, buttons bottom-right,
+  // and the two must never overlap.
+  const frame = await anna.evaluate(() => {
+    const chat = document.getElementById('side-panel').getBoundingClientRect();
+    const bar = document.getElementById('action-bar').getBoundingClientRect();
+    return {
+      chatLeft: chat.left < innerWidth / 3 && chat.bottom > innerHeight * 0.6,
+      barRight: bar.right > (innerWidth * 2) / 3 && bar.bottom > innerHeight * 0.6,
+      overlap: chat.right > bar.left && chat.left < bar.right
+        && chat.bottom > bar.top && chat.top < bar.bottom,
+    };
+  });
+  await check('chat is docked bottom-left', frame.chatLeft);
+  await check('the action buttons sit bottom-right', frame.barRight);
+  await check('chat never overlaps the action buttons', !frame.overlap);
 
   // Sit out lives behind the menu now — never on the action bar, where a
   // stray tap next to Check could kill a hand.
@@ -597,7 +619,7 @@ try {
 
   // ---- per-player table skins: same room, three different looks ----
   const skinOptions = await anna.locator('#skin option').count();
-  await check('every table skin is offered', skinOptions === 3);
+  await check('every table skin is offered', skinOptions === 6);
   const geometry = async () => anna.evaluate(() => {
     const r = (sel) => [...document.querySelectorAll(sel)].map((e) => {
       const b = e.getBoundingClientRect();
@@ -643,8 +665,9 @@ try {
     }
     const root = document.documentElement;
     const before = root.dataset.skin;
+    const skins = ['velvet', 'tour', 'series', 'cwru', 'wabash', 'classic'];
     const values = {};
-    for (const skin of ['velvet', 'tour', 'series']) {
+    for (const skin of skins) {
       root.dataset.skin = skin;
       const cs = getComputedStyle(root);
       values[skin] = Object.fromEntries([...declared].map((t) => [t, cs.getPropertyValue(t).trim()]));
@@ -653,7 +676,7 @@ try {
     return [...declared].filter((t) => {
       const v = values.velvet[t];
       if (!v || !CSS.supports('color', v)) return false;
-      return values.tour[t] === v && values.series[t] === v;
+      return skins.slice(1).every((s) => values[s][t] === v);
     });
   });
   await check(`no colour token is left on the Velvet value in every skin (${JSON.stringify(sharedColours)})`,

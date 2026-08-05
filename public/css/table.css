@@ -26,17 +26,19 @@ html, body.table-page {
   height: 100vh;
   height: 100dvh;
   max-width: 100vw;
+  /* The client-format frame: the table gets the whole width, and the bottom
+     band belongs to the chrome — chat docked bottom-left, the action buttons
+     bottom-right, room showing between them. Separate grid cells, so the
+     chat can never overlap the table or the buttons. */
   /* minmax(0, …) instead of a bare 1fr: a 1fr track is really minmax(auto,1fr),
-     so a wide, non-wrapping row (the action bar) would force the whole grid —
-     and the felt — wider than the screen. The 0 minimum lets it shrink to fit. */
-  /* The top bar sizes to its own content: word labels wrap to a second row on
-     a narrow screen, and a fixed track height would clip them. */
+     so a wide, non-wrapping row would force the whole grid — and the felt —
+     wider than the screen. The 0 minimum lets it shrink to fit. */
   grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-columns: minmax(0, 1fr) var(--panel-w);
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr) auto;
   grid-template-areas:
-    'top top'
-    'table panel'
-    'bar panel';
+    'top top top'
+    'table table table'
+    'chat room bar';
 }
 
 /* Grid children must be allowed to shrink below their content's min-width. */
@@ -311,6 +313,62 @@ body.disconnected::after {
   overflow: hidden; /* the scaled stage is sized to fit, so nothing should spill */
 }
 
+/* The whole frame sits in the skin's room, so the band between the chat dock
+   and the buttons reads as floor, not as a hole in the page. */
+#app {
+  background: var(--room-bg);
+}
+
+/* The skin-tinted room backdrop (campus towers, chapel, panelling). The box
+   is identical in every skin — only paint and opacity differ. */
+#room-scape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--scape-o);
+  pointer-events: none;
+}
+
+/* The felt watermark. A fixed box centred low on the felt, text supplied by
+   the skin (content comes from --wm-a / --wm-b), clipped so a long name can
+   never change anyone's geometry. */
+#felt-mark {
+  position: absolute;
+  left: 50%;
+  top: 71%;
+  transform: translate(-50%, -50%);
+  width: 56%;
+  height: 24%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#felt-mark::before {
+  content: var(--wm-a);
+  white-space: pre-line;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.12;
+  font-size: clamp(18px, 3vw, 32px);
+  color: var(--wm-ink);
+}
+
+#felt-mark::after {
+  content: var(--wm-b);
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  margin-top: 5px;
+  font-size: clamp(9px, 1.3vw, 13px);
+  color: var(--wm-ink);
+}
+
 #table {
   /* A fixed logical size that JS (fitTableStage) scales as one piece — felt,
      seats, bets and all — to fit whatever screen we're on. Everything inside is
@@ -416,14 +474,22 @@ body.disconnected::after {
   opacity: 0.92;
 }
 
+/* The pot reads above the board, plain and bold, like the client format. */
 #pot-line {
   display: inline-block;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 20px;
-  padding: 4px 16px;
-  font-size: 15px;
-  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--chip-ink);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* Board cards still to come: dashed outlines where they will land. */
+.board-slot {
+  width: var(--board-card-w);
+  height: var(--board-card-h);
+  border-radius: 7px;
+  border: 2px dashed var(--felt-line);
 }
 
 #center-message {
@@ -552,16 +618,19 @@ body.disconnected::after {
   height: calc(var(--card-h) * 1.18);
 }
 
+/* The client-format plate: a rounded card with the name stacked over the
+   money, money in the skin's own cash colour. */
 .nameplate {
   position: relative;
   background: linear-gradient(var(--plate-a), var(--plate-b));
   border: 2px solid var(--accent);
-  border-radius: 999px;
-  padding: 6px 14px;
-  min-width: 118px;
+  border-radius: 12px;
+  padding: 5px 14px;
+  min-width: 108px;
   max-width: 164px;
   text-align: center;
   z-index: 2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
   transition: box-shadow 0.2s, border-color 0.2s;
 }
 
@@ -596,23 +665,24 @@ body.disconnected::after {
 
 .np-row {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1.25;
 }
 
 .np-name {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90px;
+  max-width: 132px;
 }
 
 .np-stack {
   font-size: 13px;
-  color: var(--accent);
+  color: var(--money);
   font-weight: 700;
 }
 
@@ -932,13 +1002,20 @@ body.disconnected::after {
 
 /* ---- side panel ---- */
 
+/* Desktop: the chat is a dock in the bottom-left cell of the grid — its own
+   track, so it can never sit on the table or the action buttons. */
 #side-panel {
-  grid-area: panel;
+  grid-area: chat;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
+  height: 240px;
+  margin: 0 0 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
   background: var(--bg-panel);
   min-height: 0;
+  align-self: end;
 }
 
 #seat-requests {
@@ -1130,6 +1207,28 @@ td.dim { color: var(--text-dim); }
   margin-top: 8px;
 }
 
+/* The ledger pop-up: wider than a form modal, with its own Close. */
+.ledger-modal {
+  max-width: 580px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.modal-head h2 {
+  margin-bottom: 0;
+}
+
+.modal-x {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
 /* The ledger's public audit line: green when every chip is accounted for. */
 .books-line {
   margin-top: 8px;
@@ -1147,18 +1246,24 @@ td.dim { color: var(--text-dim); }
 
 /* ---- action bar ---- */
 
+/* Desktop: the Fold / Check / Bet cluster lives in the bottom-RIGHT cell,
+   like the client format — its own grid track, clear of the chat dock. */
 #action-bar {
   grid-area: bar;
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   flex-wrap: wrap; /* controls stack instead of forcing the page wider */
   gap: 10px 14px;
   min-height: 76px;
   padding: 10px 16px;
-  border-top: 1px solid var(--border);
+  align-self: end;
+  margin: 0 12px 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   background: var(--bg-panel);
+  max-width: 640px;
 }
 
 .ab-note {
@@ -1413,11 +1518,27 @@ td.dim { color: var(--text-dim); }
     right: 0;
     bottom: 0;
     width: min(340px, 92vw);
+    height: auto;
+    margin: 0;
+    border-radius: 0;
+    align-self: auto;
     z-index: 60;
     transform: translateX(100%);
     transition: transform 0.22s ease-out;
+    border: none;
     border-left: 1px solid var(--border);
     box-shadow: var(--shadow);
+  }
+
+  /* The phone bar goes back to a full-width strip — but the buttons keep to
+     the lower right, matching the client format. */
+  #action-bar {
+    margin: 0;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    max-width: none;
+    align-self: stretch;
   }
 
   #side-panel.open {
