@@ -100,9 +100,8 @@ export function renderActionBar(client) {
   void turnKey;
   if (turnKey !== lastTurnKey) {
     lastTurnKey = turnKey;
-    // The bet tab sits open at the bottom whenever a bet is yours to size —
-    // the Bet/Raise button folds it away rather than summoning it.
-    trayOpen = !!av?.canRaise;
+    // The tray never opens itself: Bet/Raise summons it, Close puts it away.
+    trayOpen = false;
     trayAmount = av ? defaultRaiseAmount(av) : 0;
   }
 
@@ -190,8 +189,7 @@ export function renderActionBar(client) {
     html = `
       <span class="ab-note">${iFolded ? 'Hand over — show what you folded?' : 'You took it down without a showdown.'}</span>
       <button class="btn btn-ghost" data-act="show-cards">Show your cards</button>
-      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">Rabbit hunt</button>' : ''}
-      <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">Rabbit hunt</button>' : ''}`;
   } else if (you.sittingOut) {
     html = `
       <span class="ab-note">You're sitting out.</span>
@@ -213,13 +211,11 @@ export function renderActionBar(client) {
               `<button class="btn pre-btn ${you.preAction === kind ? 'armed' : ''}" data-pre="${kind}">${label}</button>`
           )
           .join('')}
-      </div>
-      <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
+      </div>`;
   } else if (state.status === GAME_STATUS.RUNNING || state.status === GAME_STATUS.PAUSED) {
     html = `
       <span class="ab-note">${waitingText(client)}</span>
-      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">Rabbit hunt</button>' : ''}
-      <button class="btn btn-ghost ab-small" data-act="sit-out">Sit out</button>`;
+      ${you.canRabbitHunt ? '<button class="btn btn-ghost ab-small" data-act="rabbit">Rabbit hunt</button>' : ''}`;
   } else {
     html = `<span class="ab-note">Seated with ${you.stack} — waiting for the game to start.</span>`;
   }
@@ -256,6 +252,7 @@ function trayHtml(av, client) {
         ${presets
           .map((p) => `<button class="preset" data-preset="${p.amount}">${p.label}</button>`)
           .join('')}
+        <button class="tray-close" data-act="open-tray">Close</button>
       </div>
       <div class="tray-controls">
         <button class="step" data-step="-1">−</button>
@@ -390,9 +387,6 @@ function handleAct(client, act, av, arg = null) {
     case 'show-cards':
       client.send(EVENTS.SHOW_CARDS, { handId: hand.handId });
       break;
-    case 'sit-out':
-      client.send(EVENTS.SIT_OUT, {});
-      break;
     case 'sit-in':
       client.send(EVENTS.SIT_IN, {});
       break;
@@ -416,7 +410,10 @@ function handleAct(client, act, av, arg = null) {
       break;
     }
     case 'stand-up':
-      client.send(EVENTS.STAND_UP, {});
+      // Leaving the seat folds you out of a live hand — never on a stray tap.
+      if (confirm('Leave your seat? If a hand is running, your hand is folded.')) {
+        client.send(EVENTS.STAND_UP, {});
+      }
       break;
   }
 }

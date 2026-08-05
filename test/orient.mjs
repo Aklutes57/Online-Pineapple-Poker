@@ -159,6 +159,36 @@ for (const [name, w, h, wantUpright] of views) {
       if (topEl && !topEl.closest('.seat.me')) myCardsBlocked++;
     }
 
+    // The community cards are the one thing at the table no neighbour's fan
+    // may cover. Preflop the board is empty, so stand in the full five and
+    // hit-test their centres. The centre layer is click-through by design,
+    // which elementFromPoint would skip — give it pointer events back for
+    // the duration of the probe so the test sees the true paint order.
+    const board = document.getElementById('board');
+    const center = document.getElementById('table-center');
+    let boardRow = board.querySelector('.board-row');
+    if (!boardRow) {
+      boardRow = document.createElement('div');
+      boardRow.className = 'board-row';
+      board.appendChild(boardRow);
+      stand.push(boardRow);
+    }
+    while (boardRow.children.length < 5) {
+      const c = document.createElement('div');
+      c.className = 'card back probe';
+      boardRow.appendChild(c);
+      stand.push(c);
+    }
+    center.style.pointerEvents = 'auto';
+    let boardCovered = 0;
+    for (const card of boardRow.children) {
+      const r = card.getBoundingClientRect();
+      if (!r.width) continue;
+      const topEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (topEl && !topEl.closest('#table-center')) boardCovered++;
+    }
+    center.style.pointerEvents = '';
+
     for (const el of probes) el.remove();
     for (const el of stand) el.remove();
     for (const fan of document.querySelectorAll('.cards-fan.probe-class')) {
@@ -176,18 +206,20 @@ for (const [name, w, h, wantUpright] of views) {
       chips: chips.length,
       collisions,
       myCardsBlocked,
+      boardCovered,
     };
   }, [landscapeCoords, portraitCoords]);
 
   const orientOk = m.upright === wantUpright;
   const tallerThanWide = m.th > m.tw;
   const shapeOk = wantUpright ? tallerThanWide : !tallerThanWide;
-  const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0 && m.myCardsBlocked === 0;
+  const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0
+    && m.myCardsBlocked === 0 && m.boardCovered === 0;
   // How much of the screen the felt covers — the point of the whole change.
   const cover = ((m.tw * m.th) / (m.iw * m.ih) * 100).toFixed(0);
   const ok = orientOk && shapeOk && fits;
   if (!ok) bad++;
-  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked}`);
+  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked} boardCovered=${m.boardCovered}`);
   await page.screenshot({ path: `${SHOT}/orient-${name}.png` });
   await ctx.close();
 }

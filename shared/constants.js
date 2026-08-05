@@ -196,7 +196,7 @@ export const TIMINGS = {
   DISCARD_NO_CLOCK: 300000, // untimed tables still need a stall fallback
   NUDGE_GRACE: 15000, // ms a nudged player gets before the host's prod lands
   COUNTDOWN_747: 3200, // the 3-2-1 before stay/fold choices are revealed
-  NEXT_HAND_DELAY: 4000, // ms between hands
+  NEXT_HAND_DELAY: 3000, // ms between hands
   RUNOUT_STREET_DELAY: 1500, // ms between streets on an all-in run-out
   AWAY_GRACE: 1000, // ms before auto-acting for a sitting-out player
   DISCONNECT_GRACE: 60000, // ms a disconnected player gets when the action timer is off

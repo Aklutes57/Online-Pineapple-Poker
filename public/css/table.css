@@ -116,10 +116,10 @@ body.disconnected::after {
   left: 0;
   right: 0;
   z-index: 150;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
-  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px 14px;
   background: var(--bg-panel);
   border-bottom: 2px solid var(--accent);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
@@ -131,10 +131,13 @@ body.disconnected::after {
   display: none;
 }
 
-/* Section headers span the whole grid, so twenty controls read as five ideas
-   instead of a ragged pile of pills. */
+.menu-group.hidden {
+  display: none;
+}
+
+/* Each sub-menu is a real <details>: the header folds its group. Headers
+   read as section dividers, so twenty controls read as six ideas. */
 .menu-sec {
-  grid-column: 1 / -1;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -143,10 +146,35 @@ body.disconnected::after {
   border-bottom: 1px solid var(--border);
   padding: 6px 2px 4px;
   margin-top: 2px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
 }
 
-.menu-sec:first-child {
-  margin-top: 0;
+.menu-sec::-webkit-details-marker {
+  display: none;
+}
+
+/* The fold indicator: a caret that turns when the group is open. */
+.menu-sec::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--accent);
+  transition: transform 0.15s ease;
+}
+
+.menu-group[open] > .menu-sec::before {
+  transform: rotate(90deg);
+}
+
+/* The controls of one group: the same auto-fill grid the whole sheet used
+   to be, now scoped per group. */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  padding: 8px 0 6px;
 }
 
 .menu-note {
@@ -337,6 +365,17 @@ body.disconnected::after {
   transform: translate(-50%, -50%);
   text-align: center;
   width: 78%;
+  /* Above the other seats (z 1), below your own (z 5): the community cards
+     are the one thing at the table nobody's fan may ever cover. The box is
+     click-through so the raised layer never swallows a tap meant for a seat
+     behind it — only its own buttons catch the pointer. */
+  z-index: 2;
+  pointer-events: none;
+}
+
+#table-center button,
+#table-center a {
+  pointer-events: auto;
 }
 
 #board {
@@ -730,7 +769,9 @@ body.disconnected::after {
 }
 
 .card.dealt {
-  animation: deal 0.28s ease-out;
+  /* Backwards fill: a card waiting on its animation-delay sits at the 'from'
+     frame (invisible), so a staggered deal arrives one card at a time. */
+  animation: deal 0.28s ease-out backwards;
 }
 
 @keyframes deal {
@@ -1089,6 +1130,21 @@ td.dim { color: var(--text-dim); }
   margin-top: 8px;
 }
 
+/* The ledger's public audit line: green when every chip is accounted for. */
+.books-line {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.books-line.ok {
+  color: var(--green);
+}
+
+.books-line.bad {
+  color: var(--red);
+}
+
 /* ---- action bar ---- */
 
 #action-bar {
@@ -1169,19 +1225,36 @@ td.dim { color: var(--text-dim); }
   background: var(--blue);
 }
 
-/* The bet tab: a sheet across the bottom, sitting open above the action
-   buttons whenever a bet is yours to size. Slider for the sweep, presets for
-   the common fractions, and a number field for typing it exactly. In normal
-   flow on purpose: it makes the bar genuinely taller, so the table refits
-   above it instead of being covered by it — your cards stay on screen. */
+/* The bet tab: summoned by the Bet/Raise button, it lays itself OVER the
+   Fold/Check row (and whatever sliver of felt it still needs) instead of
+   making the bar taller — opening it never resizes the table. Close hands
+   the buttons back. */
 .bet-tray {
-  order: -1;
-  flex-basis: 100%;
-  margin: -10px -16px 2px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
   background: var(--bg-panel);
-  border-bottom: 1px solid var(--accent);
-  box-shadow: 0 -10px 26px rgba(0, 0, 0, 0.35) inset;
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.45);
   padding: 10px clamp(14px, 4vw, 40px) 12px;
+}
+
+/* Close looks like a preset pill but never behaves like one — it hands the
+   Fold/Check/Bet row back. */
+.tray-close {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  font-size: 13px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.tray-close:hover {
+  border-color: var(--red);
+  color: var(--text);
 }
 
 .bet-tray .btn {
@@ -1208,14 +1281,20 @@ td.dim { color: var(--text-dim); }
   border-color: var(--accent);
 }
 
+/* The slider always gets a full row of its own — edge to edge is the longest
+   slider the tray can offer — with the steppers, the typed amount and the
+   confirm sharing the row below. */
 .tray-controls {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .tray-controls input[type='range'] {
-  flex: 1;
+  flex-basis: 100%;
+  order: -1;
+  height: 26px;
   accent-color: var(--accent);
 }
 
@@ -1453,22 +1532,15 @@ td.dim { color: var(--text-dim); }
     height: calc(var(--card-h) * 1.05);
   }
 
-  /* The sheet's grid is roomy on a phone; full-width cells read as a list. */
+  /* The sheet's grids are roomy on a phone; two columns read as a list. */
   .top-menu {
+    gap: 4px;
+    padding: 8px 10px 10px;
+  }
+
+  .menu-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 7px;
-    padding: 10px;
-  }
-
-  /* The slider deserves the full width of a phone — it takes its own row, and
-     the steppers, the typed amount and the confirm share the one below. */
-  .tray-controls {
-    flex-wrap: wrap;
-  }
-
-  .tray-controls input[type='range'] {
-    flex-basis: 100%;
-    order: -1;
   }
 
   .tray-controls input[type='number'] {

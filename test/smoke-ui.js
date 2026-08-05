@@ -186,6 +186,33 @@ try {
   const readout = await anna.textContent('.seat.me .hand-now');
   await check('live hand readout shows under your cards', readout.trim().length > 0);
 
+  // ---- the bet tab: summoned by the Bet button, dismissed by Close, and
+  // opening it never resizes the table ----
+  {
+    let toAct = null;
+    for (let i = 0; i < 40 && !toAct; i++) {
+      for (const p of [anna, ben, cara]) {
+        if (await p.locator('[data-act="open-tray"]').isVisible().catch(() => false)) { toAct = p; break; }
+      }
+      if (!toAct) await anna.waitForTimeout(150);
+    }
+    await check('someone is offered a Bet/Raise button', !!toAct);
+    await check('the tray does not open itself on your turn',
+      !(await toAct.locator('#tray-slider').isVisible().catch(() => false)));
+    const feltBefore = await toAct.evaluate(() =>
+      JSON.stringify(document.getElementById('table').getBoundingClientRect()));
+    await toAct.click('[data-act="open-tray"]');
+    await toAct.waitForSelector('#tray-slider');
+    await check('the Bet button opens the tray', true);
+    await check('opening the tray never resizes the table',
+      (await toAct.evaluate(() =>
+        JSON.stringify(document.getElementById('table').getBoundingClientRect()))) === feltBefore);
+    await toAct.click('.tray-close');
+    await toAct.waitForSelector('#tray-slider', { state: 'detached' });
+    await check('Close hands back the Fold/Check/Bet row',
+      await toAct.locator('[data-act="open-tray"]').isVisible());
+  }
+
   // ---- play hands by checking/calling until a winner shows ----
   let winnerSeen = false;
   for (let i = 0; i < 80 && !winnerSeen; i++) {
@@ -231,6 +258,8 @@ try {
   }
   await check('747 deals and offers Stay / Fold', sawDecision);
   await check('747 header shows the ante', (await anna.textContent('#game-badge')).includes('Ante'));
+  await check('747 header shows the penalty cap',
+    (await anna.textContent('#game-badge')).includes('Penalty up to'));
   await check('747 dealer cards are face down in the middle',
     (await anna.locator('#board .card.back').count()) === 4);
 
@@ -297,6 +326,24 @@ try {
     someoneIsUp ? settleLines.length > 0 : true
   );
   await check('CSV export button is present', await anna.locator('#ledger-csv').isVisible());
+
+  // The books-balance line is the ledger auditing itself, for everyone.
+  await check('ledger books balance for the host', await anna.locator('#books-line.ok').isVisible());
+
+  // The Ledger button on the top bar opens the same view for a non-host.
+  await ben.click('#ledger-btn');
+  await ben.waitForSelector('#books-line');
+  await check('Ledger button opens the ledger for a guest',
+    await ben.locator('.tab[data-tab="ledger"]').evaluate((el) => el.classList.contains('active')));
+  await check('ledger books balance for a guest too', await ben.locator('#books-line.ok').isVisible());
+
+  // Sit out lives behind the menu now — never on the action bar, where a
+  // stray tap next to Check could kill a hand.
+  await check('no Sit out button on the action bar',
+    (await anna.locator('#action-bar [data-act="sit-out"]').count()) === 0);
+  await openMenu(anna);
+  await check('Sit out lives in the menu Seat group', await anna.locator('#menu-sit').isVisible());
+  await anna.keyboard.press('Escape');
 
   // ---- hand replay opens from the log and steps through ----
   await anna.click('.tab[data-tab="log"]');

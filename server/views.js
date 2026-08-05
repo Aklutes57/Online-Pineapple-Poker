@@ -128,6 +128,10 @@ export function buildViews(game) {
         naturalSevenSeats: hand.finished ? hand.results?.naturalSevenSeats ?? null : null,
         sixTwo: hand.finished ? hand.results?.sixTwo ?? null : null,
         carryOut: hand.finished ? hand.results?.carryOut ?? 0 : 0,
+        // The riding pot this hand was dealt with (public — it's in the pot
+        // readout already). The ledger's books-balance line needs it while
+        // the hand is live, because game.carryPot is zero at that moment.
+        carryIn: hand.carryIn || 0,
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
         // Run it twice is put to the table each time; this is who has answered.

@@ -14,11 +14,16 @@ export function makeCardEl(code, opts = {}) {
   el.innerHTML = `<span class="rank">${rank}</span><span class="suit">${SUIT_GLYPHS[suit]}</span>`;
   if (opts.discardable) el.classList.add('discardable');
   if (opts.dealt) el.classList.add('dealt');
+  // A delayed card holds its 'from' frame until its turn (the animation fills
+  // backwards), so a staggered deal really does come out one card at a time.
+  if (opts.delay) el.style.animationDelay = `${opts.delay}ms`;
   return el;
 }
 
-export function makeCardBack() {
+export function makeCardBack(opts = {}) {
   const el = document.createElement('div');
   el.className = 'card back';
+  if (opts.dealt) el.classList.add('dealt');
+  if (opts.delay) el.style.animationDelay = `${opts.delay}ms`;
   return el;
 }

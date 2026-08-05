@@ -25,18 +25,20 @@ export function initPanels(client) {
   });
 
   // The header fairness chip opens the Fair tab.
-  document.getElementById('fair-chip')?.addEventListener('click', () => {
-    const p = document.getElementById('side-panel');
-    p.classList.add('open');
-    p.classList.remove('collapsed');
-    document.querySelector('.tab[data-tab="fair"]')?.click();
-  });
+  document.getElementById('fair-chip')?.addEventListener('click', () => openPanel('fair'));
 
-  // Mobile drawer toggle.
+  // The Chat button is exactly that: it opens the panel ON the chat tab.
+  // (Log, ledger and shuffle-verification have their own doors now, so a
+  // toggle that landed on whatever tab was last open just reads as broken.)
   const panel = document.getElementById('side-panel');
   document.getElementById('panel-toggle').addEventListener('click', () => {
-    panel.classList.toggle('open');
-    if (panel.classList.contains('open')) clearUnread();
+    const chatShowing = panel.classList.contains('open')
+      && document.querySelector('.tab[data-tab="chat"]')?.classList.contains('active');
+    if (chatShowing) {
+      panel.classList.remove('open');
+    } else {
+      openPanel('chat');
+    }
   });
   document.getElementById('panel-close').addEventListener('click', () => {
     panel.classList.remove('open');
@@ -192,6 +194,15 @@ export function initPanels(client) {
   });
 }
 
+// Open the side panel on a named tab, from anywhere: the Ledger button, the
+// menu's Game log / Verify shuffle entries, the fairness chip, the Chat button.
+export function openPanel(tabName) {
+  const p = document.getElementById('side-panel');
+  p.classList.add('open');
+  p.classList.remove('collapsed');
+  document.querySelector(`.tab[data-tab="${tabName}"]`)?.click();
+}
+
 export function notifyStateForPanels(client) {
   mergeChat(client.state.chatTail || []);
   renderChat();
@@ -345,6 +356,17 @@ function renderLedger(client) {
   // offer to pay the exact amount straight to the winner.
   const payTo = new Map(rows.filter((r) => r.payments).map((r) => [r.nickname, r.payments]));
 
+  // The books check everyone can see: every chip bought in is either in a
+  // stack, cashed out, or riding in the 747 pot. Σnet is stacks + cash-outs
+  // − buy-ins, so the whole table balances exactly when Σnet + carry = 0.
+  const hand = client.state.hand;
+  const carry = (client.state.carryPot || 0) + (hand && !hand.finished ? hand.carryIn || 0 : 0);
+  const netSum = rows.reduce((a, r) => a + r.net, 0);
+  const balanced = netSum + carry === 0;
+  const booksLine = balanced
+    ? `<p class="books-line ok" id="books-line">✓ Books balance — every chip is in a stack${carry > 0 ? ` or the riding pot (${carry})` : ''}</p>`
+    : `<p class="books-line bad" id="books-line">✗ Books off by ${Math.abs(netSum + carry)} — tell the host</p>`;
+
   host.innerHTML = `
     <table class="ledger">
       <thead><tr><th>Player</th><th>Buy-ins</th><th>Stack</th><th>Hand</th><th>Net</th></tr></thead>
@@ -364,6 +386,7 @@ function renderLedger(client) {
       </tbody>
     </table>
     <p class="empty-note">Net = cash-outs + current stack − buy-ins · "Hand" is the last hand's result</p>
+    ${booksLine}
     <div class="settle-block">
       <h4>Settle up</h4>
       ${
