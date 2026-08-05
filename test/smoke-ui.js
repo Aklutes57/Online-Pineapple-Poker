@@ -378,6 +378,20 @@ try {
   await check('the action buttons sit bottom-right', frame.barRight);
   await check('chat never overlaps the action buttons', !frame.overlap);
 
+  // The dock folds to its tab strip and the felt takes the room back.
+  const tableH = () => anna.evaluate(() =>
+    document.getElementById('table').getBoundingClientRect().height);
+  const openH = await tableH();
+  await anna.click('#dock-toggle');
+  await anna.waitForTimeout(400);
+  await check('Hide folds the chat down to its tab strip',
+    !(await anna.locator('#tab-chat').isVisible())
+    && (await anna.textContent('#dock-toggle')) === 'Show');
+  await check('folding the chat gives the table more room', (await tableH()) > openH);
+  await anna.click('.tab[data-tab="chat"]');
+  await anna.waitForTimeout(400);
+  await check('picking a tab unfolds the chat again', await anna.locator('#tab-chat').isVisible());
+
   // Sit out lives behind the menu now — never on the action bar, where a
   // stray tap next to Check could kill a hand.
   await check('no Sit out button on the action bar',

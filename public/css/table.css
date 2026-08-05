@@ -1018,6 +1018,31 @@ body.disconnected::after {
   align-self: end;
 }
 
+/* Hide folds the dock down to its tab strip and hands the height back to
+   the felt (the bottom row shrinks and the table refits). Desktop only —
+   the phone drawer has its own slide-away. Seat requests stay visible even
+   folded: the host should never miss one. */
+.dock-toggle {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+@media (min-width: 1000px) {
+  #side-panel.dock-closed {
+    height: auto;
+  }
+
+  #side-panel.dock-closed .tab-body {
+    display: none;
+  }
+}
+
+@media (max-width: 999px) {
+  .dock-toggle {
+    display: none;
+  }
+}
+
 #seat-requests {
   border-bottom: 1px solid var(--border);
   padding: 10px 12px;

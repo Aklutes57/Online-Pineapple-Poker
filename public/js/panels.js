@@ -40,16 +40,32 @@ export function initPanels(client) {
   // The Chat button is exactly that: it opens the panel ON the chat tab.
   // (Log, ledger and shuffle-verification have their own doors now, so a
   // toggle that landed on whatever tab was last open just reads as broken.)
+  // Desktop, where the dock is always in view, it folds/unfolds the dock.
   const panel = document.getElementById('side-panel');
   document.getElementById('panel-toggle').addEventListener('click', () => {
-    const chatShowing = panel.classList.contains('open')
-      && document.querySelector('.tab[data-tab="chat"]')?.classList.contains('active');
-    if (chatShowing) {
+    const chatActive = document.querySelector('.tab[data-tab="chat"]')?.classList.contains('active');
+    const desktop = window.matchMedia('(min-width: 1000px)').matches;
+    const showing = desktop
+      ? !panel.classList.contains('dock-closed')
+      : panel.classList.contains('open');
+    if (showing && chatActive) {
       panel.classList.remove('open');
+      if (desktop) setDock(true);
     } else {
       openPanel('chat');
     }
   });
+
+  // The dock folds to its tab strip and back; picking any tab unfolds it.
+  document.getElementById('dock-toggle')?.addEventListener('click', () => {
+    setDock(!panel.classList.contains('dock-closed'));
+  });
+  document.querySelectorAll('.tab[data-tab]').forEach((tab) => {
+    tab.addEventListener('click', () => setDock(false));
+  });
+  let dockPref = null;
+  try { dockPref = localStorage.getItem('pp:chatDock'); } catch { /* private browsing */ }
+  if (dockPref === 'closed') setDock(true);
   document.getElementById('panel-close').addEventListener('click', () => {
     panel.classList.remove('open');
   });
@@ -204,12 +220,29 @@ export function initPanels(client) {
   });
 }
 
+// Fold or unfold the desktop chat dock. Folded, only the tab strip (and any
+// pending seat requests) stays; the bottom row shrinks and the table refits
+// through the app's own resize path. The choice sticks per device.
+function setDock(closed) {
+  const p = document.getElementById('side-panel');
+  if (!p) return;
+  p.classList.toggle('dock-closed', closed);
+  const t = document.getElementById('dock-toggle');
+  if (t) {
+    t.textContent = closed ? 'Show' : 'Hide';
+    t.title = closed ? 'Unfold the chat' : 'Fold the chat away — the table gets the room';
+  }
+  try { localStorage.setItem('pp:chatDock', closed ? 'closed' : 'open'); } catch { /* private browsing */ }
+  window.dispatchEvent(new Event('resize'));
+}
+
 // Open the side panel on a named tab, from anywhere: the menu's Game log /
 // Verify shuffle entries, the fairness chip, the Chat button.
 export function openPanel(tabName) {
   const p = document.getElementById('side-panel');
   p.classList.add('open');
   p.classList.remove('collapsed');
+  setDock(false);
   document.querySelector(`.tab[data-tab="${tabName}"]`)?.click();
 }
 
