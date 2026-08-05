@@ -162,6 +162,36 @@ function check(name, cond) {
     [...game.players.values()].every((p) => p.status !== 'requesting'));
 }
 
+// ---- the re-buy offer waits for the hand to be completely over ----
+{
+  const { game, host } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  const { buildViews } = await import('../server/views.js');
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const eve = game.addPlayer('Eve', null);
+  eve.connected = true;
+  game.requestSeat(eve, 200, 1);
+  if (eve.status === 'requesting') game.approveSeat(eve.id, true);
+  game.status = 'running';
+  game.startHand();
+  check('a hand is live', game.currentHand && !game.currentHand.finished);
+
+  // All-in: the stack hits zero while the hand is still running.
+  eve.stack = 0;
+  const during = buildViews(game).forPlayer(eve.id);
+  check('no buy-in is offered while the hand is still being played',
+    during.canRebuy === false);
+
+  // The hand ends — now the offer appears.
+  game.currentHand.finished = true;
+  const after = buildViews(game).forPlayer(eve.id);
+  check('the offer appears once the hand is completely over',
+    after.canRebuy === true);
+}
+
 // ---- a first-timer still waits, and a kicked player does not walk back in ----
 {
   const { game, host } = createGame({}, 'Host', null);

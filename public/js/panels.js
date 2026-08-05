@@ -41,6 +41,42 @@ export function initPanels(client) {
   document.getElementById('panel-close').addEventListener('click', () => {
     panel.classList.remove('open');
   });
+  document.getElementById('panel-arrow')?.addEventListener('click', () => {
+    panel.classList.remove('open');
+  });
+
+  // Drag the drawer to put it away: it tracks the finger 1:1 and commits when
+  // the swipe has clearly left (past a third of its width, or a quick fling).
+  // Vertical scrolling inside the chat list stays untouched — the drag only
+  // arms once the movement is decisively sideways.
+  let touch = null;
+  panel.addEventListener('touchstart', (e) => {
+    if (!panel.classList.contains('open')) return;
+    const t = e.touches[0];
+    touch = { x: t.clientX, y: t.clientY, dx: 0, t: Date.now(), armed: false };
+  }, { passive: true });
+  panel.addEventListener('touchmove', (e) => {
+    if (!touch) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touch.x;
+    const dy = t.clientY - touch.y;
+    if (!touch.armed) {
+      if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      touch.armed = true;
+      panel.classList.add('dragging');
+    }
+    touch.dx = Math.max(0, dx); // only ever slides the way it closes
+    panel.style.transform = `translateX(${touch.dx}px)`;
+  }, { passive: true });
+  panel.addEventListener('touchend', () => {
+    if (!touch) return;
+    const quick = touch.dx > 40 && Date.now() - touch.t < 260;
+    const far = touch.dx > panel.getBoundingClientRect().width / 3;
+    panel.classList.remove('dragging');
+    panel.style.transform = '';
+    if (touch.armed && (quick || far)) panel.classList.remove('open');
+    touch = null;
+  });
 
   // Chat form.
   document.getElementById('chat-form').addEventListener('submit', (e) => {

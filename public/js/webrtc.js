@@ -26,6 +26,9 @@ const videoEls = new Map();  // playerId -> HTMLVideoElement (own + remote)
 // Players you have muted, for you only — it silences their audio in your
 // browser and tells them nothing. Kept per table between reloads.
 const mutedPeers = new Set();
+// Deafened: you hear nobody, they still hear you (that's what the mic button
+// is for). Local only, like the per-player mutes, and remembered per device.
+let deafened = false;
 let iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 export async function initWebrtc(c, sock) {
@@ -38,11 +41,28 @@ export async function initWebrtc(c, sock) {
     /* fall back to the default public STUN */
   }
   loadMuted();
+  try {
+    deafened = localStorage.getItem('pp:deafen') === 'on';
+  } catch { /* private browsing */ }
   socket.on(EVENTS.RTC_SIGNAL, onSignal);
 }
 
 export function avState() {
-  return { supported: isSupported(), joined, camOn, micOn };
+  return { supported: isSupported(), joined, camOn, micOn, deafened };
+}
+
+export function isDeafened() {
+  return deafened;
+}
+
+export function toggleDeafen() {
+  deafened = !deafened;
+  try {
+    localStorage.setItem('pp:deafen', deafened ? 'on' : 'off');
+  } catch { /* still works for this session */ }
+  applyMutes();
+  onChange();
+  return deafened;
 }
 
 // ---- muting individual players (local only) ----
@@ -79,7 +99,7 @@ export function toggleMutePlayer(playerId) {
 function applyMutes() {
   for (const [id, el] of videoEls) {
     if (id === client?.you?.playerId) continue; // your own is always muted
-    el.muted = mutedPeers.has(id);
+    el.muted = deafened || mutedPeers.has(id);
   }
 }
 export function setOnChange(fn) { onChange = fn || (() => {}); }
@@ -210,7 +230,7 @@ function makePeer(peerId, initiator) {
     const v = ensureVideoEl(peerId, false);
     if (v.srcObject !== e.streams[0]) {
       v.srcObject = e.streams[0];
-      v.muted = mutedPeers.has(peerId);
+      v.muted = deafened || mutedPeers.has(peerId);
       v.play?.().catch(() => {});
     }
     if (client.state) syncSeats(client.state);

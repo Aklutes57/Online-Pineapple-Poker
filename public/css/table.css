@@ -131,6 +131,36 @@ body.disconnected::after {
   display: none;
 }
 
+/* Section headers span the whole grid, so twenty controls read as five ideas
+   instead of a ragged pile of pills. */
+.menu-sec {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 2px 4px;
+  margin-top: 2px;
+}
+
+.menu-sec:first-child {
+  margin-top: 0;
+}
+
+.menu-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+#menu-toggle .gear {
+  font-size: 15px;
+  line-height: 1;
+}
+
 /* Inside the sheet every control stretches to its cell, so the grid reads as
    tidy rows rather than a ragged pile of pills. */
 .top-menu .top-btn,
@@ -1139,18 +1169,23 @@ td.dim { color: var(--text-dim); }
   background: var(--blue);
 }
 
+/* The bet tab: a sheet across the bottom, sitting open above the action
+   buttons whenever a bet is yours to size. Slider for the sweep, presets for
+   the common fractions, and a number field for typing it exactly. In normal
+   flow on purpose: it makes the bar genuinely taller, so the table refits
+   above it instead of being covered by it — your cards stay on screen. */
 .bet-tray {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  order: -1;
+  flex-basis: 100%;
+  margin: -10px -16px 2px;
   background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-  padding: 14px;
-  width: min(560px, 94vw);
-  z-index: 30;
+  border-bottom: 1px solid var(--accent);
+  box-shadow: 0 -10px 26px rgba(0, 0, 0, 0.35) inset;
+  padding: 10px clamp(14px, 4vw, 40px) 12px;
+}
+
+.bet-tray .btn {
+  white-space: nowrap;
 }
 
 .tray-presets {
@@ -1262,6 +1297,28 @@ td.dim { color: var(--text-dim); }
 
 /* ---- responsive ---- */
 
+/* The chat drawer's handle: an arrow sticking out of its left edge, pointing
+   the way the drawer goes. Tap it — or drag the drawer right — to put the
+   chat away without hunting for the Close tab. Only exists where the panel
+   overlays the table (phones); on a laptop the panel is a fixed column. */
+.panel-arrow {
+  display: none;
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 74px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: var(--bg-panel);
+  color: var(--accent-lite);
+  font-size: 17px;
+  box-shadow: -6px 0 16px rgba(0, 0, 0, 0.35);
+}
+
 @media (max-width: 999px) {
   #app {
     grid-template-columns: minmax(0, 1fr);
@@ -1286,6 +1343,16 @@ td.dim { color: var(--text-dim); }
 
   #side-panel.open {
     transform: translateX(0);
+  }
+
+  #side-panel.open .panel-arrow {
+    display: block;
+  }
+
+  /* While a finger is dragging the drawer, the snap animation gets out of the
+     way so it tracks the touch 1:1. */
+  #side-panel.dragging {
+    transition: none;
   }
 
   .tab-close {
@@ -1391,6 +1458,27 @@ td.dim { color: var(--text-dim); }
     grid-template-columns: repeat(2, 1fr);
     gap: 7px;
     padding: 10px;
+  }
+
+  /* The slider deserves the full width of a phone — it takes its own row, and
+     the steppers, the typed amount and the confirm share the one below. */
+  .tray-controls {
+    flex-wrap: wrap;
+  }
+
+  .tray-controls input[type='range'] {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .tray-controls input[type='number'] {
+    flex: 1;
+    min-width: 64px;
+  }
+
+  .bet-tray .btn {
+    padding: 10px 16px;
+    font-size: 15px;
   }
 
   #table-area { padding: 4px; }

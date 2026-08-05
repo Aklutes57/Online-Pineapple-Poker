@@ -100,7 +100,9 @@ export function renderActionBar(client) {
   void turnKey;
   if (turnKey !== lastTurnKey) {
     lastTurnKey = turnKey;
-    trayOpen = false;
+    // The bet tab sits open at the bottom whenever a bet is yours to size —
+    // the Bet/Raise button folds it away rather than summoning it.
+    trayOpen = !!av?.canRaise;
     trayAmount = av ? defaultRaiseAmount(av) : 0;
   }
 
@@ -273,12 +275,11 @@ function buildPresets(av, pot) {
   const potRaise = currentBet + pot + callAmount; // raise "to" a pot-size bet
   const clamp = (v) => Math.max(minRaiseTo, Math.min(maxRaiseTo, Math.round(v)));
   const list = [
-    { label: 'Min', amount: minRaiseTo },
-    { label: '⅓ pot', amount: clamp(currentBet + (pot + callAmount) / 3) },
+    { label: '¼ pot', amount: clamp(currentBet + (pot + callAmount) / 4) },
     { label: '½ pot', amount: clamp(currentBet + (pot + callAmount) / 2) },
     { label: '¾ pot', amount: clamp(currentBet + (pot + callAmount) * 0.75) },
     { label: 'Pot', amount: clamp(potRaise) },
-    { label: 'Max', amount: maxRaiseTo },
+    { label: 'All in', amount: maxRaiseTo },
   ];
   // Drop duplicates (tiny pots collapse the fractions together).
   const seen = new Set();

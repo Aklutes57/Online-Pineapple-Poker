@@ -208,8 +208,11 @@ export function buildViews(game) {
       canVoteRunItTwice:
         inHand && !p.folded && hand.phase === PHASES.RIT_VOTE
         && (p.ritVote === null || p.ritVote === undefined),
-      // Busted: offer a re-buy (or standing up) rather than leaving them stuck.
-      canRebuy: p.status === 'seated' && p.stack <= 0,
+      // Busted: offer a re-buy (or standing up) rather than leaving them
+      // stuck — but never while their hand is still being played out. An
+      // all-in player has a stack of zero the moment the chips go in, and
+      // being offered a buy-in mid-run-out reads as "you already lost".
+      canRebuy: p.status === 'seated' && p.stack <= 0 && !(inHand && !hand.finished),
       // True once the host has let this player in: sitting back down after a
       // bust is instant, so the client must not promise a wait that won't come.
       seatOnRequest: game.seatsItself(p),

@@ -30,6 +30,8 @@ export function renderAll(client) {
   renderCenter(client);
   renderActionBar(client);
   document.getElementById('host-menu-btn').classList.toggle('hidden', !you?.isHost);
+  // The whole Host section of the settings sheet exists only for the host.
+  document.getElementById('menu-host-sec')?.classList.toggle('hidden', !you?.isHost);
   document.getElementById('leave-btn').classList.toggle('hidden', !you || you.spectator);
   // The action bar's height can change with its contents, which can change the
   // space left for the table — refit, and re-place if that flipped the shape.

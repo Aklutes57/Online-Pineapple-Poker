@@ -12,7 +12,7 @@ import { renderAll, startTimerLoop, fitTableStage } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels } from '/js/panels.js';
 import {
-  initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic,
+  initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic, toggleDeafen,
   syncSeats as syncAvSeats, avState, setOnChange,
 } from '/js/webrtc.js';
 
@@ -277,9 +277,19 @@ function renderAvControls() {
     cam.textContent = st.camOn ? 'Camera on' : 'Camera off';
     cam.classList.toggle('av-off', !st.camOn);
     cam.title = st.camOn ? 'Turn camera off' : 'Turn camera on';
-    mic.textContent = st.micOn ? 'Mic on' : 'Mic off';
+    mic.textContent = st.micOn ? 'Mute mic' : 'Unmute mic';
     mic.classList.toggle('av-off', !st.micOn);
-    mic.title = st.micOn ? 'Mute mic' : 'Unmute mic';
+    mic.title = st.micOn
+      ? "Mute your mic — they see you, they can't hear you"
+      : 'Unmute your mic';
+    const deafen = document.getElementById('av-deafen');
+    if (deafen) {
+      deafen.textContent = st.deafened ? 'Undeafen' : 'Deafen';
+      deafen.classList.toggle('av-off', st.deafened);
+      deafen.title = st.deafened
+        ? 'Hear everyone again'
+        : 'Deafen — you hear nobody; your own mic is unchanged';
+    }
   }
 }
 
@@ -465,6 +475,7 @@ document.getElementById('av-join')?.addEventListener('click', async () => {
 });
 document.getElementById('av-cam')?.addEventListener('click', toggleCamera);
 document.getElementById('av-mic')?.addEventListener('click', toggleMic);
+document.getElementById('av-deafen')?.addEventListener('click', toggleDeafen);
 document.getElementById('av-leave')?.addEventListener('click', leaveAV);
 window.addEventListener('pagehide', leaveAV);
 loadAccount().then(async (account) => {

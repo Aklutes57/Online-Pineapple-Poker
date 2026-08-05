@@ -52,38 +52,51 @@
       <div class="top-actions">
         <button id="fair-chip" class="fair-chip hidden" title="Provably-fair shuffle — click for details"></button>
         <button id="panel-toggle" class="btn-ghost btn top-btn" title="Chat and logs">Chat<span id="unread-badge" class="hidden"></span><span id="seatreq-badge" class="req-badge hidden"></span></button>
-        <button id="menu-toggle" class="btn-ghost btn top-btn" title="Everything else about the table"
-                aria-expanded="false" aria-controls="top-menu" aria-haspopup="true">Menu <span class="caret" aria-hidden="true">▾</span></button>
+        <button id="menu-toggle" class="btn-ghost btn top-btn" title="Settings"
+                aria-expanded="false" aria-controls="top-menu" aria-haspopup="true"
+                aria-label="Settings"><span class="gear" aria-hidden="true">⚙</span> <span class="caret" aria-hidden="true">▾</span></button>
       </div>
       <div class="top-spacer" aria-hidden="true"></div>
 
-      <!-- Everything that used to crowd the bar lives behind the caret, so the
-           bar stays one row and the felt gets the height back. -->
+      <!-- The settings sheet, grouped so twenty controls read as five ideas.
+           Section headers span the grid; the Host section only exists for the
+           host. -->
       <div id="top-menu" class="top-menu hidden">
+        <div class="menu-sec">Table</div>
         <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">Invite</button>
         <span class="react-wrap">
           <button id="react-btn" class="btn-ghost btn top-btn" title="Send a reaction">React</button>
           <div id="react-picker" class="hidden"></div>
         </span>
+        <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
+
+        <div class="menu-sec">Video &amp; voice</div>
         <button id="av-join" class="btn-ghost btn top-btn hidden" title="Turn on your camera and mic">Start video</button>
         <span id="av-live" class="av-live hidden">
           <button id="av-cam" class="btn-ghost btn top-btn" title="Turn your camera off">Camera</button>
-          <button id="av-mic" class="btn-ghost btn top-btn" title="Mute your mic">Mic</button>
+          <button id="av-mic" class="btn-ghost btn top-btn" title="Mute your mic — they see you, they can't hear you">Mute mic</button>
+          <button id="av-deafen" class="btn-ghost btn top-btn" title="Deafen — you hear nobody; your own mic is unchanged">Deafen</button>
           <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">Frame</button>
           <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video and voice">End video</button>
         </span>
+        <p class="menu-note">Mute one player from the Mute button on their seat — that's just for you.</p>
+
+        <div class="menu-sec">Your look</div>
         <select id="skin" class="top-select" title="How the table looks on your screen" aria-label="Table look"></select>
         <select id="name-font" class="top-select" title="The font your name is shown in" aria-label="Your name font"></select>
         <button id="avatar-btn" class="btn-ghost btn top-btn" title="Your picture, shown in your seat when your camera is off">Profile pic</button>
-        <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <button id="table-img-btn" class="btn-ghost btn top-btn" title="Put a picture on the table (everyone sees it)">Table pic</button>
+        <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <input type="file" id="table-img-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <input type="file" id="cam-frame-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+
+        <div class="menu-sec">Sound &amp; alerts</div>
         <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on or off">Sound</button>
         <button id="deck-toggle" class="btn-ghost btn top-btn" title="Four-colour deck on or off">Deck</button>
         <button id="push-bell" class="btn-ghost btn top-btn" title="Alerts when it's your turn and you're away">Alerts</button>
-        <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Host controls">Host</button>
-        <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat">Stand up</button>
+
+        <div class="menu-sec hidden" id="menu-host-sec">Host</div>
+        <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Only you see this — blinds, timer, seats, closing the table">Host controls</button>
       </div>
     </header>
 
@@ -102,6 +115,7 @@
     </main>
 
     <aside id="side-panel" class="collapsed">
+      <button id="panel-arrow" class="panel-arrow" title="Slide the chat away">▸</button>
       <div id="seat-requests" class="hidden"></div>
       <div class="tabs">
         <button data-tab="chat" class="tab active">Chat</button>
