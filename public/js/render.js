@@ -15,6 +15,13 @@ import { isMuted, toggleMutePlayer } from '/js/webrtc.js';
 const seatsLayer = () => document.getElementById('seats-layer');
 const betsLayer = () => document.getElementById('bets-layer');
 
+// How long the CSS `deal` animation runs — a card scheduled longer ago than
+// this is simply shown. Kept in step with .card.dealt in table.css.
+const DEAL_MS = 280;
+// False only until the first full paint: someone joining or reloading
+// mid-hand sees the table as it stands, not a replay of the deal.
+let firstPaintDone = false;
+
 export function renderAll(client) {
   const { state, you } = client;
   if (!state) return;
@@ -39,7 +46,9 @@ export function renderAll(client) {
   document.getElementById('menu-seat-group')?.classList.toggle('hidden', !seated);
   const sitBtn = document.getElementById('menu-sit');
   if (sitBtn) {
-    sitBtn.classList.toggle('hidden', !seated);
+    // A busted player is auto-away and can only re-buy (the action bar offers
+    // it) — an "I'm back" that always errors would just be a trap.
+    sitBtn.classList.toggle('hidden', !seated || (you?.stack ?? 0) <= 0);
     sitBtn.textContent = you?.sittingOut ? "I'm back" : 'Sit out';
     sitBtn.title = you?.sittingOut
       ? 'Deal me in again from the next hand'
@@ -48,6 +57,7 @@ export function renderAll(client) {
   // The action bar's height can change with its contents, which can change the
   // space left for the table — refit, and re-place if that flipped the shape.
   relayout();
+  firstPaintDone = true;
 }
 
 // Scale the whole table (felt + seats + bets, all positioned inside #table) as
@@ -360,39 +370,54 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   // voluntarily shows (seat.cards set) gets their cards rendered — the
   // pod's folded styling keeps them visibly dead.
   //
-  // The pod rebuilds on every state change, so 'this card is new' has to be
-  // remembered across rebuilds: only cards past what this pod already showed
-  // get the deal animation. New cards come out one at a time, sweeping around
-  // the table from the dealer's left like a real deal.
+  // The pod rebuilds on every state change, so the deal choreography can't
+  // live in the DOM: each card's when-it-becomes-visible moment is kept on
+  // the pod as a wall-clock timestamp. A rebuild mid-deal re-applies the
+  // remaining delay (negative delays resume an animation midway), so an
+  // early action never snaps half-dealt cards in. New cards come out one at
+  // a time, sweeping around the table from the dealer's left like a real
+  // deal; a reveal (showdown or a folder showing) flips the whole hand in
+  // one quick sweep instead of re-dealing it.
+  const now = Date.now();
   const handKey = hand ? String(hand.handId) : '';
   const sameHand = pod.dataset.handKey === handKey;
-  const prevCards = sameHand ? parseInt(pod.dataset.cardsShown || '0', 10) : 0;
   const facesRevealed = !!shownCards && !(sameHand && pod.dataset.faces === '1');
   pod.dataset.handKey = handKey;
   pod.dataset.faces = shownCards ? '1' : '0';
   const dealerSeat = state.seats.findIndex((s) => s?.isDealer);
   const dealOrder = dealerSeat >= 0 ? (seatIndex - dealerSeat - 1 + SEAT_COUNT) % SEAT_COUNT : 0;
-  // A round of dealing (one card to every seat) takes one lap of the table.
-  const dealDelay = (ci) =>
-    ci < prevCards && !facesRevealed
-      ? 0
-      : Math.max(0, ci - prevCards) * 420 + dealOrder * 40;
-  const dealAnim = (ci) => ci >= prevCards || facesRevealed;
+  let showAt = [];
+  if (sameHand) {
+    try { showAt = JSON.parse(pod.dataset.showAt || '[]'); } catch { /* rebuilt */ }
+  }
+  const prevScheduled = showAt.length;
+  const reveal = facesRevealed && (seat.folded || hand?.finished || prevScheduled > 0);
+  // A card you may throw away must never be invisible while it is clickable.
+  const instant = isMe && !!you?.canDiscard;
+  const scheduleFor = (ci) => {
+    // Joining or reloading mid-hand replays nothing: the action clock is
+    // already running and the table state is old news to everyone else.
+    if (!firstPaintDone || instant) return now - DEAL_MS;
+    if (ci >= prevScheduled) return now + (reveal ? 0 : (ci - prevScheduled) * 420) + dealOrder * 40;
+    if (reveal) return now + dealOrder * 40;
+    return showAt[ci];
+  };
+  const cardOpts = (ci, extra = {}) => {
+    const t = scheduleFor(ci);
+    showAt[ci] = t;
+    return { dealt: t + DEAL_MS > now, delay: t - now, ...extra };
+  };
 
   const fan = document.createElement('div');
   fan.className = 'cards-fan' + (isMe ? ' mine' : '');
   if (seat.inHand && seat.folded && seat.cards) {
     for (let ci = 0; ci < seat.cards.length; ci++) {
-      fan.appendChild(makeCardEl(seat.cards[ci], { dealt: dealAnim(ci), delay: dealDelay(ci) }));
+      fan.appendChild(makeCardEl(seat.cards[ci], cardOpts(ci)));
     }
   } else if (seat.inHand && !seat.folded) {
     if (shownCards) {
       for (let ci = 0; ci < shownCards.length; ci++) {
-        const card = makeCardEl(shownCards[ci], {
-          dealt: dealAnim(ci),
-          delay: dealDelay(ci),
-          discardable: isMe && you.canDiscard,
-        });
+        const card = makeCardEl(shownCards[ci], cardOpts(ci, { discardable: isMe && you.canDiscard }));
         if (isMe && you.canDiscard) {
           card.onclick = () => client.send(EVENTS.DISCARD, { handId: hand.handId, cardIndex: ci });
         }
@@ -400,11 +425,11 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
       }
     } else {
       for (let ci = 0; ci < seat.cardCount; ci++) {
-        fan.appendChild(makeCardBack({ dealt: dealAnim(ci), delay: dealDelay(ci) }));
+        fan.appendChild(makeCardBack(cardOpts(ci)));
       }
     }
   }
-  pod.dataset.cardsShown = String(fan.children.length);
+  pod.dataset.showAt = JSON.stringify(showAt.slice(0, fan.children.length));
 
   // Four- and five-card games (PLO, 747) deal fans wide enough to reach into
   // the next seat, so the fan carries its size for the CSS to shrink by.
@@ -618,31 +643,48 @@ function renderBoard(client) {
   const rabbit = hand?.rabbit || null;
   const sig = `${cards.join(',')}|${(second || []).join(',')}|${(rabbit || []).join(',')}`;
   if (board.dataset.sig !== sig) {
-    // The board rebuilds whole, so 'new since last time' is a remembered
-    // count: only cards past it animate, one at a time — a flop arrives
-    // 1-2-3, not as a block. A new handId resets the count, because a bomb
-    // pot's board can open on a full flop.
+    // The board rebuilds whole, so the deal choreography lives in remembered
+    // per-card timestamps (same scheme as the seats): only cards past what
+    // was already scheduled animate, one at a time — a flop arrives 1-2-3,
+    // not as a block — and a rebuild mid-stagger resumes rather than snaps.
+    // A new handId resets everything, because a bomb pot's board can open
+    // on a full flop.
+    const now = Date.now();
     const handKey = hand ? String(hand.handId) : '';
     const sameHand = board.dataset.handKey === handKey;
-    const prevN = sameHand ? Math.min(parseInt(board.dataset.count || '0', 10), cards.length) : 0;
-    const prev2 = sameHand && second ? Math.min(parseInt(board.dataset.count2 || '0', 10), second.length) : 0;
+    let showAt = [];
+    let showAt2 = [];
+    if (sameHand) {
+      try {
+        showAt = JSON.parse(board.dataset.showAt || '[]');
+        showAt2 = JSON.parse(board.dataset.showAt2 || '[]');
+      } catch { /* rebuilt */ }
+    }
+    const schedule = (arr, i) => {
+      if (!firstPaintDone) return now - DEAL_MS;
+      return i < arr.length ? arr[i] : now + (i - arr.length) * 300;
+    };
+    const opts = (arr, i) => {
+      const t = schedule(arr, i);
+      arr[i] = t;
+      return { dealt: t + DEAL_MS > now, delay: t - now };
+    };
     board.dataset.sig = sig;
     board.dataset.handKey = handKey;
-    board.dataset.count = String(cards.length);
-    board.dataset.count2 = String(second ? second.length : 0);
     board.innerHTML = '';
     board.classList.toggle('two-boards', !!second);
 
     const firstRow = document.createElement('div');
     firstRow.className = 'board-row';
     for (let i = 0; i < cards.length; i++) {
-      firstRow.appendChild(makeCardEl(cards[i], { dealt: i >= prevN, delay: Math.max(0, i - prevN) * 300 }));
+      firstRow.appendChild(makeCardEl(cards[i], opts(showAt, i)));
     }
     // Rabbit hunt cards are the run-out that never happened — shown dimmed
-    // so they can't be mistaken for the real board.
+    // so they can't be mistaken for the real board. They share the first
+    // row's schedule so they trail in after the real cards.
     if (rabbit) {
       for (let i = 0; i < rabbit.length; i++) {
-        const el = makeCardEl(rabbit[i], { dealt: true, delay: i * 300 });
+        const el = makeCardEl(rabbit[i], opts(showAt, cards.length + i));
         el.classList.add('rabbit');
         firstRow.appendChild(el);
       }
@@ -653,10 +695,12 @@ function renderBoard(client) {
       const secondRow = document.createElement('div');
       secondRow.className = 'board-row';
       for (let i = 0; i < second.length; i++) {
-        secondRow.appendChild(makeCardEl(second[i], { dealt: i >= prev2, delay: Math.max(0, i - prev2) * 300 }));
+        secondRow.appendChild(makeCardEl(second[i], opts(showAt2, i)));
       }
       board.appendChild(secondRow);
     }
+    board.dataset.showAt = JSON.stringify(showAt.slice(0, cards.length + (rabbit ? rabbit.length : 0)));
+    board.dataset.showAt2 = JSON.stringify(showAt2.slice(0, second ? second.length : 0));
   }
 
   renderPotLine(potLine, state, hand);
@@ -688,14 +732,27 @@ function renderDealer(board, hand) {
   const d = hand.dealer;
   const sig = `dealer:${d.cardCount}:${(d.cards || []).join(',')}:${d.desc || ''}`;
   if (board.dataset.sig === sig) return;
-  // Same one-at-a-time deal as the seats: only backs beyond what was already
-  // showing animate, and the reveal flips the whole hand with a small sweep.
+  // Same one-at-a-time deal as the seats (remembered timestamps, resumable
+  // mid-animation); the reveal flips the whole hand with a small sweep.
+  const now = Date.now();
   const handKey = String(hand.handId);
   const sameHand = board.dataset.handKey === handKey;
-  const prevN = sameHand ? parseInt(board.dataset.count || '0', 10) : 0;
+  const wasRevealed = sameHand && board.dataset.dealerFaces === '1';
+  let showAt = [];
+  if (sameHand) {
+    try { showAt = JSON.parse(board.dataset.dealerShowAt || '[]'); } catch { /* rebuilt */ }
+  }
+  const opts = (i, revealSweep) => {
+    let t;
+    if (!firstPaintDone) t = now - DEAL_MS;
+    else if (revealSweep && !wasRevealed) t = now + i * 100;
+    else if (i < showAt.length) t = showAt[i];
+    else t = now + (i - showAt.length) * 300;
+    showAt[i] = t;
+    return { dealt: t + DEAL_MS > now, delay: t - now };
+  };
   board.dataset.sig = sig;
   board.dataset.handKey = handKey;
-  board.dataset.count = String(d.cards ? d.cards.length : d.cardCount);
   board.classList.add('dealer-area');
   board.classList.remove('two-boards');
   board.innerHTML = '';
@@ -709,14 +766,16 @@ function renderDealer(board, hand) {
   row.className = 'board-row';
   if (d.cards) {
     for (let i = 0; i < d.cards.length; i++) {
-      row.appendChild(makeCardEl(d.cards[i], { dealt: true, delay: i * 100 }));
+      row.appendChild(makeCardEl(d.cards[i], opts(i, true)));
     }
   } else {
     for (let i = 0; i < d.cardCount; i++) {
-      row.appendChild(makeCardBack({ dealt: i >= prevN, delay: Math.max(0, i - prevN) * 300 }));
+      row.appendChild(makeCardBack(opts(i, false)));
     }
   }
   board.appendChild(row);
+  board.dataset.dealerFaces = d.cards ? '1' : '0';
+  board.dataset.dealerShowAt = JSON.stringify(showAt.slice(0, d.cards ? d.cards.length : d.cardCount));
 }
 
 // ---- center message ----

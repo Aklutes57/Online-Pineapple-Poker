@@ -192,6 +192,47 @@ function check(name, cond) {
     after.canRebuy === true);
 }
 
+// ---- a queued carry-pot liquidation is never dropped, and "I'm back"
+// cancels your own queued stand-up (but never a host kick) ----
+{
+  const { game, host } = createGame({ variant: '747' }, 'Host', null);
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const kim = game.addPlayer('Kim', null);
+  kim.connected = true;
+  game.requestSeat(kim, 200, 1);
+  if (kim.status === 'requesting') game.approveSeat(kim.id, true);
+
+  // The op has no playerId — it must survive the per-player guard.
+  game.settings.variant = 'holdem';
+  game.carryPot = 120;
+  game.queueOp({ type: 'liquidateCarry' });
+  const stacksBefore = host.stack + kim.stack;
+  game.applyPendingOps();
+  check('a queued carry liquidation actually runs at hand end',
+    game.carryPot === 0 && host.stack + kim.stack === stacksBefore + 120);
+
+  // A voluntary stand-up queued mid-hand is cancelled by "I'm back"…
+  game.status = 'running';
+  game.startHand();
+  game.removeFromSeat(kim, 'leave');
+  check('a mid-hand stand-up is queued, not immediate',
+    kim.status === 'seated' && game.pendingOps.some((op) => op.type === 'unseat' && op.playerId === kim.id));
+  const back = game.sitIn(kim);
+  check('"I\'m back" cancels the queued stand-up',
+    back.ok === true && !game.pendingOps.some((op) => op.type === 'unseat' && op.playerId === kim.id));
+  game.currentHand.finished = true;
+  game.applyPendingOps();
+  check('the player keeps the seat after the hand', kim.status === 'seated');
+
+  // …but a host kick is not the player's to undo.
+  game.startHand();
+  game.removeFromSeat(kim, 'kick');
+  const denied = game.sitIn(kim);
+  check('a queued kick cannot be cancelled by the player',
+    denied.ok === false && game.pendingOps.some((op) => op.type === 'unseat' && op.playerId === kim.id));
+}
+
 // ---- a first-timer still waits, and a kicked player does not walk back in ----
 {
   const { game, host } = createGame({}, 'Host', null);

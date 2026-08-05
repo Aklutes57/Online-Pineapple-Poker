@@ -362,7 +362,21 @@ export class Game {
 
   sitIn(player) {
     if (player.status !== 'seated') return { ok: false, error: 'not seated' };
-    if (player.stack <= 0) return { ok: false, error: 'no chips — ask the host for a top-up' };
+    if (player.stack <= 0) return { ok: false, error: 'no chips — re-buy to keep playing' };
+    // A host kick queued for the end of the hand is not the player's to undo.
+    if (this.pendingOps.some((op) => op.type === 'unseat' && op.playerId === player.id && op.reason === 'kick')) {
+      return { ok: false, error: 'the host has removed you from the table' };
+    }
+    // "I'm back" also takes back your own queued Stand up: saying you're
+    // back and then losing the seat at hand end would make a liar of the UI.
+    const queued = this.pendingOps.findIndex(
+      (op) => op.type === 'unseat' && op.playerId === player.id
+    );
+    if (queued !== -1) {
+      this.pendingOps.splice(queued, 1);
+      player.kicked = false;
+      this.addLog(`${player.nickname} is staying after all`);
+    }
     player.sittingOut = false;
     this.addLog(`${player.nickname} is back`);
     this.maybeStartHand();
@@ -667,16 +681,20 @@ export class Game {
     const ops = this.pendingOps;
     this.pendingOps = [];
     for (const op of ops) {
+      // Table-level ops first: liquidateCarry has no playerId, so the player
+      // guard below would silently drop it and strand the riding pot.
+      if (op.type === 'liquidateCarry') {
+        if (VARIANTS[this.settings.variant].engine !== '747') {
+          this.liquidateCarryPot('game change');
+        }
+        continue;
+      }
       const player = this.players.get(op.playerId);
       if (!player) continue;
       if (op.type === 'unseat' && player.status === 'seated') {
         this.unseatNow(player, op.reason);
       } else if (op.type === 'adjustStack' && player.status === 'seated') {
         this.applyStackAdjust(player, op.delta);
-      } else if (op.type === 'liquidateCarry') {
-        if (VARIANTS[this.settings.variant].engine !== '747') {
-          this.liquidateCarryPot('game change');
-        }
       }
     }
     // After unseats have freed any seats, pull people off the queue.
