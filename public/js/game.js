@@ -263,6 +263,7 @@ function renderAvControls() {
   const st = avState();
   const seated = !!client.you && !client.you.spectator;
   const joinBtn = document.getElementById('av-join');
+  const voiceBtn = document.getElementById('av-voice');
   const live = document.getElementById('av-live');
   if (!joinBtn || !live) return;
 
@@ -270,10 +271,14 @@ function renderAvControls() {
   if (st.joined && !seated) { leaveAV(); return; }
 
   joinBtn.classList.toggle('hidden', !st.supported || !seated || st.joined);
+  voiceBtn?.classList.toggle('hidden', !st.supported || !seated || st.joined);
   live.classList.toggle('hidden', !st.joined);
   if (st.joined) {
     const cam = document.getElementById('av-cam');
     const mic = document.getElementById('av-mic');
+    // A voice-only session has no camera to toggle and no tile to frame.
+    cam.classList.toggle('hidden', !st.hasVideo);
+    document.getElementById('av-frame')?.classList.toggle('hidden', !st.hasVideo);
     cam.textContent = st.camOn ? 'Camera on' : 'Camera off';
     cam.classList.toggle('av-off', !st.camOn);
     cam.title = st.camOn ? 'Turn camera off' : 'Turn camera on';
@@ -290,6 +295,8 @@ function renderAvControls() {
         ? 'Hear everyone again'
         : 'Deafen — you hear nobody; your own mic is unchanged';
     }
+    const leave = document.getElementById('av-leave');
+    if (leave) leave.textContent = st.hasVideo ? 'End video' : 'End voice';
   }
 }
 
@@ -482,6 +489,13 @@ initWebrtc(client, socket);
 setOnChange(renderAvControls);
 document.getElementById('av-join')?.addEventListener('click', async () => {
   const r = await joinAV();
+  if (!r.ok && r.error) showToast(r.error);
+  renderAvControls();
+});
+// Voice without the camera: your mic joins the same session, your profile
+// picture keeps your seat. Mute mic / End voice take it from there.
+document.getElementById('av-voice')?.addEventListener('click', async () => {
+  const r = await joinAV({ voiceOnly: true });
   if (!r.ok && r.error) showToast(r.error);
   renderAvControls();
 });

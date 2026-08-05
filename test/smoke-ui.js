@@ -145,6 +145,25 @@ try {
   await openMenu(anna);
   await anna.waitForSelector('#av-join:not(.hidden)');
   await check('leaving video restores the Video button', true);
+
+  // Voice-only: the mic joins without a camera; the camera controls stay
+  // out of the way and the mute toggle is right there.
+  await anna.waitForSelector('#av-voice:not(.hidden)');
+  await anna.click('#av-voice');
+  await openMenu(anna);
+  await anna.waitForSelector('#av-live:not(.hidden)');
+  await check('Mic on joins voice without a camera',
+    await anna.locator('#av-mic').isVisible()
+    && !(await anna.locator('#av-cam').isVisible())
+    && (await anna.textContent('#av-leave')) === 'End voice');
+  await anna.click('#av-mic');
+  await openMenu(anna);
+  await check('the mic button mutes and relabels',
+    (await anna.textContent('#av-mic')) === 'Unmute mic');
+  await anna.click('#av-leave');
+  await openMenu(anna);
+  await anna.waitForSelector('#av-voice:not(.hidden)');
+  await check('ending voice restores the Mic on button', true);
   await anna.keyboard.press('Escape');
 
   // ---- two friends join via the invite link ----

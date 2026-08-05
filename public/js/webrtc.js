@@ -48,7 +48,12 @@ export async function initWebrtc(c, sock) {
 }
 
 export function avState() {
-  return { supported: isSupported(), joined, camOn, micOn, deafened };
+  return {
+    supported: isSupported(), joined, camOn, micOn, deafened,
+    // Voice-only sessions have no video track — the camera/frame controls
+    // would be dead buttons.
+    hasVideo: !!localStream && localStream.getVideoTracks().length > 0,
+  };
 }
 
 export function isDeafened() {
@@ -110,27 +115,34 @@ function isSupported() {
 
 // ---- join / leave ----
 
-export async function joinAV() {
+// voiceOnly joins the same mesh with a mic and no camera at all — the seat
+// keeps showing the profile picture and only your voice travels.
+export async function joinAV({ voiceOnly = false } = {}) {
   if (joined || !isSupported()) return { ok: joined };
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 24 } },
+      video: voiceOnly
+        ? false
+        : { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 24 } },
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
   } catch (err) {
+    const what = voiceOnly ? 'mic' : 'camera or mic';
     return { ok: false, error: err?.name === 'NotAllowedError'
-      ? 'Camera/mic permission was denied.'
-      : 'Could not access your camera or mic.' };
+      ? `${voiceOnly ? 'Mic' : 'Camera/mic'} permission was denied.`
+      : `Could not access your ${what}.` };
   }
   joined = true;
-  camOn = true;
+  camOn = !voiceOnly;
   micOn = true;
 
-  // Local preview at your own seat (muted so you don't echo, mirrored).
+  // Local preview at your own seat (muted so you don't echo, mirrored). A
+  // voice-only tile starts invisible, so the profile picture stays put.
   const myId = client.you?.playerId;
   if (myId) {
     const v = ensureVideoEl(myId, true);
     v.srcObject = localStream;
+    v.classList.toggle('cam-off', voiceOnly);
     v.play?.().catch(() => {});
   }
 
@@ -197,6 +209,12 @@ export function syncSeats(state) {
     const pod = layer.querySelector(`[data-seat="${i}"]`);
     if (!pod) continue;
     const v = seat && seat.mediaOn ? videoEls.get(seat.playerId) : null;
+    // A voice-only peer's stream carries no video track at all — their tile
+    // is pure audio, so keep it invisible and let the picture show through.
+    if (v && seat.playerId !== myId) {
+      const stream = v.srcObject;
+      v.classList.toggle('cam-off', !!stream && stream.getVideoTracks().length === 0);
+    }
     // A live tile covers the same spot as the profile picture; when the camera
     // is switched off the tile only goes invisible, so the picture comes back
     // and fills the hole rather than leaving a gap in the pod.
