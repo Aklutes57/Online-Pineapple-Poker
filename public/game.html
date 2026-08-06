@@ -73,7 +73,7 @@
           <div class="menu-grid">
             <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">Invite</button>
             <button id="open-log" class="btn-ghost btn top-btn" title="Every action this session, hand by hand">Game log</button>
-            <button id="open-fair" class="btn-ghost btn top-btn" title="Check the shuffle was honest">Verify shuffle</button>
+            <button id="open-fair" class="btn-ghost btn top-btn" title="Check the shuffle was honest — the provably-fair proof">Verify integrity</button>
           </div>
         </details>
 
@@ -176,7 +176,6 @@
         <button data-tab="log" class="tab">Log</button>
         <!-- The ledger is a pop-up, not a tab — this button just opens it. -->
         <button id="ledger-tab-btn" class="tab" title="Who bought in for what, who's up, who's down">Ledger</button>
-        <button data-tab="fair" class="tab">Verifying Integrity</button>
         <!-- Desktop: folds the dock down to this tab strip, giving the felt
              the room back. Any tab click opens it again. -->
         <button id="dock-toggle" class="tab dock-toggle" title="Fold the chat away — the table gets the room">Hide</button>
@@ -192,9 +191,6 @@
       <div id="tab-log" class="tab-body hidden">
         <div id="log-list" class="scroll-list"></div>
       </div>
-      <div id="tab-fair" class="tab-body hidden">
-        <div id="fair-panel" class="scroll-list"></div>
-      </div>
     </aside>
 
     <footer id="action-bar"></footer>
@@ -208,6 +204,18 @@
         <button class="btn btn-ghost modal-x" id="ledger-close" title="Close the ledger">Close</button>
       </div>
       <div id="ledger-table"></div>
+    </div>
+  </div>
+
+  <!-- Verifying integrity: the provably-fair readout, from the settings
+       menu or the shuffle chip. Closable, like the ledger. -->
+  <div class="modal-backdrop hidden" id="fair-modal">
+    <div class="modal ledger-modal">
+      <div class="modal-head">
+        <h2>Verifying integrity</h2>
+        <button class="btn btn-ghost modal-x" id="fair-close" title="Close">Close</button>
+      </div>
+      <div id="fair-panel"></div>
     </div>
   </div>
 

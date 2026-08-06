@@ -10,7 +10,7 @@ import {
 } from '/js/pwa.js';
 import { renderAll, startTimerLoop, fitTableStage } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
-import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger } from '/js/panels.js';
+import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger, openFair } from '/js/panels.js';
 import {
   initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic, toggleDeafen,
   syncSeats as syncAvSeats, avState, setOnChange,
@@ -419,7 +419,7 @@ document.addEventListener('keydown', (e) => {
 // open the side panel already turned to the right tab.
 document.getElementById('ledger-btn')?.addEventListener('click', openLedger);
 document.getElementById('open-log')?.addEventListener('click', () => openPanel('log'));
-document.getElementById('open-fair')?.addEventListener('click', () => openPanel('fair'));
+document.getElementById('open-fair')?.addEventListener('click', openFair);
 
 // Sit out / I'm back from the Seat sub-menu. The label tracks you.sittingOut
 // (renderAll repaints it on every state), so one button serves both ways.

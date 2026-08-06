@@ -25,7 +25,11 @@ export function initPanels(client) {
   });
 
   // The header fairness chip opens the Fair tab.
-  document.getElementById('fair-chip')?.addEventListener('click', () => openPanel('fair'));
+  document.getElementById('fair-chip')?.addEventListener('click', openFair);
+  document.getElementById('fair-close')?.addEventListener('click', closeFair);
+  document.getElementById('fair-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'fair-modal') closeFair();
+  });
 
   // The ledger pop-up: a button beside the chat tabs, Close, backdrop, Escape.
   document.getElementById('ledger-tab-btn')?.addEventListener('click', openLedger);
@@ -34,7 +38,9 @@ export function initPanels(client) {
     if (e.target.id === 'ledger-modal') closeLedger();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeLedger();
+    if (e.key !== 'Escape') return;
+    closeLedger();
+    closeFair();
   });
 
   // The Chat button is exactly that: it opens the panel ON the chat tab.
@@ -248,6 +254,16 @@ export function openPanel(tabName) {
 
 // The ledger is a pop-up: openable from the top bar or beside the chat tabs,
 // closable from its Close button, the backdrop, or Escape.
+// The provably-fair readout is a pop-up too: opened from Settings > Table >
+// Verify integrity, or from the shuffle chip in the bar.
+export function openFair() {
+  document.getElementById('fair-modal')?.classList.remove('hidden');
+}
+
+export function closeFair() {
+  document.getElementById('fair-modal')?.classList.add('hidden');
+}
+
 export function openLedger() {
   document.getElementById('ledger-modal')?.classList.remove('hidden');
 }

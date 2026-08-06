@@ -430,9 +430,19 @@ try {
   const fairFloat = await anna.textContent('#fair-chip');
   await check('the fair chip shows a hashed float for the hand', /Shuffle\s*0\.\d{4}/.test(fairFloat));
 
+  // Verifying integrity is a pop-up now, opened from the chip or from
+  // Settings > Table > Verify integrity.
   await anna.click('#fair-chip');
-  await anna.waitForSelector('#tab-fair:not(.hidden)');
-  await check('the Fair tab shows the client seed', (await anna.textContent('#fair-panel')).length > 0);
+  await anna.waitForSelector('#fair-modal:not(.hidden)');
+  await check('the shuffle chip opens the integrity pop-up',
+    (await anna.textContent('#fair-panel')).length > 0);
+  await anna.click('#fair-close');
+  await check('the integrity pop-up closes',
+    await anna.locator('#fair-modal').evaluate((el) => el.classList.contains('hidden')));
+  await openMenu(anna);
+  await anna.click('#open-fair');
+  await anna.waitForSelector('#fair-modal:not(.hidden)');
+  await check('Settings opens Verify integrity too', true);
 
   await anna.fill('#fair-seed-input', 'smoke-seed-42');
   await anna.click('#fair-seed-form button[type="submit"]');
@@ -440,6 +450,7 @@ try {
     document.getElementById('log-list')?.textContent.includes("set the table's client seed")
   );
   await check('a player can set the table client seed', true);
+  await anna.click('#fair-close');
 
   // The replay verifier re-checks the deck commitment in the browser and
   // confirms every shown card — while folded hands stay sealed.
@@ -659,7 +670,7 @@ try {
 
   // ---- per-player table skins: same room, three different looks ----
   const skinOptions = await anna.locator('#skin option').count();
-  await check('every table skin is offered', skinOptions === 6);
+  await check('every table skin is offered', skinOptions === 7);
   const geometry = async () => anna.evaluate(() => {
     const r = (sel) => [...document.querySelectorAll(sel)].map((e) => {
       const b = e.getBoundingClientRect();
@@ -705,7 +716,7 @@ try {
     }
     const root = document.documentElement;
     const before = root.dataset.skin;
-    const skins = ['velvet', 'tour', 'series', 'cwru', 'wabash', 'classic'];
+    const skins = ['velvet', 'tour', 'series', 'cwru', 'wabash', 'classic', 'redhawk'];
     const values = {};
     for (const skin of skins) {
       root.dataset.skin = skin;

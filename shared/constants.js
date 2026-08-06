@@ -300,6 +300,7 @@ export const SKINS = {
   cwru: { label: 'CWRU Spartans' },
   wabash: { label: 'Wabash Scarlet' },
   classic: { label: 'Classic Card Room' },
+  redhawk: { label: 'NC Wrestling Club' },
 };
 export const DEFAULT_SKIN = 'velvet';
 

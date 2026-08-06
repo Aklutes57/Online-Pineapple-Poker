@@ -624,3 +624,54 @@ label {
   margin-top: 2px;
   font-size: 14px;
 }
+
+/* ---- Naperville Central Wrestling Club ----
+   The wrestling-room look: Redhawk red mat inside a black rail, white
+   boundary lines, and the club's crest on the felt. */
+:root[data-skin='redhawk'] {
+  --bg: #0b0809;
+  --bg-raised: #2a1517;
+  --bg-panel: #16100f;
+  --border: #4a2422;
+  --text: #f6f1ef;
+  --text-dim: #bda6a2;
+  --accent: #e03127;
+  --accent-lite: #ff8b80;
+  --accent-dark: #8f1a13;
+  --blue: #33272a;
+  --green: #1c7350;
+  --green-dark: #114a33;
+  --red: #b3211a;
+  --felt: #b7241c;
+  --felt-dark: #7b120d;
+  --felt-hi: #d8352a;
+  --rail: #121011;
+  --ink: #070505;
+  --btn-ink: #fff6f4;
+  --ghost-bg: rgba(10, 6, 6, 0.6);
+  --ghost-hover: rgba(224, 49, 39, 0.18);
+  --green-lite: #24895f;
+  --red-lite: #d02a20;
+  --red-deep: #7d130e;
+  --rail-ring: #f2f2f2;
+  --rail-edge: #2c2426;
+  --felt-line: rgba(255, 255, 255, 0.5);
+  --glow: rgba(224, 49, 39, .15);
+  --pulse: 224, 49, 39;
+  --card-face: #fbf8f7;
+  --card-ink: #17100f;
+  --plate-a: rgba(30, 17, 18, .96);
+  --plate-b: rgba(14, 8, 9, .96);
+  --chip-ink: #ffe4e0;
+  --card-red: #c31d16;
+  --card-back-a: #3a1c1d;
+  --card-back-b: #1d1011;
+  --money: #ffffff;
+  --wm-a: 'NAPERVILLE';
+  --wm-b: 'WRESTLING CLUB';
+  --wm-ink: rgba(255, 255, 255, 0.42);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #35181a 0%, #1b0d0e 45%, #090506 100%);
+  --scape-a: #241012;
+  --scape-b: #3a1a1a;
+  --scape-o: 0.45;
+}
