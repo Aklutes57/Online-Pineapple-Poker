@@ -5,7 +5,11 @@ import { scryptSync, randomBytes, timingSafeEqual, randomUUID } from 'node:crypt
 import { run, get, all, now } from './db.js';
 import { cleanPayments } from '../shared/payments.js';
 
-const SESSION_TTL = 90 * 24 * 60 * 60 * 1000; // 90 days
+// "Remember me" keeps you signed in on your own device for three months;
+// without it the session lasts a day, so a shared or borrowed screen forgets
+// you by tomorrow.
+const SESSION_TTL = 90 * 24 * 60 * 60 * 1000;   // 90 days, remembered
+const SESSION_TTL_SHORT = 24 * 60 * 60 * 1000;  // 1 day, not remembered
 const SCRYPT_KEYLEN = 64;
 
 export const LIMITS = {
@@ -36,7 +40,7 @@ function verifyPassword(password, storedHash, salt) {
   return timingSafeEqual(a, b);
 }
 
-export function createAccount({ email, password, displayName }) {
+export function createAccount({ email, password, displayName, remember = true }) {
   const cleanEmail = normalizeEmail(email);
   if (!cleanEmail) return { ok: false, error: 'Enter a valid email address' };
   if (typeof password !== 'string' || password.length < LIMITS.password.min) {
@@ -62,10 +66,10 @@ export function createAccount({ email, password, displayName }) {
   );
   const accountId = Number(result.lastInsertRowid);
   run('INSERT INTO player_stats (account_id, updated_at) VALUES (?, ?)', accountId, ts);
-  return { ok: true, account: getAccount(accountId), token: createSession(accountId) };
+  return { ok: true, account: getAccount(accountId), token: createSession(accountId, remember) };
 }
 
-export function login({ email, password }) {
+export function login({ email, password, remember = true }) {
   const cleanEmail = normalizeEmail(email);
   const generic = { ok: false, error: 'Email or password is incorrect' };
   if (!cleanEmail || typeof password !== 'string') return generic;
@@ -79,15 +83,15 @@ export function login({ email, password }) {
   if (!verifyPassword(password, row.password_hash, row.password_salt)) return generic;
 
   run('UPDATE accounts SET last_login_at = ? WHERE id = ?', now(), row.id);
-  return { ok: true, account: publicAccount(row), token: createSession(row.id) };
+  return { ok: true, account: publicAccount(row), token: createSession(row.id, remember) };
 }
 
-export function createSession(accountId) {
+export function createSession(accountId, remember = true) {
   const token = randomUUID() + randomBytes(16).toString('hex');
   const ts = now();
   run(
     'INSERT INTO sessions (token, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
-    token, accountId, ts, ts + SESSION_TTL
+    token, accountId, ts, ts + (remember ? SESSION_TTL : SESSION_TTL_SHORT)
   );
   return token;
 }

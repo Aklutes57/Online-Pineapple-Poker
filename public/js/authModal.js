@@ -1,7 +1,7 @@
 // The sign-in / sign-up modal, shared by the landing page and the profile
 // page. Injects its own markup so any page can call openAuthModal().
 
-import { signup, signin } from '/js/auth.js';
+import { signup, signin, isRemembered } from '/js/auth.js';
 
 let installed = false;
 let onDone = null;
@@ -24,6 +24,10 @@ const MARKUP = `
       <label for="a-password">Password</label>
       <input id="a-password" type="password" autocomplete="current-password" placeholder="At least 8 characters">
     </div>
+    <label class="check-label remember-row" for="a-remember">
+      <input type="checkbox" id="a-remember" checked>
+      <span>Keep me signed in on this device</span>
+    </label>
     <p class="auth-error hidden" id="auth-error"></p>
     <div class="actions">
       <button class="btn btn-ghost" id="a-cancel">Cancel</button>
@@ -82,6 +86,7 @@ async function submit() {
   const email = document.getElementById('a-email').value.trim();
   const password = document.getElementById('a-password').value;
   const displayName = document.getElementById('a-name').value.trim();
+  const remember = document.getElementById('a-remember').checked;
   const btn = document.getElementById('a-submit');
 
   if (!email || !password) {
@@ -95,8 +100,8 @@ async function submit() {
 
   btn.disabled = true;
   const result = mode === 'signup'
-    ? await signup({ email, password, displayName })
-    : await signin({ email, password });
+    ? await signup({ email, password, displayName, remember })
+    : await signin({ email, password, remember });
   btn.disabled = false;
 
   if (!result.ok) {
@@ -112,6 +117,8 @@ export function openAuthModal({ startMode = 'signin', onSuccess = null } = {}) {
   onDone = onSuccess;
   setMode(startMode);
   document.getElementById('a-password').value = '';
+  // Default to what this device chose last time.
+  document.getElementById('a-remember').checked = isRemembered();
   document.getElementById('auth-modal').classList.remove('hidden');
   document.getElementById(startMode === 'signup' ? 'a-name' : 'a-email').focus();
 }

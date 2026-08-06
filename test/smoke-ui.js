@@ -567,11 +567,34 @@ try {
   await dana.click('#signout-btn');
   await dana.waitForURL(`${base}/`);
   await dana.click('#signin-btn');
+  await check('sign-in offers Keep me signed in, on by default',
+    await dana.locator('#a-remember').isChecked());
   await dana.fill('#a-email', 'dana@example.com');
   await dana.fill('#a-password', 'a good long password');
   await dana.click('#a-submit');
   await dana.waitForSelector('.nav-account');
   await check('sign out then sign back in works', true);
+  await check('remembered: the session survives closing the browser',
+    await dana.evaluate(() => localStorage.getItem('pp:account') !== null));
+
+  // Unchecked, the token lives only for this tab — a shared screen forgets.
+  await dana.click('#signout-btn');
+  await dana.waitForSelector('#signin-btn');
+  await dana.click('#signin-btn');
+  await dana.uncheck('#a-remember');
+  await dana.fill('#a-email', 'dana@example.com');
+  await dana.fill('#a-password', 'a good long password');
+  await dana.click('#a-submit');
+  await dana.waitForSelector('.nav-account');
+  await check('not remembered: signed in for this tab only',
+    await dana.evaluate(() =>
+      localStorage.getItem('pp:account') === null
+      && sessionStorage.getItem('pp:account') !== null));
+  await dana.reload();
+  await dana.waitForSelector('.nav-account');
+  await check('not remembered: a reload keeps you signed in', true);
+  await check('the checkbox remembers the choice you made last',
+    await dana.evaluate(() => localStorage.getItem('pp:remember') === 'off'));
 
   // ---- wrong password is rejected in the UI ----
   await dana.click('#signout-btn');

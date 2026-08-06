@@ -215,7 +215,8 @@ export function buildServer() {
   const authLimiter = makeRateLimiter({ windowMs: 60_000, max: 20 });
 
   app.post('/api/auth/signup', authLimiter, (req, res) => {
-    const result = createAccount(req.body || {});
+    const body = req.body || {};
+    const result = createAccount({ ...body, remember: body.remember !== false });
     if (!result.ok) {
       res.status(400).json({ error: result.error });
       return;
@@ -224,7 +225,8 @@ export function buildServer() {
   });
 
   app.post('/api/auth/login', authLimiter, (req, res) => {
-    const result = login(req.body || {});
+    const body = req.body || {};
+    const result = login({ ...body, remember: body.remember !== false });
     if (!result.ok) {
       res.status(401).json({ error: result.error });
       return;

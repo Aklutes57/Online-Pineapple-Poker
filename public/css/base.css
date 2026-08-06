@@ -616,3 +616,11 @@ label {
   height: 16px;
   accent-color: var(--accent, #f0b43c);
 }
+
+/* "Keep me signed in" is its own row under the password, not a grid cell —
+   it doesn't want the column padding the bounty toggle needs. */
+.modal .check-label.remember-row {
+  padding-top: 0;
+  margin-top: 2px;
+  font-size: 14px;
+}
