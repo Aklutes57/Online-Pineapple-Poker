@@ -360,6 +360,16 @@ export class Game {
     return { ok: true };
   }
 
+  // Straddling is each player's own choice. The table option only makes the
+  // straddle AVAILABLE; whether your UTG posts it is up to you, and the
+  // default is in (matching how the option always worked).
+  setStraddle(player, on) {
+    if (player.status !== 'seated') return { ok: false, error: 'not seated' };
+    player.straddleOptIn = on;
+    this.addLog(`${player.nickname} is ${on ? 'in for' : 'out of'} the straddle`);
+    return { ok: true };
+  }
+
   sitIn(player) {
     if (player.status !== 'seated') return { ok: false, error: 'not seated' };
     if (player.stack <= 0) return { ok: false, error: 'no chips — re-buy to keep playing' };
@@ -434,13 +444,12 @@ export class Game {
     if (!this.rebuysOpen()) {
       return { ok: false, error: 'the re-buy period is over — this one plays out' };
     }
-    const { minBuyIn, maxBuyIn } = this.settings;
+    // Re-buys have a floor but no ceiling — a home game tops up however deep
+    // it likes. (The sanity cap only guards integer arithmetic.)
+    const { minBuyIn } = this.settings;
     const want = Number.isInteger(amount) ? amount : this.settings.defaultBuyIn;
-    if (!Number.isInteger(want) || want < minBuyIn || want > maxBuyIn) {
-      return { ok: false, error: `re-buy must be ${minBuyIn}-${maxBuyIn}` };
-    }
-    if (player.stack + want > maxBuyIn) {
-      return { ok: false, error: `a stack can't go past ${maxBuyIn}` };
+    if (!Number.isInteger(want) || want < minBuyIn || want > 100_000_000) {
+      return { ok: false, error: `re-buy must be at least ${minBuyIn}` };
     }
     if (this.playerInLiveHand(player)) {
       this.queueOp({ type: 'adjustStack', playerId: player.id, delta: want });

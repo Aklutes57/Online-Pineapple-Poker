@@ -312,7 +312,10 @@ try {
   await anna.click('#h-done');
 
   // ---- emoji reactions reach the other players ----
-  await openMenu(ben);
+  // React is its own top-bar button now — no menu needed.
+  await check('React sits in the top bar', await ben.locator('#react-btn').isVisible());
+  await check('a guest is offered Sign in on the table',
+    await ben.locator('#signin-chip').isVisible());
   await ben.click('#react-btn');
   await ben.waitForSelector('#react-picker:not(.hidden)');
   await ben.click('.react-option[data-emoji="🔥"]');

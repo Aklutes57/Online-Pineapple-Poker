@@ -133,11 +133,10 @@ function check(name, cond) {
   check('a player with no chips is not dealt into the hand',
     !dealtIn.some((p) => p.id === broke.id) && dealtIn.length === 2);
 
-  // Re-buy puts them back in, within the table's buy-in limits.
+  // Re-buy puts them back in: the table minimum still holds, but there is
+  // no ceiling — a home game tops up however deep it likes.
   const tooSmall = game.rebuy(broke, game.settings.minBuyIn - 1);
   check('a re-buy under the table minimum is refused', tooSmall.ok === false);
-  const tooBig = game.rebuy(broke, game.settings.maxBuyIn + 1);
-  check('a re-buy over the table maximum is refused', tooBig.ok === false);
 
   const ok = game.rebuy(broke, 200);
   check('a re-buy is accepted', ok.ok === true && broke.stack === 200);
@@ -231,6 +230,41 @@ function check(name, cond) {
   const denied = game.sitIn(kim);
   check('a queued kick cannot be cancelled by the player',
     denied.ok === false && game.pendingOps.some((op) => op.type === 'unseat' && op.playerId === kim.id));
+}
+
+// ---- straddling is each player's own choice, and re-buys have no ceiling ----
+{
+  const { game, host } = createGame({ straddle: true, smallBlind: 1, bigBlind: 2 }, 'Host', null);
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const uma = game.addPlayer('Uma', null);
+  const vic = game.addPlayer('Vic', null);
+  for (const [p, seat] of [[uma, 1], [vic, 2]]) {
+    p.connected = true;
+    game.requestSeat(p, 200, seat);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+  }
+  game.status = 'running';
+  // Button starts somewhere; find the UTG (after the big blind) of the first
+  // hand and opt them out BEFORE the deal.
+  game.startHand();
+  const firstStraddler = game.currentHand.straddleSeat;
+  check('with the option on, UTG straddles by default', firstStraddler !== null);
+  game.currentHand.finished = true;
+
+  // Opt everyone out: no hand should post a straddle now.
+  for (const p of [host, uma, vic]) {
+    check('a seated player can set their straddle choice', game.setStraddle(p, false).ok === true);
+  }
+  game.startHand();
+  check('an opted-out UTG plays a normal hand', game.currentHand.straddleSeat === null);
+  game.currentHand.finished = true;
+
+  // Re-buy: floor enforced, no ceiling.
+  uma.stack = 0;
+  check('a tiny re-buy is refused', game.rebuy(uma, 1).ok === false);
+  check('a huge re-buy is welcome', game.rebuy(uma, 50000).ok === true);
+  check('the whole amount landed', uma.stack === 50000);
 }
 
 // ---- a first-timer still waits, and a kicked player does not walk back in ----

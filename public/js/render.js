@@ -54,6 +54,12 @@ export function renderAll(client) {
       ? 'Deal me in again from the next hand'
       : 'Go away for a bit — the table checks or folds for you until you’re back';
   }
+  // Straddle choice: only meaningful when the table's straddle is on.
+  const straddleBtn = document.getElementById('menu-straddle');
+  if (straddleBtn) {
+    straddleBtn.classList.toggle('hidden', !seated || !state.settings.straddle);
+    straddleBtn.textContent = you?.straddleOptIn === false ? 'Straddle: out' : 'Straddle: in';
+  }
   // The action bar's height can change with its contents, which can change the
   // space left for the table — refit, and re-place if that flipped the shape.
   relayout();

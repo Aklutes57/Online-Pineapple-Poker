@@ -403,8 +403,8 @@ function handleAct(client, act, av, arg = null) {
       client.send(EVENTS.REBUY, { amount: parseInt(arg, 10) });
       break;
     case 'rebuy-other': {
-      const { minBuyIn, maxBuyIn } = client.state.settings;
-      const raw = prompt(`Re-buy how many chips? (${minBuyIn}-${maxBuyIn})`);
+      const { minBuyIn } = client.state.settings;
+      const raw = prompt(`Re-buy how many chips? (at least ${minBuyIn} — no cap)`);
       const amount = parseInt(raw, 10);
       if (Number.isInteger(amount)) client.send(EVENTS.REBUY, { amount });
       break;

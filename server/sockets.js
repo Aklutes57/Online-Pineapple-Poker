@@ -324,6 +324,10 @@ export function attachSockets(io) {
       result(game, game.sitIn(player));
     }));
 
+    socket.on(EVENTS.SET_STRADDLE, withGame((game, player, payload) => {
+      result(game, game.setStraddle(player, !!payload?.on));
+    }));
+
     socket.on(EVENTS.STAND_UP, withGame((game, player) => {
       result(game, game.removeFromSeat(player, 'leave'));
     }));

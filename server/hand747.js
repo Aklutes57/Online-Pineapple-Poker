@@ -230,6 +230,27 @@ export class Hand747 {
     );
 
     if (stayers.length === 0) {
+      // House rule: when nobody plays the dealer, the best hand at the table
+      // owes the ride 3× the ante — holding the goods and ducking has a
+      // price. First from the button breaks a dead tie, matching the pot
+      // machinery's own bias.
+      const dealt = this.seatsFromButton().filter((p) => p.holeCards.length);
+      if (dealt.length && this.ante > 0) {
+        // "Best hand" means the five they would have held: the fifth cards
+        // are deterministic in deal order, so score everyone with theirs
+        // (without attaching them — folded hands stay four-card mucks).
+        const foldedScores = new Map(dealt.map((p) => [
+          p.seatIndex,
+          isNaturalSeven(p.originalFour)
+            ? NATURAL_SEVEN_SCORE
+            : evaluate747([...p.holeCards, ...this.draw(1)]),
+        ]));
+        const bestScore = Math.max(...dealt.map((p) => foldedScores.get(p.seatIndex)));
+        const payer = dealt.find((p) => foldedScores.get(p.seatIndex) === bestScore);
+        // Collected in finishShowdown AFTER the pot is read, like every
+        // other penalty — paying here would inflate the pot it rides behind.
+        this.duckPayer = payer;
+      }
       this.finishShowdown([], new Map());
       return;
     }
@@ -304,6 +325,23 @@ export class Hand747 {
             `(lost to ${reason === 'dealer' ? 'the dealer' : 'a player'})`
           );
         }
+      }
+    }
+
+    // The duck penalty: nobody played the dealer, so the best hand pays 3×
+    // the ante into the ride — collected here, after the pot was read, and
+    // routed to the riding pot like every other penalty.
+    if (this.duckPayer) {
+      const paid = betting.pay(this.duckPayer, this.ante * 3);
+      if (paid > 0) {
+        const seat = this.duckPayer.seatIndex;
+        penaltyTotal += paid;
+        penalties.push({ seat, amount: paid, to: 'duck' });
+        this.pushEvent({ type: 'penalty', seat, amount: paid, to: 'duck' });
+        this.ctx.log(
+          `${this.duckPayer.nickname} held the best hand and ducked the dealer — ` +
+          `pays ${paid} (3× ante) into the next pot`
+        );
       }
     }
 

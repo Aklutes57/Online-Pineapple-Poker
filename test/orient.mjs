@@ -189,6 +189,29 @@ for (const [name, w, h, wantUpright] of views) {
     }
     center.style.pointerEvents = '';
 
+    // Overlap is not just about who paints on top: a board that COVERS a
+    // nameplate is as broken as a fan that covers the board. The board box
+    // must intersect no nameplate at all, and no seat's plate or webcam tile
+    // may sit on another seat's plate.
+    const boardBox = boardRow.getBoundingClientRect();
+    const plates = [...document.querySelectorAll('#seats-layer .nameplate')]
+      .map((n) => n.getBoundingClientRect()).filter((b) => b.width > 0);
+    const boardHitsPlate = plates.filter((b) => hits(boardBox, b)).length;
+    let podClash = 0;
+    const podBoxes = [...document.querySelectorAll('#seats-layer .seat.occupied')].map((s) => ({
+      plate: s.querySelector('.nameplate')?.getBoundingClientRect(),
+      cam: s.querySelector('video.seat-cam')?.getBoundingClientRect(),
+    }));
+    for (let a = 0; a < podBoxes.length; a++) {
+      for (let b = 0; b < podBoxes.length; b++) {
+        if (a === b) continue;
+        const src = [podBoxes[a].plate, podBoxes[a].cam].filter((r) => r && r.width);
+        const dst = podBoxes[b].plate;
+        if (!dst || !dst.width) continue;
+        if (src.some((r) => hits(r, dst))) podClash++;
+      }
+    }
+
     for (const el of probes) el.remove();
     for (const el of stand) el.remove();
     for (const fan of document.querySelectorAll('.cards-fan.probe-class')) {
@@ -207,6 +230,8 @@ for (const [name, w, h, wantUpright] of views) {
       collisions,
       myCardsBlocked,
       boardCovered,
+      boardHitsPlate,
+      podClash,
     };
   }, [landscapeCoords, portraitCoords]);
 
@@ -214,12 +239,13 @@ for (const [name, w, h, wantUpright] of views) {
   const tallerThanWide = m.th > m.tw;
   const shapeOk = wantUpright ? tallerThanWide : !tallerThanWide;
   const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0
-    && m.myCardsBlocked === 0 && m.boardCovered === 0;
+    && m.myCardsBlocked === 0 && m.boardCovered === 0
+    && m.boardHitsPlate === 0 && m.podClash === 0;
   // How much of the screen the felt covers — the point of the whole change.
   const cover = ((m.tw * m.th) / (m.iw * m.ih) * 100).toFixed(0);
   const ok = orientOk && shapeOk && fits;
   if (!ok) bad++;
-  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked} boardCovered=${m.boardCovered}`);
+  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked} boardCovered=${m.boardCovered} boardHitsPlate=${m.boardHitsPlate} podClash=${m.podClash}`);
   await page.screenshot({ path: `${SHOT}/orient-${name}.png` });
   await ctx.close();
 }

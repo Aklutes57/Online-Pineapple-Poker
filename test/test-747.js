@@ -172,6 +172,33 @@ function conserve(name, players, before, hand, carryIn = 0) {
   conserve('single winner', players, before, hand);
 }
 
+// Duck rule: nobody plays the dealer, so the best hand at the table pays
+// 3x the ante into the ride — on top of the swept pot.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100), makePlayer(2, 100)];
+  const before = totalChips(players);
+  const deck = [
+    'As', 'Ah', 'Ad', 'Kc', // seat 1 — trip aces, the best hand, ducks anyway
+    '2c', '3d', '8h', '9s', // seat 2
+    'Jd', '2h', '5s', '9c', // seat 0
+    'Kd', 'Kh', '5c', '6d', // dealer
+    '2s', '3h', '6h',       // hypothetical fifths: seat1, seat2, seat0
+  ];
+  const { hand, ctx } = make747({ players, deck, ante: 10 });
+  hand.handleDecision(players[0], false);
+  hand.handleDecision(players[1], false);
+  hand.handleDecision(players[2], false);
+  ctx.fire(); // countdown -> reveal
+  check('duck: hand finished', hand.finished);
+  check('duck: best hand paid 3x the ante', players[1].stack === 100 - 10 - 30);
+  check('duck: the others paid only the ante',
+    players[0].stack === 90 && players[2].stack === 90);
+  check('duck: pot and penalty both ride', hand.results.carryOut === 30 + 30);
+  check('duck: penalty recorded against the ducker',
+    hand.results.penalties?.some((p) => p.seat === 1 && p.amount === 30 && p.to === 'duck'));
+  conserve('duck rule', players, before, hand);
+}
+
 // Natural Seven beats even the dealer's Five of a Kind.
 {
   const players = [makePlayer(0, 100), makePlayer(1, 100)];
@@ -227,7 +254,11 @@ function conserve(name, players, before, hand, carryIn = 0) {
   ctx.fire();
   check('all-fold: finished', hand.finished);
   check('all-fold: dealer keeps four cards', hand.dealerCards.length === 4);
-  check('all-fold: whole pot rides', hand.results.carryOut === 30);
+  // The pot rides, and the duck rule adds 3x the ante from whoever held the
+  // best hand (random deck — who paid varies, the amount never does).
+  check('all-fold: pot plus the duck penalty ride', hand.results.carryOut === 30 + 30);
+  check('all-fold: the duck penalty is recorded',
+    hand.results.penalties?.some((p) => p.to === 'duck' && p.amount === 30));
   conserve('all fold', players, before, hand);
 }
 

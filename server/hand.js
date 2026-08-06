@@ -145,8 +145,11 @@ export class Hand {
 
     // Straddle: UTG posts double the big blind before the deal, and action
     // starts to their left. Skipped heads-up, where the button already posts
-    // the small blind and is the only candidate seat.
-    if (this.straddleEnabled && this.players.length >= 3) {
+    // the small blind and is the only candidate seat. The table option makes
+    // the straddle available; each player opts in or out for themselves
+    // (default in), so an opted-out UTG just plays a normal hand.
+    if (this.straddleEnabled && this.players.length >= 3
+        && this.bySeat.get(this.seatAfter(this.bbSeat))?.straddleOptIn !== false) {
       const seat = this.seatAfter(this.bbSeat);
       const straddler = this.bySeat.get(seat);
       const want = this.bigBlind * 2;

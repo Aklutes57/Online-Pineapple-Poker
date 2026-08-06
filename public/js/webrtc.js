@@ -143,7 +143,7 @@ export async function joinAV({ voiceOnly = false } = {}) {
     const v = ensureVideoEl(myId, true);
     v.srcObject = localStream;
     v.classList.toggle('cam-off', voiceOnly);
-    v.play?.().catch(() => {});
+    v.play?.().catch(() => armPlayRetry());
   }
 
   socket.emit(EVENTS.RTC_MEDIA, { on: true });
@@ -249,7 +249,7 @@ function makePeer(peerId, initiator) {
     if (v.srcObject !== e.streams[0]) {
       v.srcObject = e.streams[0];
       v.muted = deafened || mutedPeers.has(peerId);
-      v.play?.().catch(() => {});
+      v.play?.().catch(() => armPlayRetry());
     }
     if (client.state) syncSeats(client.state);
   };
@@ -306,6 +306,23 @@ function closePeer(peerId) {
 
 // ---- video elements ----
 
+// iOS (and Low Power Mode anywhere) refuses to start an unmuted remote
+// video outside a user gesture — the tile sits black and silent. When a
+// play() is refused, arm a one-shot listener that replays every stalled
+// tile on the next tap or click anywhere.
+let playRetryArmed = false;
+function armPlayRetry() {
+  if (playRetryArmed) return;
+  playRetryArmed = true;
+  const kick = () => {
+    playRetryArmed = false;
+    for (const v of videoEls.values()) {
+      if (v.paused && v.srcObject) v.play?.().catch(() => {});
+    }
+  };
+  document.addEventListener('pointerdown', kick, { once: true, capture: true });
+}
+
 function ensureVideoEl(playerId, isLocal) {
   let v = videoEls.get(playerId);
   if (!v) {
@@ -313,7 +330,13 @@ function ensureVideoEl(playerId, isLocal) {
     v.className = 'seat-cam' + (isLocal ? ' mine' : '');
     v.autoplay = true;
     v.playsInline = true;
+    v.setAttribute('playsinline', ''); // older iOS ignores the property
     if (isLocal) v.muted = true; // never echo your own mic
+    // A stream that arrives mid-render can miss its play() — retry the
+    // moment the metadata lands, and fall back to the gesture arm.
+    v.addEventListener('loadedmetadata', () => {
+      v.play?.().catch(() => armPlayRetry());
+    });
     videoEls.set(playerId, v);
   }
   return v;

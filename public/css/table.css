@@ -470,6 +470,20 @@ body.disconnected::after {
   height: var(--board-card-h);
 }
 
+/* The upright felt is narrow: full-size board cards reach into the rim
+   seats, so the board (and its dashed slots) runs at 4/5 size and the whole
+   centre sits a touch higher, clear of the mid-height seats. */
+#table.upright #board .card,
+#table.upright .board-slot {
+  --face: calc(var(--board-card-w) * 0.8);
+  width: calc(var(--board-card-w) * 0.8);
+  height: calc(var(--board-card-h) * 0.8);
+}
+
+#table.upright #table-center {
+  top: 46%;
+}
+
 #board.two-boards .board-row:nth-child(2) {
   opacity: 0.92;
 }
@@ -589,6 +603,16 @@ body.disconnected::after {
   height: calc(var(--card-h) * 1.66);
 }
 
+/* The upright ring is narrow: the full big-screen bonus reaches the seats
+   flanking yours (tablet portrait), so your hand keeps a smaller boost. */
+@media (min-width: 721px) {
+  #table.upright .cards-fan.mine .card {
+    --face: calc(var(--card-w) * 1.34);
+    width: calc(var(--card-w) * 1.34);
+    height: calc(var(--card-h) * 1.34);
+  }
+}
+
 /* Four- and five-card games: everyone's fan doubles in width, and on the ring
    the seats beside yours reach straight into your hand. The flexible thing in
    a pod is the CARDS — never the webcam tile, which keeps its full size — so a
@@ -642,6 +666,14 @@ body.disconnected::after {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(var(--pulse), 0.6), 0 0 24px rgba(var(--pulse), 0.35);
   animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* Whose turn it is reads from across the room: their picture (or webcam
+   tile) rings green until they act. */
+.seat.to-act .seat-avatar,
+.seat.to-act video.seat-cam {
+  border-color: #35c46f !important;
+  box-shadow: 0 0 0 2px rgba(53, 196, 111, 0.65), 0 0 18px rgba(53, 196, 111, 0.55);
 }
 
 @keyframes pulse {
@@ -1919,8 +1951,8 @@ td.dim { color: var(--text-dim); }
 
 /* The webcam feed sits where a seat's avatar would, just above the nameplate. */
 video.seat-cam {
-  width: 192px;
-  height: 144px;
+  width: 160px;
+  height: 120px;
   object-fit: cover;
   border-radius: 12px;
   border: 2px solid rgba(255, 255, 255, 0.22);
@@ -1936,8 +1968,13 @@ video.seat-cam.mine {
 video.seat-cam.cam-off { visibility: hidden; }
 .seat.me video.seat-cam { border-color: var(--accent); }
 
+/* The upright ring stacks pods closer together, so its tiles trim a step. */
+@media (min-width: 721px) {
+  #table.upright video.seat-cam { width: 132px; height: 99px; }
+}
+
 @media (max-width: 720px) {
-  video.seat-cam { width: 144px; height: 108px; }
+  video.seat-cam { width: 118px; height: 88px; }
 }
 
 /* ---- per-player mute + muted styling ---- */

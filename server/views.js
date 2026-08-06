@@ -196,6 +196,7 @@ export function buildViews(game) {
       isHost: game.hostId === p.id,
       nameFont: p.nameFont || DEFAULT_NAME_FONT,
       spectator: p.status !== 'seated',
+      straddleOptIn: p.straddleOptIn !== false,
       status: p.status,
       seatIndex: p.seatIndex,
       stack: p.stack,

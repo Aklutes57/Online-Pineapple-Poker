@@ -401,7 +401,6 @@ menuToggle?.addEventListener('click', (e) => {
 topMenu?.addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
-  if (btn.id === 'react-btn') return; // opens its own picker inside the sheet
   setMenu(false);
 });
 
@@ -425,6 +424,12 @@ document.getElementById('open-fair')?.addEventListener('click', () => openPanel(
 // (renderAll repaints it on every state), so one button serves both ways.
 document.getElementById('menu-sit')?.addEventListener('click', () => {
   client.send(client.you?.sittingOut ? EVENTS.SIT_IN : EVENTS.SIT_OUT, {});
+});
+
+// Straddling is your own call: opt out and your under-the-gun hands play
+// normally even with the table's straddle switched on.
+document.getElementById('menu-straddle')?.addEventListener('click', () => {
+  client.send(EVENTS.SET_STRADDLE, { on: client.you?.straddleOptIn === false });
 });
 
 // ---- how the table looks on YOUR screen ----
@@ -506,7 +511,11 @@ document.getElementById('av-leave')?.addEventListener('click', leaveAV);
 window.addEventListener('pagehide', leaveAV);
 loadAccount().then(async (account) => {
   client.account = account;
-  if (!account) return;
+  if (!account) {
+    // No account: offer the door right on the table (guests stay welcome).
+    document.getElementById('signin-chip')?.classList.remove('hidden');
+    return;
+  }
   const chip = document.getElementById('account-chip');
   if (chip) {
     chip.textContent = account.displayName;

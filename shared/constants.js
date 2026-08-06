@@ -13,6 +13,7 @@ export const EVENTS = {
   SHOW_CARDS: 'showCards',
   SIT_OUT: 'sitOut',
   SIT_IN: 'sitIn',
+  SET_STRADDLE: 'setStraddle',
   STAND_UP: 'standUp',
   CHAT: 'chat',
   REACT: 'react',
@@ -207,15 +208,15 @@ export const TIMINGS = {
 // Index 0 is bottom-center; clockwise when viewed on screen.
 export const SEAT_COORDS = [
   { left: 50, top: 97 },
-  { left: 25, top: 90 },
-  { left: 11, top: 66 },
-  { left: 11, top: 32 },
-  { left: 25, top: 8 },
+  { left: 28, top: 92 },
+  { left: 10, top: 72 },
+  { left: 10, top: 27 },
+  { left: 28, top: 6 },
   { left: 50, top: 1 },
-  { left: 75, top: 8 },
-  { left: 89, top: 32 },
-  { left: 89, top: 66 },
-  { left: 75, top: 90 },
+  { left: 72, top: 6 },
+  { left: 90, top: 27 },
+  { left: 90, top: 72 },
+  { left: 72, top: 92 },
 ];
 
 // The same ring for a table stood on its end — used when the screen is taller
@@ -225,17 +226,20 @@ export const SEAT_COORDS = [
 // The side seats sit further in than a simple ellipse would put them: a seat
 // pod is a much larger share of this narrower felt, so hugging the rim would
 // leave them dangling in space beside the table.
+// The mid-height seats stay clear of the board band (the board row sits at
+// ~40-50% of the upright felt), and the seats flanking your own sit wide and
+// high enough that your enlarged cards can't reach their nameplates.
 export const SEAT_COORDS_PORTRAIT = [
   { left: 50, top: 97 },
-  { left: 28, top: 88 },
-  { left: 17, top: 65 },
-  { left: 17, top: 35 },
-  { left: 28, top: 12 },
+  { left: 21, top: 87 },
+  { left: 14, top: 62 },
+  { left: 14, top: 30 },
+  { left: 32, top: 8 },
   { left: 50, top: 3 },
-  { left: 72, top: 12 },
-  { left: 83, top: 35 },
-  { left: 83, top: 65 },
-  { left: 72, top: 88 },
+  { left: 68, top: 8 },
+  { left: 86, top: 30 },
+  { left: 86, top: 62 },
+  { left: 79, top: 87 },
 ];
 
 // Where each seat's bet chips render, pulled toward the table center.
