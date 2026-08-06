@@ -1229,6 +1229,137 @@ td.pos { color: var(--green); font-weight: 700; }
 td.neg { color: var(--red); font-weight: 700; }
 td.dim { color: var(--text-dim); }
 
+/* ---- Session Ledger pop-up: card rows, PokerNow-style ---- */
+
+.sledger {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.sl-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px 58px 54px 62px;
+  gap: 8px;
+  align-items: center;
+}
+
+.sl-grid > .sl-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-head {
+  padding: 0 12px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.sl-head span:not(:first-child) {
+  text-align: right;
+}
+
+.sl-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+}
+
+.sl-player {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sl-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sl-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-id {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-details {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sl-details:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.sl-net.pos { color: var(--green); font-weight: 700; }
+.sl-net.neg { color: var(--red); font-weight: 700; }
+
+.sl-more {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.sl-more .pos { color: var(--green); font-weight: 700; }
+.sl-more .neg { color: var(--red); font-weight: 700; }
+.sl-more .dim { color: var(--text-dim); }
+
+.sl-total {
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 700;
+}
+
+.sl-total-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+}
+
+/* Phone-width modal: tighter numeric columns, and the Details button drops
+   under the name instead of squeezing it to nothing. */
+@media (max-width: 480px) {
+  .sledger { font-size: 12.5px; }
+  .sl-grid { grid-template-columns: minmax(0, 1fr) 42px 46px 42px 50px; gap: 6px; }
+  .sl-player { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .sl-details { padding: 2px 7px; font-size: 10px; }
+}
+
 .settle-block {
   margin-top: 18px;
   padding-top: 14px;

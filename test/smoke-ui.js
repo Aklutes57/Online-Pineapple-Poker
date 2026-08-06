@@ -333,13 +333,36 @@ try {
   // ---- ledger: a pop-up, opened beside the chat tabs, closable ----
   await anna.click('#ledger-tab-btn');
   await anna.waitForSelector('#ledger-modal:not(.hidden)');
-  await anna.waitForSelector('table.ledger tbody tr');
-  const nets = await anna.$$eval('table.ledger tbody tr td:last-child', (tds) =>
-    tds.map((td) => parseInt(td.textContent, 10))
+  await anna.waitForSelector('.sledger .sl-row');
+  const nets = await anna.$$eval('.sledger .sl-net', (els) =>
+    els.map((el) => parseInt(el.textContent, 10))
   );
   await check('ledger pop-up opens from the chat-side button', true);
   await check('ledger has 3 rows', nets.length === 3);
   await check('ledger nets sum to zero', nets.reduce((a, b) => a + b, 0) === 0);
+  await check(
+    'ledger sorts winners first',
+    nets.every((n, i) => i === 0 || nets[i - 1] >= n)
+  );
+
+  // The TABLE TOTAL row cross-foots: with the books balanced, every chip
+  // bought in is either back out or still in a stack.
+  const totals = await anna.$$eval('.sl-total .sl-num', (els) =>
+    els.map((el) => parseInt(el.textContent, 10) || 0)
+  );
+  await check('table-total row cross-foots', totals[0] === totals[1] + totals[2]);
+
+  // Per-player Details drawer opens, shows the hand info, and closes.
+  await anna.click('.sl-row .sl-details');
+  await check(
+    'a Details drawer opens with hands played',
+    (await anna.locator('.sl-more:not(.hidden)').first().textContent()).includes('played')
+  );
+  await anna.click('.sl-row .sl-details');
+  await check(
+    'the Details drawer closes again',
+    (await anna.locator('.sl-more:not(.hidden)').count()) === 0
+  );
 
   // Settle-up: every payment must be covered by the nets, and the ledger
   // balancing to zero means the suggested transfers square everyone up.

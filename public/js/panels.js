@@ -187,8 +187,21 @@ export function initPanels(client) {
     }
   });
 
-  // Tap-to-copy payment handles (Zelle/Chime have no deep link).
+  // Tap-to-copy payment handles (Zelle/Chime have no deep link), and the
+  // per-player Details drawers — both delegated, because the ledger's HTML is
+  // rebuilt on every state update.
   document.getElementById('ledger-table').addEventListener('click', (e) => {
+    const detailsBtn = e.target.closest('button[data-details]');
+    if (detailsBtn) {
+      const pid = detailsBtn.dataset.details;
+      if (openDetails.has(pid)) openDetails.delete(pid);
+      else openDetails.add(pid);
+      detailsBtn
+        .closest('.sl-row')
+        ?.querySelector('.sl-more')
+        ?.classList.toggle('hidden', !openDetails.has(pid));
+      return;
+    }
     const copyBtn = e.target.closest('button[data-copy]');
     if (!copyBtn) return;
     const handle = copyBtn.dataset.copy;
@@ -411,10 +424,14 @@ function renderLog(client) {
 
 // ---- ledger ----
 
-// NOTE: "Net" must stay the last column — the browser test reads it with
-// td:last-child to assert the ledger balances to zero.
+// Details drawers the user has opened, by playerId — the ledger re-renders on
+// every state update while the pop-up is showing, so open drawers must survive
+// the rebuild.
+const openDetails = new Set();
+
 function renderLedger(client) {
-  const rows = client.state.ledger || [];
+  // Winners first, like a session ledger reads: sorted by net, descending.
+  const rows = [...(client.state.ledger || [])].sort((a, b) => b.net - a.net);
   const host = document.getElementById('ledger-table');
   if (!rows.length) {
     host.innerHTML = '<p class="empty-note">Nobody has bought in yet.</p>';
@@ -436,25 +453,53 @@ function renderLedger(client) {
     ? `<p class="books-line ok" id="books-line">✓ Books balance — every chip is in a stack${carry > 0 ? ` or the riding pot (${carry})` : ''}</p>`
     : `<p class="books-line bad" id="books-line">✗ Books off by ${Math.abs(netSum + carry)} — tell the host</p>`;
 
+  const totals = rows.reduce(
+    (t, r) => ({ buyIns: t.buyIns + r.buyIns, cashOuts: t.cashOuts + r.cashOuts, stack: t.stack + r.stack }),
+    { buyIns: 0, cashOuts: 0, stack: 0 }
+  );
+
   host.innerHTML = `
-    <table class="ledger">
-      <thead><tr><th>Player</th><th>Buy-ins</th><th>Stack</th><th>Hand</th><th>Net</th></tr></thead>
-      <tbody>
-        ${rows
-          .map(
-            (r) => `
-          <tr>
-            <td>${escapeHtml(r.nickname)}</td>
-            <td>${r.buyIns}</td>
-            <td>${r.stack}</td>
-            <td class="${deltaClass(r.lastHandDelta)}">${formatDelta(r.lastHandDelta)}</td>
-            <td class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${r.net}</td>
-          </tr>`
-          )
-          .join('')}
-      </tbody>
-    </table>
-    <p class="empty-note">Net = cash-outs + current stack − buy-ins · "Hand" is the last hand's result</p>
+    <div class="sledger">
+      <div class="sl-grid sl-head">
+        <span>Player</span><span>Buy-in</span><span>Buy-out</span><span>Stack</span><span>Net ↓</span>
+      </div>
+      ${rows
+        .map(
+          (r) => `
+      <div class="sl-row">
+        <div class="sl-grid">
+          <span class="sl-player">
+            <span class="sl-who">
+              <span class="sl-name">${escapeHtml(r.nickname)}</span>
+              <span class="sl-id">@${escapeHtml(r.playerId)}</span>
+            </span>
+            <button type="button" class="sl-details" data-details="${escapeHtml(r.playerId)}" title="Hands played, last hand's result, how to pay them">Details</button>
+          </span>
+          <span class="sl-num">${r.buyIns}</span>
+          <span class="sl-num">${r.cashOuts}</span>
+          <span class="sl-num">${r.stack}</span>
+          <span class="sl-num sl-net ${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${r.net}</span>
+        </div>
+        <div class="sl-more${openDetails.has(r.playerId) ? '' : ' hidden'}">
+          <span>${r.handsPlayed || 0} hand${(r.handsPlayed || 0) === 1 ? '' : 's'} played</span>
+          <span>Last hand: <span class="${deltaClass(r.lastHandDelta)}">${formatDelta(r.lastHandDelta)}</span></span>
+          <span>${r.seated ? 'Seated' : 'Away'}</span>
+          ${r.net > 0 ? payButtons(r.payments, r.net) : ''}
+        </div>
+      </div>`
+        )
+        .join('')}
+      <div class="sl-row sl-total">
+        <div class="sl-grid">
+          <span class="sl-total-label">Table total</span>
+          <span class="sl-num">${totals.buyIns}</span>
+          <span class="sl-num">${totals.cashOuts}</span>
+          <span class="sl-num">${totals.stack}</span>
+          <span class="sl-num"></span>
+        </div>
+      </div>
+    </div>
+    <p class="empty-note">Net = buy-out + current stack − buy-in · winners first · Details has each player's last hand</p>
     ${booksLine}
     <div class="settle-block">
       <h4>Settle up</h4>
