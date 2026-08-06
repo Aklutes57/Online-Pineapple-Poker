@@ -321,8 +321,11 @@ export class Hand {
     const player = this.bySeat.get(this.toActSeat);
     let ms = null;
     if (player.sittingOut) ms = TIMINGS.AWAY_GRACE;
+    // An offline player folds (or checks) on the short disconnect clock no
+    // matter what the table's action timer is — the table never waits a full
+    // turn clock for somebody who is gone.
+    else if (!player.connected) ms = TIMINGS.DISCONNECT_GRACE;
     else if (this.actionTime > 0) ms = this.actionTime * 1000;
-    else if (!player.connected) ms = TIMINGS.DISCONNECT_GRACE; // no-limit timer can't wait forever for a gone player
     if (ms !== null) {
       this.timeBankEngaged = false;
       this.ctx.setTimer('action', ms, () => this.handleTimeout());

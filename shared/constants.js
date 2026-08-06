@@ -200,7 +200,7 @@ export const TIMINGS = {
   NEXT_HAND_DELAY: 3000, // ms between hands
   RUNOUT_STREET_DELAY: 1500, // ms between streets on an all-in run-out
   AWAY_GRACE: 1000, // ms before auto-acting for a sitting-out player
-  DISCONNECT_GRACE: 60000, // ms a disconnected player gets when the action timer is off
+  DISCONNECT_GRACE: 10000, // ms an offline player gets before their hand is folded for them
   HOST_TRANSFER_AFTER: 120000, // ms of host disconnect before host passes
 };
 

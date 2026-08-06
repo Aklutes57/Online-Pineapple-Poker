@@ -503,8 +503,15 @@ export function attachSockets(io) {
     }));
 
     socket.on('disconnect', () => {
+      const playerId = socket.data.playerId;
       const game = detachSocket(socket);
-      if (game && !game.closed) broadcast(game);
+      if (!game || game.closed) return;
+      // Going offline must never stall the hand: if the leaver is the one to
+      // act, re-arm their turn so the short disconnect clock starts NOW and
+      // folds (or checks) for them — not whenever the full timer would.
+      const player = game.players.get(playerId);
+      if (player && !player.connected) game.nudgeCurrentTurn(player);
+      broadcast(game);
     });
   });
 }

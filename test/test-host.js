@@ -13,7 +13,7 @@ const { io: ioc } = await import('socket.io-client');
 const { Game } = await import('../server/game.js');
 const { createGame } = await import('../server/gameManager.js');
 const { buildServer } = await import('../server/app.js');
-const { EVENTS } = await import('../shared/constants.js');
+const { EVENTS, TIMINGS } = await import('../shared/constants.js');
 
 let failures = 0;
 let passes = 0;
@@ -230,6 +230,32 @@ function check(name, cond) {
   const denied = game.sitIn(kim);
   check('a queued kick cannot be cancelled by the player',
     denied.ok === false && game.pendingOps.some((op) => op.type === 'unseat' && op.playerId === kim.id));
+}
+
+// ---- an offline player's turn folds on the short disconnect clock ----
+{
+  const { game, host } = createGame({ actionTime: 0 }, 'Host', null);
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const pia = game.addPlayer('Pia', null);
+  const quinn = game.addPlayer('Quinn', null);
+  for (const [p, seat] of [[pia, 1], [quinn, 2]]) {
+    p.connected = true;
+    game.requestSeat(p, 200, seat);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+  }
+  game.status = 'running';
+  game.startHand();
+  const hand = game.currentHand;
+  check('untimed table: a present actor has no clock', game.timer === null || game.timer.name !== 'action');
+  const actor = hand.bySeat.get(hand.toActSeat);
+  actor.connected = false;
+  game.nudgeCurrentTurn(actor); // what the disconnect handler does
+  check('an offline actor lands on the short disconnect clock',
+    game.timer?.name === 'action'
+    && game.timer.deadline - Date.now() <= TIMINGS.DISCONNECT_GRACE + 500);
+  game.clearTimer?.();
+  game.currentHand.finished = true;
 }
 
 // ---- straddling is each player's own choice, and re-buys have no ceiling ----

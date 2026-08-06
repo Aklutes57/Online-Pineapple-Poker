@@ -608,7 +608,9 @@ export function clearChipsOfPods() {
     // a displaced chip still reads as belonging to the seat it came from.
     const toCentre = Math.atan2(cy - y0, cx - x0);
     let best = null;
-    for (let ring = 1; ring <= 24 && !best; ring++) {
+    // 40 rings: a webcam-heavy arc (three tiles and full fans in a cluster)
+    // needs the search to reach well past the pods into the open felt.
+    for (let ring = 1; ring <= 40 && !best; ring++) {
       for (let i = 0; i < 12 && !best; i++) {
         // 0, +30, -30, +60, -60 … around the line to the centre.
         const turn = (Math.ceil(i / 2) * (Math.PI / 6)) * (i % 2 === 0 ? 1 : -1);

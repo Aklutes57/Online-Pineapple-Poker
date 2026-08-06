@@ -532,6 +532,13 @@ body.disconnected::after {
   pointer-events: none;
 }
 
+/* Bet amounts are live information: the clearing search keeps them off the
+   pods, and if a webcam-packed arc really leaves no room, they paint on TOP
+   rather than vanishing under a tile. (Your own seat still outranks them.) */
+#bets-layer {
+  z-index: 3;
+}
+
 .seat {
   position: absolute;
   transform: translate(-50%, -50%);
