@@ -48,7 +48,8 @@ function join() {
       location.href = '/?error=notfound';
       return;
     }
-    localStorage.setItem(storageKey, JSON.stringify({ ...saved(), token: res.token }));
+    // ts: the home page's "Recent tables" list sorts by when you last sat here.
+    localStorage.setItem(storageKey, JSON.stringify({ ...saved(), token: res.token, ts: Date.now() }));
     applyState(res.state);
   });
 }

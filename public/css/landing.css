@@ -130,6 +130,50 @@
 .hcard.c2 { transform: rotate(-2deg) translate(-116px, 10px); }
 .hcard.c3 { transform: rotate(-18deg) translate(-223px, 38px); }
 
+/* ---- your recent tables ---- */
+
+.recent {
+  padding: 36px 0 44px;
+  border-top: 1px solid var(--border);
+}
+
+.recent h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.recent-note {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.recent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.recent-who code {
+  background: var(--bg-raised);
+  border-radius: 6px;
+  padding: 1px 7px;
+}
+
+.recent-links {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.recent-links .btn {
+  text-decoration: none;
+}
+
 /* ---- features ---- */
 
 .features {

@@ -4,6 +4,50 @@ import { wireInstallButton } from '/js/pwa.js';
 
 wireInstallButton(document.getElementById('install-btn'));
 
+// ---- your recent tables ----
+// Joining a table saves a rejoin token at pp:<gameId>; that IS the list of
+// tables this device has sat at. Losing the invite link therefore never
+// loses the game — or its server-saved ledger.
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function renderRecentTables() {
+  const rows = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('pp:')) continue;
+      const id = key.slice(3);
+      // Preference keys (pp:skin, pp:muted:…) never hold a rejoin token.
+      if (!id || id.includes(':')) continue;
+      let entry;
+      try { entry = JSON.parse(localStorage.getItem(key)); } catch { continue; }
+      if (!entry || typeof entry !== 'object' || !entry.token) continue;
+      rows.push({ id, nickname: entry.nickname || 'Guest', ts: entry.ts || 0 });
+    }
+  } catch { return; /* private browsing */ }
+  if (!rows.length) return;
+  rows.sort((a, b) => b.ts - a.ts);
+
+  const list = document.getElementById('recent-list');
+  const section = document.getElementById('recent-tables');
+  if (!list || !section) return;
+  list.innerHTML = rows.slice(0, 12).map((r) => `
+    <li class="recent-row">
+      <span class="recent-who"><b>${esc(r.nickname)}</b> at table <code>${esc(r.id)}</code>${
+        r.ts ? ` · ${new Date(r.ts).toLocaleDateString()}` : ''}</span>
+      <span class="recent-links">
+        <a class="btn btn-ghost nav-btn" href="/games/${encodeURIComponent(r.id)}">Open table</a>
+        <a class="btn btn-ghost nav-btn" href="/api/games/${encodeURIComponent(r.id)}/ledger.csv">Ledger (CSV)</a>
+      </span>
+    </li>`).join('');
+  section.classList.remove('hidden');
+}
+renderRecentTables();
+
 const modal = document.getElementById('create-modal');
 const toast = document.getElementById('toast');
 
@@ -127,7 +171,7 @@ async function createGame() {
     });
     if (!res.ok) throw new Error('create failed');
     const { gameId, token } = await res.json();
-    localStorage.setItem(`pp:${gameId}`, JSON.stringify({ token, nickname }));
+    localStorage.setItem(`pp:${gameId}`, JSON.stringify({ token, nickname, ts: Date.now() }));
     location.href = `/games/${gameId}`;
   } catch {
     showToast('Could not create the table — try again');

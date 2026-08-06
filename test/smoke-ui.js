@@ -704,6 +704,17 @@ try {
   await anna.keyboard.press('Escape');
   await anna.waitForTimeout(200);
 
+  // ---- a lost invite link is not a lost ledger: the home page lists the
+  // tables this device sat at, with the saved ledger a tap away ----
+  await ben.goto(base);
+  await ben.waitForSelector('#recent-tables:not(.hidden)');
+  const gameCode = gameUrl.split('/').pop();
+  await check('the home page lists the table this device played at',
+    (await ben.evaluate(() => document.getElementById('recent-list').innerHTML)).includes(gameCode));
+  await check('the recent-table ledger link serves the saved CSV',
+    (await ben.evaluate(async (id) =>
+      (await fetch(`/api/games/${id}/ledger.csv`)).status, gameCode)) === 200);
+
   // ---- tournament format lives in the create pop-up, cash game is default ----
   const tess = await newPage('tess');
   await tess.goto(base);
