@@ -4,6 +4,7 @@
 import { scryptSync, randomBytes, timingSafeEqual, randomUUID } from 'node:crypto';
 import { run, get, all, now } from './db.js';
 import { cleanPayments } from '../shared/payments.js';
+import { SETTINGS_LIMITS } from '../shared/constants.js';
 
 // "Remember me" keeps you signed in on your own device for three months;
 // without it the session lasts a day, so a shared or borrowed screen forgets
@@ -141,6 +142,17 @@ export function updatePrefs(accountId, patch) {
   const prefs = { ...account.prefs, ...patch };
   run('UPDATE accounts SET prefs_json = ? WHERE id = ?', JSON.stringify(prefs), accountId);
   return { ok: true, prefs };
+}
+
+// The name this account settles up under in a ledger, kept apart from the
+// username shown at the table. Stored in prefs so it follows them to every
+// table. Empty clears it, and the ledger falls back to the table name.
+export function setRealName(accountId, raw) {
+  const name = typeof raw === 'string'
+    ? raw.replace(/\s+/g, ' ').trim().slice(0, SETTINGS_LIMITS.realName.max) || null
+    : null;
+  const result = updatePrefs(accountId, { realName: name });
+  return result.ok ? name : null;
 }
 
 // Linked P2P payment handles (Venmo/Cash App/PayPal/Zelle/Chime), validated

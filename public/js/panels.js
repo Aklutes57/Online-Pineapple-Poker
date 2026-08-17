@@ -323,6 +323,15 @@ function renderFairness(client) {
   if (panel.dataset.sig === sig) return;
   panel.dataset.sig = sig;
 
+  // The signature still moves every time a new hand is dealt, so the rebuild
+  // below can land while someone is part-way through typing a seed. Carry the
+  // half-typed value (and the caret) across it — defaultValue is whatever the
+  // table's committed seed was when the box was drawn, so anything different
+  // is something the player typed.
+  const oldSeed = document.getElementById('fair-seed-input');
+  const typedSeed = oldSeed && oldSeed.value !== oldSeed.defaultValue ? oldSeed.value : null;
+  const seedHadFocus = !!oldSeed && document.activeElement === oldSeed;
+
   const short = (h) => (typeof h === 'string' && h.length > 24 ? `${h.slice(0, 12)}…${h.slice(-8)}` : h || '—');
 
   panel.innerHTML = `
@@ -344,6 +353,14 @@ function renderFairness(client) {
     </form>
     <p class="fp-note">The full deck is committed before each deal, so no card can change after the action. Open any finished hand's replay to verify its board and shown cards. Folded hands stay sealed forever.</p>
   `;
+
+  if (typedSeed !== null) {
+    const nextSeed = document.getElementById('fair-seed-input');
+    if (nextSeed) {
+      nextSeed.value = typedSeed;
+      if (seedHadFocus) nextSeed.focus();
+    }
+  }
 
   const form = document.getElementById('fair-seed-form');
   form.addEventListener('submit', (e) => {
@@ -438,9 +455,12 @@ function renderLedger(client) {
     return;
   }
   const payments = settleUp(rows);
-  // nickname -> that player's linked payment handles, so a settle-up line can
-  // offer to pay the exact amount straight to the winner.
-  const payTo = new Map(rows.filter((r) => r.payments).map((r) => [r.nickname, r.payments]));
+  // Keyed by the same name settleUp pays out under — the ledger name when a
+  // player set one — or the Pay buttons would vanish for exactly the players
+  // who took the trouble to say who they are.
+  const payTo = new Map(
+    rows.filter((r) => r.payments).map((r) => [r.realName || r.nickname, r.payments])
+  );
 
   // The books check everyone can see: every chip bought in is either in a
   // stack, cashed out, or riding in the 747 pot. Σnet is stacks + cash-outs
@@ -470,8 +490,10 @@ function renderLedger(client) {
         <div class="sl-grid">
           <span class="sl-player">
             <span class="sl-who">
-              <span class="sl-name">${escapeHtml(r.nickname)}</span>
-              <span class="sl-id">@${escapeHtml(r.playerId)}</span>
+              <span class="sl-name">${escapeHtml(r.realName || r.nickname)}</span>
+              <span class="sl-id">${r.realName
+                ? `${escapeHtml(r.nickname)} · @${escapeHtml(r.playerId)}`
+                : `@${escapeHtml(r.playerId)}`}</span>
             </span>
             <button type="button" class="sl-details" data-details="${escapeHtml(r.playerId)}" title="Hands played, last hand's result, how to pay them">Details</button>
           </span>
@@ -541,23 +563,26 @@ function payButtons(payments, amount) {
   return btns.length ? `<div class="pay-options">${btns.join('')}</div>` : '';
 }
 
+// The last hand reads as what the winner won, and nothing else. Losing a pot
+// is already obvious from your own stack — having the size of it spelled out
+// next to your name, for the whole table to open, is a different thing.
 function deltaClass(delta) {
-  if (!delta) return 'dim';
-  return delta > 0 ? 'pos' : 'neg';
+  return delta > 0 ? 'pos' : 'dim';
 }
 
 function formatDelta(delta) {
-  if (!delta) return '—';
-  return `${delta > 0 ? '+' : ''}${delta}`;
+  return delta > 0 ? `+${delta}` : '—';
 }
 
 function exportLedgerCsv(client) {
   const rows = client.state.ledger || [];
   const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const lines = [
-    ['Player', 'Buy-ins', 'Cash-outs', 'Stack', 'Hands', 'Net'].join(','),
+    // Both names: the one who gets paid, and the one they played under.
+    ['Name', 'Username', 'Buy-ins', 'Cash-outs', 'Stack', 'Hands', 'Net'].join(','),
     ...rows.map((r) =>
-      [esc(r.nickname), r.buyIns, r.cashOuts, r.stack, r.handsPlayed || 0, r.net].join(',')
+      [esc(r.realName || r.nickname), esc(r.nickname), r.buyIns, r.cashOuts, r.stack,
+        r.handsPlayed || 0, r.net].join(',')
     ),
     '',
     ['Settle up: from', 'to', 'amount'].join(','),

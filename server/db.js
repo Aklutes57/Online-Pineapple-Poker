@@ -213,6 +213,13 @@ const MIGRATIONS = [
   ALTER TABLE table_sessions ADD COLUMN fairness_server_commit TEXT;
   ALTER TABLE hands ADD COLUMN fairness_json TEXT;
   `,
+
+  // 6 — the name a player settles up under, kept apart from the username they
+  // played under. Nullable: it is optional, and every ledger built before this
+  // simply falls back to the nickname, exactly as it did.
+  `
+  ALTER TABLE session_results ADD COLUMN real_name TEXT;
+  `,
 ];
 
 export function initDb(dbPath = process.env.PP_DB_PATH || path.join(root, 'data', 'pineapple.db')) {

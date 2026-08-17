@@ -726,5 +726,145 @@ function totalChips(players, hand) {
     players.every((p) => Number.isSafeInteger(p.stack)));
 }
 
+// --- Run it twice deals one board at a time ---
+// The second board is DRAWN street by street with the first (same deck
+// positions as ever, so the integrity proof is untouched) but stays face down
+// until the first board has finished running out.
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = [
+    '2h', '7d', 'Ah', 'Kc',            // hole cards
+    '3s', '4d', 'Jh',                   // board 1 flop
+    '8c', '5s', '9d',                   // board 2 flop
+    'Ts', 'Qh', '6c', '2c',             // turns and rivers for both
+  ];
+  const { hand, ctx } = makeHand({ players, deck, options: { runItTwice: true } });
+  hand.start();
+  act(hand, 0, 'raise', 100);
+  act(hand, 1, 'call');
+  hand.handleRitVote(hand.bySeat.get(0), true);
+  hand.handleRitVote(hand.bySeat.get(1), true);
+  check('rit: agreed before any board is dealt', hand.runItTwice && hand.board.length === 0);
+  check('rit: the second board starts hidden', hand.board2Shown === 0);
+
+  // Walk the first board out. Nothing of the second board may be visible.
+  const shownDuringFirst = [];
+  let guard = 0;
+  while (ctx.timer && hand.board.length < 5 && guard++ < 20) {
+    ctx.fire();
+    shownDuringFirst.push(hand.board2Shown);
+  }
+  check('rit: first board runs out on its own', hand.board.length === 5);
+  check('rit: second board stayed face down throughout the first',
+    shownDuringFirst.every((n) => n === 0));
+  check('rit: both boards are already drawn', hand.board2.length === 5);
+  check('rit: nothing has been shown of board two yet', hand.board2Shown === 0);
+
+  // Now the second board runs out, one street at a time.
+  const steps = [];
+  guard = 0;
+  while (ctx.timer && !hand.finished && guard++ < 20) {
+    ctx.fire();
+    if (!hand.finished) steps.push(hand.board2Shown);
+  }
+  check('rit: second board revealed in street-sized steps',
+    JSON.stringify(steps) === JSON.stringify([3, 4, 5]));
+  check('rit: hand finishes after both boards', hand.finished);
+  check('rit: finished hand shows all of board two', hand.board2Shown === 5);
+  check('rit: sequential deal conserves chips',
+    players.reduce((a, p) => a + p.stack, 0) === 200);
+  check('rit: per-board results still recorded', hand.results.boards?.length === 2);
+  check('rit: boards still share no cards',
+    !hand.board.some((c) => hand.board2.includes(c)));
+  // The deck positions are what the fairness proof is over: board one takes
+  // the flop, board two the next three, and so on, exactly as before.
+  check('rit: deck consumption order unchanged',
+    hand.board.join(',') === '3s,4d,Jh,Ts,6c'
+    && hand.board2.join(',') === '8c,5s,9d,Qh,2c');
+}
+
+// The same, but agreed on the turn: the boards share four cards, which land
+// together when the second row appears.
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = ['2h', '7d', 'Ah', 'Kc', '3s', '4d', 'Jh', 'Ts', '6c', 'Qh', '2c'];
+  const { hand, ctx } = makeHand({ players, deck, options: { runItTwice: true } });
+  hand.start();
+  act(hand, 0, 'call');
+  act(hand, 1, 'check');
+  // Flop, then get it all in on the turn.
+  check('rit-turn: flop dealt', hand.phase === PHASES.FLOP);
+  act(hand, 1, 'check');
+  act(hand, 0, 'check');
+  check('rit-turn: turn dealt', hand.board.length === 4);
+  act(hand, 1, 'raise', 98); // the blinds are already in, so 98 is the shove
+  act(hand, 0, 'call');
+  check('rit-turn: vote opened on the turn', hand.phase === PHASES.RIT_VOTE);
+  hand.handleRitVote(hand.bySeat.get(0), true);
+  hand.handleRitVote(hand.bySeat.get(1), true);
+  check('rit-turn: four shared cards', hand.ritPrefix === 4);
+  const shown = [];
+  let guard = 0;
+  while (ctx.timer && !hand.finished && guard++ < 20) {
+    ctx.fire();
+    if (!hand.finished) shown.push(hand.board2Shown);
+  }
+  // River on board one (second board still hidden), then the shared four
+  // appear, then board two's own river.
+  check('rit-turn: shared cards land together, then the river',
+    JSON.stringify(shown) === JSON.stringify([0, 4, 5]));
+  check('rit-turn: chips conserved', players.reduce((a, p) => a + p.stack, 0) === 200);
+}
+
+// --- Live equity while the hand runs out ---
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  // Cards go out in blocks starting left of the button, so seat 1 takes the
+  // first two: seat 1 = Ah Kh, seat 0 = 2c 7d. Board runs Qh Jh 3s / 4d / 9c.
+  const deck = ['Ah', 'Kh', '2c', '7d', 'Qh', 'Jh', '3s', '4d', '9c'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  check('equity: the deal is as the test assumes',
+    hand.bySeat.get(1).holeCards.join('') === 'AhKh'
+    && hand.bySeat.get(0).holeCards.join('') === '2c7d');
+  check('equity: nothing published before the chips are in', hand.equityNow === null);
+  act(hand, 0, 'raise', 100);
+  check('equity: still nothing while a decision is pending', hand.equityNow === null);
+  act(hand, 1, 'call');
+  check('equity: the run-out is on', hand.runOut === true);
+  check('equity: hands are face up', hand.revealed === true);
+  check('equity: published once the cards are face up', !!hand.equityNow);
+  const preflop = hand.equityNow;
+  check('equity: one row per live player', preflop.rows.length === 2);
+  check('equity: rows are sorted best first', preflop.rows[0].pct >= preflop.rows[1].pct);
+  check('equity: shares add up to 100',
+    Math.abs(preflop.rows.reduce((a, r) => a + r.pct, 0) - 100) < 0.5);
+  check('equity: AKs is the favourite over 72o preflop',
+    preflop.rows.find((r) => r.seat === 1).pct > 60);
+  check('equity: no board cards counted yet', preflop.cards === 0);
+
+  ctx.fire(); // flop: Qh Jh 3s — seat 1 adds a royal draw to two overcards
+  check('equity: recomputed on the flop', hand.equityNow.cards === 3);
+  check('equity: AKs further ahead on the flop',
+    hand.equityNow.rows.find((r) => r.seat === 1).pct > 80);
+  ctx.fireAll();
+  check('equity: cleared when the hand is over', hand.equityNow === null);
+  check('equity: winner took it', players[1].stack === 200);
+}
+
+// Equity is only ever arithmetic on cards the table can already see: a hand
+// that ends without a run-out never publishes any.
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = ['Ah', '2c', 'Kh', '7d', 'Qh', 'Jh', '3s', '4d', '9c'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 20);
+  act(hand, 1, 'fold');
+  ctx.fireAll();
+  check('equity: a hand won by a fold publishes nothing', hand.equityNow === null);
+  check('equity: folded hand stays face down', hand.revealed === false);
+}
+
 console.log(`betting: ${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

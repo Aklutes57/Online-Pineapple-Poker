@@ -723,7 +723,13 @@ try {
   // to the same value in all three skins is one a skin forgot to override, and
   // the Velvet value leaks into the other rooms. (Structural tokens — radii,
   // widths, ratios — are shared on purpose and are not colours.)
-  const sharedColours = await anna.evaluate(() => {
+  //
+  // The two exceptions are the card stock itself. A room can change its felt,
+  // its rails and its chrome, but the deck on the table is one deck: the face
+  // is white and the pips are the one red in every skin, so these two ARE
+  // meant to be identical everywhere. Card BACKS still vary per skin.
+  const SHARED_ON_PURPOSE = ['--card-face', '--card-red'];
+  const sharedColours = await anna.evaluate((exempt) => {
     const declared = new Set();
     for (const sheet of document.styleSheets) {
       let rules;
@@ -748,11 +754,12 @@ try {
     }
     root.dataset.skin = before;
     return [...declared].filter((t) => {
+      if (exempt.includes(t)) return false;
       const v = values.velvet[t];
       if (!v || !CSS.supports('color', v)) return false;
       return skins.slice(1).every((s) => values[s][t] === v);
     });
-  });
+  }, SHARED_ON_PURPOSE);
   await check(`no colour token is left on the Velvet value in every skin (${JSON.stringify(sharedColours)})`,
     sharedColours.length === 0);
 

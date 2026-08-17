@@ -10,7 +10,7 @@ import {
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { escapeHtml } from '/js/ui.js';
 import { renderActionBar, openJoinModal } from '/js/actionBar.js';
-import { isMuted, toggleMutePlayer } from '/js/webrtc.js';
+import { isMuted, toggleMutePlayer, syncSeats as syncAvSeats } from '/js/webrtc.js';
 
 const seatsLayer = () => document.getElementById('seats-layer');
 const betsLayer = () => document.getElementById('bets-layer');
@@ -360,6 +360,13 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     seat.mediaOn, seat.camFrame, seat.avatarUrl, isMuted(seat.playerId), seat.nameFont,
     decisionPhase ? seat.decided : null, myHandNow,
     hand && !hand.finished ? hand.lastAction?.seat === seatIndex && JSON.stringify(hand.lastAction) : null,
+    // The odds tick over as each street lands, and the run-it-twice answers
+    // arrive one at a time — a pod whose other properties are unchanged still
+    // has to redraw, or the percentage on it goes stale (or never appears).
+    hand?.equity?.rows?.find((r) => r.seat === seatIndex)?.pct ?? null,
+    hand?.phase === PHASES.RIT_VOTE
+      ? JSON.stringify(hand.ritVote?.find((v) => v.seat === seatIndex) ?? null)
+      : null,
   ]);
   if (pod.dataset.sig === sig) return;
   pod.dataset.sig = sig;
@@ -454,11 +461,22 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   if (decisionPhase && seat.inHand && !seat.folded) {
     statusBits.push(seat.decided ? 'locked in' : 'deciding…');
   }
+  // Run it twice needs everyone in the hand to agree, so who has agreed and
+  // who is still thinking belongs at the table, not buried in the log.
+  const myVote = hand?.phase === PHASES.RIT_VOTE
+    ? hand.ritVote?.find((v) => v.seat === seatIndex)
+    : null;
+  if (myVote) {
+    statusBits.push(myVote.voted ? (myVote.yes ? 'wants twice' : 'wants once') : 'deciding…');
+  }
+  // Live equity while the hand runs out — see the odds strip in renderCenter.
+  const equityPct = hand?.equity?.rows?.find((r) => r.seat === seatIndex)?.pct;
   plate.innerHTML = `
     <div class="np-row">
       <span class="np-name" style="font-family: ${nameFontStack(seat.nameFont)}">${escapeHtml(seat.nickname)}</span>
       <span class="np-stack">${seat.stack}</span>
     </div>
+    ${equityPct !== undefined ? `<div class="np-equity">${equityPct}%</div>` : ''}
     ${statusBits.length ? `<div class="np-status">${statusBits.join(' · ')}</div>` : ''}
     ${seat.mediaOn && !isMe
       ? `<button class="np-mute${isMuted(seat.playerId) ? ' on' : ''}" data-mute="${seat.playerId}"
@@ -517,6 +535,9 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
       e.stopPropagation();
       toggleMutePlayer(muteBtn.dataset.mute);
       renderAll(client);
+      // Re-rendering empties the pod, which detaches that player's webcam
+      // tile. Put it back in the same task, or their picture stays frozen.
+      syncAvSeats(client.state);
     });
   }
   if (bubble) plate.insertAdjacentHTML('beforeend', bubble);
@@ -824,6 +845,13 @@ function renderCenter(client) {
   } else if (state.hand && !state.hand.finished && state.hand.phase === PHASES.COUNTDOWN_747) {
     // The number itself ticks in the timer loop between broadcasts.
     html = '<div class="countdown-747" id="cd747-num">3</div>';
+  } else if (state.hand?.phase === PHASES.RIT_VOTE) {
+    const votes = state.hand.ritVote || [];
+    const yes = votes.filter((v) => v.voted && v.yes).length;
+    html = `<p class="odds-note">Run it twice? Everyone in the hand has to agree
+      — ${yes}/${votes.length} so far</p>`;
+  } else if (!state.hand?.finished && state.hand?.equity) {
+    html = oddsStrip(state);
   } else if (state.hand?.finished) {
     let natural = state.hand.naturalSevenSeats?.length
       ? '<p class="natural-banner">🎉 NATURAL SEVEN! 🎉</p>'
@@ -849,6 +877,29 @@ function renderCenter(client) {
     const startBtn = document.getElementById('start-game-btn');
     if (startBtn) startBtn.onclick = () => client.send(EVENTS.HOST_START_GAME, {});
   }
+}
+
+// The odds calculator: once the betting is closed and the hands are face up,
+// every player's share of the pot for the board being dealt. It is only ever
+// arithmetic on cards the whole table can already see.
+function oddsStrip(state) {
+  const eq = state.hand.equity;
+  const rows = (eq.rows || []).filter((r) => state.seats[r.seat]);
+  if (!rows.length) return '';
+  const label = state.hand.runItTwice ? `Odds · board ${eq.board}` : 'Odds';
+  const cells = rows
+    .map((r) => {
+      const seat = state.seats[r.seat];
+      // A locked-in run-out reads better as "dead" than as "0.0%".
+      const pct = r.pct >= 99.95 ? 'locked' : r.pct < 0.05 ? 'dead' : `${r.pct}%`;
+      return `<span class="odds-cell">
+        <b>${escapeHtml(seat.nickname)}</b>
+        <span class="odds-bar"><i style="width:${Math.max(0, Math.min(100, r.pct))}%"></i></span>
+        <span class="odds-pct">${pct}</span>
+      </span>`;
+    })
+    .join('');
+  return `<div class="odds-strip"><span class="odds-label">${label}</span>${cells}</div>`;
 }
 
 function winnersLine(state) {

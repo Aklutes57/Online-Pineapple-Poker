@@ -1,18 +1,23 @@
 // Settle-up: the minimum set of payments that squares everyone up.
 // Shared by the server (stats/exports) and the browser (ledger panel).
 
-// rows: [{ nickname, net }]. Returns [{ from, to, amount }].
+// rows: [{ nickname, realName?, net }]. Returns [{ from, to, amount }].
 // Repeatedly matches the biggest debtor against the biggest creditor, which
 // produces at most (participants - 1) payments — the fewest transfers people
 // can actually settle with.
+//
+// Names here are the ones money changes hands under, so a player who gave a
+// real name is settled up under it rather than under their table username.
+const payee = (r) => r.realName || r.nickname;
+
 export function settleUp(rows) {
   const debtors = rows
     .filter((r) => r.net < 0)
-    .map((r) => ({ name: r.nickname, amount: -r.net }))
+    .map((r) => ({ name: payee(r), amount: -r.net }))
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
   const creditors = rows
     .filter((r) => r.net > 0)
-    .map((r) => ({ name: r.nickname, amount: r.net }))
+    .map((r) => ({ name: payee(r), amount: r.net }))
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 
   const payments = [];

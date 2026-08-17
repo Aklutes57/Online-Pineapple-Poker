@@ -186,6 +186,44 @@ body.disconnected::after {
   color: var(--text-dim);
 }
 
+/* A group whose controls are labelled fields rather than a row of buttons. */
+.menu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 6px;
+}
+
+.menu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.menu-field input {
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.menu-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.menu-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
 #menu-toggle .gear {
   font-size: 15px;
   line-height: 1;
@@ -523,6 +561,83 @@ body.disconnected::after {
   color: var(--chip-ink);
 }
 
+/* ---- the odds strip: equity per player once the betting is closed ---- */
+
+.odds-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  max-width: min(560px, 86vw);
+  margin: 6px auto 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.odds-label,
+.odds-note {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.odds-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* A bar as well as a number: at a glance you want the shape of the race, not
+   to read four decimals off the felt. */
+.odds-bar {
+  display: inline-block;
+  width: 46px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.odds-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.odds-pct {
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* The same number on the nameplate, for players watching their own seat
+   rather than the middle of the table. */
+.np-equity {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .odds-strip {
+    gap: 3px 10px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+  }
+
+  .odds-bar { width: 32px; }
+}
+
 /* ---- seats ---- */
 
 #seats-layer,
@@ -813,54 +928,69 @@ body.disconnected::after {
 /* ---- cards ---- */
 
 /* Every card face is sized from --face, so a seat card, your own bigger cards
-   and the board all keep the same proportions. Rank and suit are set to fill
-   the face the way a real card's index does, rather than floating small in the
-   middle of it. */
+   and the board all keep the same proportions.
+   The face is the client layout everyone recognises: a white card with big
+   round corners, one heavy rank sitting high on the left, and one big suit
+   below it. No corner indices, no pip grid — the rank and the suit ARE the
+   card, with real white space left around them. */
 .card {
   --face: var(--card-w);
   width: var(--card-w);
   height: var(--card-h);
   background: var(--card-face);
   color: var(--card-ink);
-  border-radius: 6px;
-  display: grid;
-  grid-template-rows: 1fr auto;
-  justify-items: center;
-  align-items: center;
+  /* Proportional, not a fixed 6px: the corners have to stay this round when
+     the same card is drawn at board size and at seat size. */
+  border-radius: calc(var(--face) * 0.13);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   /* Sized off the card's own face, never a percentage: percentage padding
      resolves against the PARENT's inline size, so the index slid down the card
      every time another one was dealt into the row. */
-  padding: calc(var(--face) * 0.04) 0 calc(var(--face) * 0.07);
-  font-weight: 900;
+  padding: calc(var(--face) * 0.07) calc(var(--face) * 0.09) calc(var(--face) * 0.09);
+  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
   user-select: none;
   flex-shrink: 0;
   overflow: hidden;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.34);
 }
 
+/* The rank hangs off the top-left corner; the suit sits under it, nudged in
+   from the left the way the client draws it. */
 .card .rank {
-  font-size: calc(var(--face) * 0.86);
-  line-height: 0.82;
-}
-
-.card .suit {
   font-size: calc(var(--face) * 0.62);
-  line-height: 0.8;
+  line-height: 0.78;
+  align-self: flex-start;
+}
+
+/* Bigger than the rank's point size, because the Unicode suit glyphs draw
+   well under their em box — on the card the two read as the same weight. */
+.card .suit {
+  font-size: calc(var(--face) * 0.72);
+  /* A line box shorter than the glyph makes the club and spade stems overflow
+     it, and the card clips them. Keep the box a full line tall and let the
+     card's bottom padding carry the difference. */
+  line-height: 1;
   letter-spacing: 0;
-  margin-top: calc(var(--face) * -0.04);
+  align-self: flex-start;
+  margin-left: calc(var(--face) * 0.02);
 }
 
-/* "10" is the only two-character rank — it gets the width to itself. */
+/* "10" is the only two-character rank — it gets the width to itself, and the
+   suit lines up under it rather than under a single glyph. */
 .card[data-card^='T'] .rank {
-  font-size: calc(var(--face) * 0.56);
-  letter-spacing: -0.08em;
+  font-size: calc(var(--face) * 0.46);
+  letter-spacing: -0.09em;
 }
 
-/* Four-color deck: spades stay black, hearts red, diamonds go blue and
+/* Four-color deck: spades stay black, hearts red, diamonds go indigo and
    clubs green. A per-player display preference toggled on <body>. */
 .four-color .card.suit-d {
-  color: #2b6fd4;
+  color: #4a56d6;
 }
 
 .four-color .card.suit-c {
@@ -871,10 +1001,20 @@ body.disconnected::after {
   color: var(--card-red);
 }
 
+/* The back: one flat colour with a fine diagonal weave and a white edge
+   inside the rounded corner, so a face-down card reads as the same deck as a
+   face-up one rather than as a different object. */
 .card.back {
   background:
-    repeating-linear-gradient(45deg, var(--card-back-a) 0 6px, var(--card-back-b) 6px 12px);
-  border: 3px solid var(--card-face);
+    repeating-linear-gradient(
+      45deg,
+      var(--card-back-a) 0 calc(var(--face) * 0.045),
+      var(--card-back-b) calc(var(--face) * 0.045) calc(var(--face) * 0.09)
+    );
+  border: calc(var(--face) * 0.045) solid var(--card-face);
+  /* border-box so the white edge eats into the card instead of growing it —
+     a back must occupy exactly the same footprint as a face. */
+  box-sizing: border-box;
 }
 
 .card.dealt {
@@ -1474,12 +1614,39 @@ td.dim { color: var(--text-dim); }
 .ab-actions {
   display: flex;
   gap: 12px;
+  /* Four buttons (Fold / Call / Raise / All in) have to survive a narrow
+     phone, so the row wraps and the buttons give up their min-width rather
+     than pushing the shove off the screen. */
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .ab-btn {
-  min-width: 118px;
+  /* min() so a narrow phone can shrink the button instead of pushing the
+     fourth one (All in) off the edge of the screen. */
+  min-width: min(118px, 100%);
   padding: 13px 20px;
   font-size: 16px;
+  flex: 0 1 auto;
+}
+
+/* All in wears the accent, filled: not the green of a sized raise (it is not a
+   size you picked) and not the red of Fold at the other end of the row. Every
+   skin defines --accent and --btn-ink, so it repaints with the room. */
+.ab-allin {
+  background: linear-gradient(var(--accent-lite), var(--accent));
+  border-color: transparent;
+  color: var(--btn-ink);
+  font-weight: 600;
+}
+
+.ab-allin:hover:not(:disabled) { filter: brightness(1.06); }
+
+/* The shove preset in the tray, called out the same way. */
+.preset-allin {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .ab-check {

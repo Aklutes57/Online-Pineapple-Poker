@@ -4,7 +4,7 @@
 import { EVENTS, ERRORS, SETTINGS_LIMITS, REACTIONS, REACTION_COOLDOWN } from '../shared/constants.js';
 import { buildViews } from './views.js';
 import { getGame, destroyGame } from './gameManager.js';
-import { accountForToken } from './accounts.js';
+import { accountForToken, setRealName as setAccountRealName } from './accounts.js';
 
 const socketsByGame = new Map(); // gameId -> Set<socket>
 
@@ -77,7 +77,12 @@ function detachSocket(socket) {
   player.sockets.delete(socket.id);
   if (player.sockets.size === 0) {
     player.connected = false;
-    player.mediaOn = false; // drop out of the A/V session so peers tear down
+    // Drop out of the A/V session so peers tear down. The epoch moves with it:
+    // a reconnecting player must not be handed a connection built for the
+    // tracks they had before they vanished.
+    if (player.mediaOn) player.mediaEpoch = (player.mediaEpoch || 0) + 1;
+    player.mediaOn = false;
+    player.camOn = false;
     game.noteDisconnect(player);
   }
   return game;
@@ -167,6 +172,9 @@ export function attachSockets(io) {
         // Linked payment handles travel with the player so table-mates can pay
         // them from the ledger. Opt-in: absent unless the account set them.
         player.payments = account.prefs?.payments || null;
+        // The name they settle up under travels with the account too, so the
+        // ledger reads the same at every table they sit at.
+        if (account.prefs?.realName) player.realName = account.prefs.realName;
         // The account's profile picture follows them to every table, so it is
         // re-applied on each join and each reconnect.
         if (account.avatarUrl) player.avatarUrl = account.avatarUrl;
@@ -402,9 +410,18 @@ export function attachSockets(io) {
 
     // ---- WebRTC voice/video (peer-to-peer; the server only relays) ----
 
-    // Announce joining/leaving the A/V session so peers know to connect.
+    // Announce joining/leaving the A/V session so peers know to connect, and
+    // whether the camera is actually on (a switched-off camera still sends a
+    // disabled track, so receivers can only tell by being told).
+    //
+    // mediaEpoch changes whenever the player's outgoing tracks change. Both
+    // ends of a peer connection watch it to decide, without any further
+    // signalling, that the connection is stale and must be rebuilt.
     socket.on(EVENTS.RTC_MEDIA, withGame((game, player, payload) => {
-      player.mediaOn = !!payload.on;
+      const on = !!payload.on;
+      if (player.mediaOn !== on) player.mediaEpoch = (player.mediaEpoch || 0) + 1;
+      player.mediaOn = on;
+      player.camOn = on && payload.cam !== false;
       broadcast(game);
     }));
 
@@ -426,6 +443,21 @@ export function attachSockets(io) {
 
     socket.on(EVENTS.SET_NAME_FONT, withGame((game, player, payload) => {
       result(game, game.setNameFont(player, payload.font));
+    }));
+
+    // The name this player is settled up under. Signed-in players keep it on
+    // their account so it follows them to every table; guests re-assert it
+    // from their own browser on each connect, the same way avatars do.
+    socket.on(EVENTS.SET_REAL_NAME, withGame((game, player, payload) => {
+      const res = game.setRealName(player, payload?.name ?? null);
+      if (res.ok && player.accountId) {
+        try {
+          setAccountRealName(player.accountId, player.realName);
+        } catch {
+          /* the table still has it; persistence is best-effort */
+        }
+      }
+      result(game, res);
     }));
 
     // Guests have no account to hang a picture on, so their browser re-asserts

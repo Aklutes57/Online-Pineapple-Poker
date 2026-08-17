@@ -1,14 +1,24 @@
 // In-app voice + webcam, peer-to-peer (WebRTC). No third-party service and no
-// media server: each player connects directly to every other player in the
-// A/V session (a small mesh — poker tables are tiny), the browser sends its
+// media server: each player connects directly to every other player who is
+// broadcasting (a small mesh — poker tables are tiny), the browser sends its
 // own camera + mic straight to the others, and our server only relays the
 // connection handshake. Strictly opt-in: nothing captures your camera or mic
 // until you press Join.
 //
-// Glare-free by construction: for any pair, only the player with the smaller id
-// makes the offer. Non-trickle ICE (we wait for gathering to finish, then send
-// one SDP with the candidates baked in) keeps the signalling to two messages a
-// pair, so it never trips the socket flood guard.
+// WATCHING IS NOT THE SAME AS BROADCASTING. Turning your own camera on is not
+// the price of seeing anyone else's: a player who never pressed Join still
+// connects to everyone who did, receive-only, and sees and hears them. That is
+// what the `present` set below is for — it is built from who is broadcasting,
+// not from whether you are.
+//
+// Glare-free by construction, with two cases:
+//   - one side broadcasting: the RECEIVING side offers. It has to be that way
+//     round — a spectator isn't in `state.seats` at all, so the broadcaster
+//     cannot see them to offer first.
+//   - both broadcasting: the smaller player id offers, as before.
+// Non-trickle ICE (we wait for gathering to finish, then send one SDP with the
+// candidates baked in) keeps the signalling to two messages a pair, so it never
+// trips the socket flood guard.
 
 import { EVENTS } from '/shared/constants.js';
 
@@ -20,9 +30,31 @@ let localStream = null;
 let joined = false;
 let camOn = true;
 let micOn = true;
+// Bumped every time our own set of outgoing tracks changes (join / leave).
+// It is half of a connection's identity: when it moves, every peer connection
+// we hold is stale and gets rebuilt so the new tracks are actually negotiated.
+// The other half is the peer's mediaEpoch, which the server broadcasts — so
+// both ends of a pair independently decide to rebuild at the same moment,
+// without another round of signalling.
+let myGen = 0;
 
 const peers = new Map();     // peerId -> RTCPeerConnection
+const peerKeys = new Map();  // peerId -> the (peerEpoch|myGen) the peer was built for
+// Connections WE opened, to watch a broadcaster. The distinction matters for
+// teardown: a connection the other side opened is one where THEY are watching
+// US, and we cannot see the want behind it — a watcher is not broadcasting, and
+// an unseated spectator is not even in state.seats. Reconciling those away is
+// exactly how a watcher's picture died a moment after it appeared.
+const initiatedByMe = new Set();
+// Back-off after a failed negotiation, so a peer that cannot connect is retried
+// on a timer instead of instantly, which would spin.
+const retryAfter = new Map(); // peerId -> timestamp
 const videoEls = new Map();  // playerId -> HTMLVideoElement (own + remote)
+// Remote audio lives in its own element, never in the seat tile. A tile can be
+// visibility:hidden (camera off), rebuilt by a re-render, or absent entirely
+// (you are watching without a seat) — none of which should ever cost you the
+// table's voices. Video tiles are muted; these carry all the sound.
+const audioEls = new Map();  // peerId -> HTMLAudioElement
 // Players you have muted, for you only — it silences their audio in your
 // browser and tells them nothing. Kept per table between reloads.
 const mutedPeers = new Set();
@@ -45,6 +77,21 @@ export async function initWebrtc(c, sock) {
     deafened = localStorage.getItem('pp:deafen') === 'on';
   } catch { /* private browsing */ }
   socket.on(EVENTS.RTC_SIGNAL, onSignal);
+  // A dropped socket clears mediaOn server-side (peers must tear down), so a
+  // blip would otherwise take a broadcaster off the table permanently: their
+  // camera stays on locally and nobody can see it. Re-assert on every
+  // reconnect, the same way the avatar and nameplate font do.
+  socket.on('connect', () => {
+    if (!joined) return;
+    // Our tracks are the same ones, but every peer rebuilt from scratch while
+    // we were away — start their connections over too.
+    myGen++;
+    for (const id of [...peers.keys()]) closePeer(id);
+    setTimeout(() => {
+      announce();
+      if (client?.state) syncSeats(client.state);
+    }, 250);
+  });
 }
 
 export function avState() {
@@ -99,13 +146,15 @@ export function toggleMutePlayer(playerId) {
   return mutedPeers.has(playerId);
 }
 
-// A muted player's own <video> element is what carries their audio, so
-// silencing it is exactly "mute this person, for me".
+// Each peer's audio element is what carries their voice, so silencing it is
+// exactly "mute this person, for me".
 function applyMutes() {
-  for (const [id, el] of videoEls) {
-    if (id === client?.you?.playerId) continue; // your own is always muted
+  for (const [id, el] of audioEls) {
     el.muted = deafened || mutedPeers.has(id);
   }
+  // Tiles never carry sound (see audioEls) — belt and braces so a stream
+  // handed to a <video> can't leak a second copy of someone's voice.
+  for (const el of videoEls.values()) el.muted = true;
 }
 export function setOnChange(fn) { onChange = fn || (() => {}); }
 
@@ -135,6 +184,11 @@ export async function joinAV({ voiceOnly = false } = {}) {
   joined = true;
   camOn = !voiceOnly;
   micOn = true;
+  // Our outgoing tracks just changed. Any connection built while we were only
+  // watching carries no tracks of ours, so drop the lot and let syncSeats
+  // rebuild them — this time with something to send.
+  myGen++;
+  for (const id of [...peers.keys()]) closePeer(id);
 
   // Local preview at your own seat (muted so you don't echo, mirrored). A
   // voice-only tile starts invisible, so the profile picture stays put.
@@ -146,22 +200,38 @@ export async function joinAV({ voiceOnly = false } = {}) {
     v.play?.().catch(() => armPlayRetry());
   }
 
-  socket.emit(EVENTS.RTC_MEDIA, { on: true });
+  announce();
   if (client.state) syncSeats(client.state);
   onChange();
   return { ok: true };
 }
 
 export function leaveAV() {
-  socket?.emit(EVENTS.RTC_MEDIA, { on: false });
-  for (const id of [...peers.keys()]) closePeer(id);
+  socket?.emit(EVENTS.RTC_MEDIA, { on: false, cam: false });
   if (localStream) for (const t of localStream.getTracks()) t.stop();
   localStream = null;
   joined = false;
+  camOn = true;
+  myGen++;
+  // Drop every connection: they all carry tracks we no longer have. Whoever is
+  // still broadcasting gets picked back up receive-only on the next state.
+  for (const id of [...peers.keys()]) closePeer(id);
   // Drop the local preview element.
   const myId = client?.you?.playerId;
   if (myId) removeVideoEl(myId);
+  if (client?.state) syncSeats(client.state);
   onChange();
+}
+
+// Tell the table what we are sending. `cam` is separate from `on` so a player
+// who switches their camera off (but stays in voice) shows their profile
+// picture to everyone rather than a frozen black tile — the track is still
+// there, just disabled, so the receiver cannot tell without being told.
+function announce() {
+  socket?.emit(EVENTS.RTC_MEDIA, {
+    on: joined,
+    cam: joined && camOn && !!localStream && localStream.getVideoTracks().length > 0,
+  });
 }
 
 export function toggleCamera() {
@@ -170,6 +240,7 @@ export function toggleCamera() {
   const myId = client?.you?.playerId;
   const v = myId && videoEls.get(myId);
   if (v) v.classList.toggle('cam-off', !camOn);
+  announce();
   onChange();
 }
 
@@ -188,17 +259,34 @@ export function syncSeats(state) {
   if (!state?.seats) return;
   const myId = client.you?.playerId;
 
-  if (joined) {
-    const present = new Set();
-    for (const seat of state.seats) {
-      if (seat && seat.mediaOn && seat.playerId && seat.playerId !== myId) present.add(seat.playerId);
+  // Everyone else still at the table, and which of them are broadcasting.
+  const atTable = new Map(); // peerId -> seat
+  for (const seat of state.seats) {
+    if (seat && seat.playerId && seat.playerId !== myId) atTable.set(seat.playerId, seat);
+  }
+  const now = Date.now();
+  if (myId) {
+    for (const [pid, seat] of atTable) {
+      if (!seat.mediaOn) continue; // nothing to receive from them
+      const key = `${seat.mediaEpoch ?? 0}|${myGen}`;
+      // A live connection built for a different key is stale: either the peer
+      // restarted their media or we changed ours. Rebuild rather than try to
+      // renegotiate — both ends reach this conclusion from the same state, so
+      // the rebuild is symmetric and needs no extra handshake.
+      if (peers.has(pid) && peerKeys.get(pid) !== key) closePeer(pid);
+      if (!peers.has(pid) && (retryAfter.get(pid) ?? 0) <= now) {
+        // Receive-only side offers; when both are broadcasting, low id offers.
+        makePeer(pid, joined ? myId < pid : true, key);
+      }
     }
-    for (const pid of present) {
-      if (!peers.has(pid) && myId && myId < pid) makePeer(pid, true);
-    }
-    for (const pid of [...peers.keys()]) {
-      if (!present.has(pid)) closePeer(pid);
-    }
+  }
+  // Tear down only what WE asked for and no longer want. A connection the peer
+  // opened stays until it fails or they close it: they are watching us, and
+  // nothing in our copy of the state can tell us they still want to.
+  for (const pid of [...peers.keys()]) {
+    if (!initiatedByMe.has(pid)) continue;
+    const seat = atTable.get(pid);
+    if (!seat || !seat.mediaOn) closePeer(pid);
   }
 
   // Attach / detach the <video> element inside each seat pod.
@@ -209,11 +297,14 @@ export function syncSeats(state) {
     const pod = layer.querySelector(`[data-seat="${i}"]`);
     if (!pod) continue;
     const v = seat && seat.mediaOn ? videoEls.get(seat.playerId) : null;
-    // A voice-only peer's stream carries no video track at all — their tile
-    // is pure audio, so keep it invisible and let the picture show through.
+    // A voice-only peer's stream carries no video track at all, and a peer who
+    // switched their camera off still sends a (disabled, black) one. Either way
+    // their tile stays invisible and the profile picture shows through — the
+    // camOn flag is the only way to tell the second case apart.
     if (v && seat.playerId !== myId) {
       const stream = v.srcObject;
-      v.classList.toggle('cam-off', !!stream && stream.getVideoTracks().length === 0);
+      const noVideo = !stream || stream.getVideoTracks().length === 0;
+      v.classList.toggle('cam-off', noVideo || seat.camOn === false);
     }
     // A live tile covers the same spot as the profile picture; when the camera
     // is switched off the tile only goes invisible, so the picture comes back
@@ -231,6 +322,10 @@ export function syncSeats(state) {
       }
       v.classList.toggle('muted-peer', mutedPeers.has(seat.playerId));
       if (v.parentElement !== pod) pod.insertBefore(v, pod.firstChild);
+      // A tile that was detached across a task (any seat rebuild — muting a
+      // player rebuilds their pod) comes back paused, and re-attaching does
+      // not resume it. Without this the picture freezes for good.
+      if (v.paused && v.srcObject) v.play?.().catch(() => armPlayRetry());
     } else {
       // A seat that lost media: pull any stray video for whoever sits there.
       const stray = pod.querySelector('video.seat-cam');
@@ -239,17 +334,39 @@ export function syncSeats(state) {
   }
 }
 
-function makePeer(peerId, initiator) {
+function makePeer(peerId, initiator, key = '') {
   const pc = new RTCPeerConnection({ iceServers });
   peers.set(peerId, pc);
-  if (localStream) for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
+  peerKeys.set(peerId, key);
+  if (localStream) {
+    for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
+  } else {
+    // Watching without broadcasting. There are no tracks to add, so ask for
+    // recvonly transceivers explicitly — an offer with no media sections at
+    // all would negotiate a connection that can never carry their camera.
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+    pc.addTransceiver('video', { direction: 'recvonly' });
+  }
 
   pc.ontrack = (e) => {
-    const v = ensureVideoEl(peerId, false);
-    if (v.srcObject !== e.streams[0]) {
-      v.srcObject = e.streams[0];
-      v.muted = deafened || mutedPeers.has(peerId);
-      v.play?.().catch(() => armPlayRetry());
+    const stream = e.streams[0];
+    if (!stream) return;
+    // Sound goes to a dedicated element, pictures to the seat tile. Both come
+    // off the same stream, so the tile stays muted to avoid a double.
+    if (e.track.kind === 'audio') {
+      const a = ensureAudioEl(peerId);
+      if (a.srcObject !== stream) {
+        a.srcObject = stream;
+        a.play?.().catch(() => armPlayRetry());
+      }
+      a.muted = deafened || mutedPeers.has(peerId);
+    } else {
+      const v = ensureVideoEl(peerId, false);
+      if (v.srcObject !== stream) {
+        v.srcObject = stream;
+        v.play?.().catch(() => armPlayRetry());
+      }
+      v.muted = true;
     }
     if (client.state) syncSeats(client.state);
   };
@@ -257,7 +374,15 @@ function makePeer(peerId, initiator) {
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePeer(peerId);
   };
 
-  if (initiator) negotiate(peerId).catch(() => closePeer(peerId));
+  if (initiator) {
+    initiatedByMe.add(peerId);
+    negotiate(peerId).catch(() => {
+      // Don't come straight back for another go: closePeer re-runs syncSeats,
+      // which would rebuild and fail again with nothing between the two.
+      retryAfter.set(peerId, Date.now() + 3000);
+      closePeer(peerId);
+    });
+  }
   return pc;
 }
 
@@ -265,22 +390,56 @@ async function negotiate(peerId) {
   const pc = peers.get(peerId);
   if (!pc) return;
   const offer = await pc.createOffer();
+  if (peers.get(peerId) !== pc) return; // torn down and rebuilt while we waited
   await pc.setLocalDescription(offer);
+  if (peers.get(peerId) !== pc) return;
   await waitIceComplete(pc);
+  // Gathering can take a couple of seconds. If this connection was replaced in
+  // the meantime, shipping its offer would have the peer answer a pc that no
+  // longer exists — a pair that looks connected and carries nothing.
+  if (peers.get(peerId) !== pc) return;
   socket.emit(EVENTS.RTC_SIGNAL, { to: peerId, data: { sdp: pc.localDescription } });
 }
 
-async function onSignal({ from, data }) {
-  if (!joined || !data?.sdp) return;
+// Signals from one peer are handled strictly one at a time. Answering takes up
+// to a couple of seconds (ICE gathering), and two offers arriving inside that
+// window would otherwise interleave setRemoteDescription/createAnswer on the
+// same connection and throw.
+const signalQueues = new Map(); // peerId -> promise chain
+
+function onSignal(msg) {
+  const from = msg?.from;
+  if (!from || !msg?.data?.sdp) return;
+  const prev = signalQueues.get(from) ?? Promise.resolve();
+  const next = prev.then(() => handleSignal(msg)).catch(() => {
+    // A handshake that fails is not fatal: drop the connection and let
+    // syncSeats rebuild it on the next state.
+    closePeer(from);
+  });
+  signalQueues.set(from, next);
+  next.finally(() => {
+    if (signalQueues.get(from) === next) signalQueues.delete(from);
+  });
+}
+
+async function handleSignal({ from, data }) {
+  // No `joined` check: an offer from a player who is only watching is exactly
+  // how they get to see us, and refusing it was why nobody but the broadcaster
+  // ever saw a webcam. The server has already vouched that `from` is a
+  // co-player at this table.
   let pc = peers.get(from);
   const sdp = data.sdp;
   if (sdp.type === 'offer') {
-    // Only accept an offer from the higher id (the designated initiator).
-    if (!pc) pc = makePeer(from, false);
+    // Whoever offered is the initiator for this pair; we answer.
+    if (!pc) pc = makePeer(from, false, peerKeyFor(from));
     await pc.setRemoteDescription(sdp);
+    if (peers.get(from) !== pc) return; // replaced while we were answering
     const answer = await pc.createAnswer();
+    if (peers.get(from) !== pc) return;
     await pc.setLocalDescription(answer);
+    if (peers.get(from) !== pc) return;
     await waitIceComplete(pc);
+    if (peers.get(from) !== pc) return;
     socket.emit(EVENTS.RTC_SIGNAL, { to: from, data: { sdp: pc.localDescription } });
   } else if (sdp.type === 'answer' && pc) {
     await pc.setRemoteDescription(sdp).catch(() => {});
@@ -297,11 +456,24 @@ function waitIceComplete(pc, timeout = 2500) {
   });
 }
 
+// The key a peer connection *should* have right now, so an answerer records the
+// same identity the offerer used and neither side rebuilds a fresh connection
+// it has only just accepted.
+function peerKeyFor(peerId) {
+  const seat = client?.state?.seats?.find((s) => s && s.playerId === peerId);
+  return `${seat?.mediaEpoch ?? 0}|${myGen}`;
+}
+
 function closePeer(peerId) {
   const pc = peers.get(peerId);
   if (pc) { try { pc.close(); } catch { /* already closed */ } peers.delete(peerId); }
+  peerKeys.delete(peerId);
+  initiatedByMe.delete(peerId);
   removeVideoEl(peerId);
-  if (client?.state) queueMicrotask(() => syncSeats(client.state));
+  removeAudioEl(peerId);
+  // setTimeout, not queueMicrotask: rebuilding runs through this function
+  // again on failure, and a microtask chain would never reach the event loop.
+  if (client?.state) setTimeout(() => { if (client?.state) syncSeats(client.state); }, 0);
 }
 
 // ---- video elements ----
@@ -316,11 +488,48 @@ function armPlayRetry() {
   playRetryArmed = true;
   const kick = () => {
     playRetryArmed = false;
-    for (const v of videoEls.values()) {
-      if (v.paused && v.srcObject) v.play?.().catch(() => {});
+    for (const el of [...videoEls.values(), ...audioEls.values()]) {
+      if (el.paused && el.srcObject) el.play?.().catch(() => {});
     }
   };
   document.addEventListener('pointerdown', kick, { once: true, capture: true });
+}
+
+// ---- audio elements ----
+
+// Voices hang off a container of their own, out of the table's layout. A seat
+// pod is the wrong home for them: it gets rebuilt, hidden, and doesn't exist
+// at all for a player who is watching without a seat.
+function audioHost() {
+  let host = document.getElementById('av-audio');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'av-audio';
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    document.body.appendChild(host);
+  }
+  return host;
+}
+
+function ensureAudioEl(peerId) {
+  let a = audioEls.get(peerId);
+  if (!a) {
+    a = document.createElement('audio');
+    a.autoplay = true;
+    a.setAttribute('playsinline', '');
+    a.addEventListener('loadedmetadata', () => {
+      a.play?.().catch(() => armPlayRetry());
+    });
+    audioEls.set(peerId, a);
+    audioHost().appendChild(a);
+  }
+  return a;
+}
+
+function removeAudioEl(peerId) {
+  const a = audioEls.get(peerId);
+  if (a) { a.srcObject = null; a.remove(); audioEls.delete(peerId); }
 }
 
 function ensureVideoEl(playerId, isLocal) {
@@ -331,7 +540,10 @@ function ensureVideoEl(playerId, isLocal) {
     v.autoplay = true;
     v.playsInline = true;
     v.setAttribute('playsinline', ''); // older iOS ignores the property
-    if (isLocal) v.muted = true; // never echo your own mic
+    // Always muted: your own tile must never echo your mic, and a remote tile's
+    // sound comes out of its audio element instead (see audioEls). A muted
+    // video also autoplays under every browser policy, so tiles never stall.
+    v.muted = true;
     // A stream that arrives mid-render can miss its play() — retry the
     // moment the metadata lands, and fall back to the gesture arm.
     v.addEventListener('loadedmetadata', () => {

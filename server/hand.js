@@ -41,6 +41,15 @@ export class Hand {
     this.straddleSeat = null;
     this.board2 = null;
     this.runItTwice = false;
+    // Run it twice deals the boards one after the other, never side by side.
+    // The cards are still DRAWN street by street at their own deck positions
+    // (that is what the integrity proof is over), but the second row stays
+    // face down until the first board has reached the river — board2Shown is
+    // how many of its cards the table is allowed to see so far.
+    this.board2Shown = 0;
+    this.board2Steps = [];   // how many cards each of board two's streets added
+    this.ritPrefix = 0;      // cards the two boards share (dealt before the vote)
+    this.board2Reveal = 0;   // which reveal checkpoint we are on
     this.rabbit = null;
     this.timeBankEngaged = false;
     this.timeBankStartedAt = 0;
@@ -63,6 +72,9 @@ export class Hand {
     this.runOut = false;
     this.revealed = false;
     this.allInEquity = null;
+    // Live equity for the board currently being dealt, published only while
+    // every remaining hand is already face up. See refreshEquity().
+    this.equityNow = null;
     // Structured record of the hand, used by the replayer. Deliberately
     // separate from ctx.log, which is prose for humans and will drift.
     this.timeline = [];
@@ -231,15 +243,19 @@ export class Hand {
     const dealt = BOARD_CARDS[street];
     if (dealt) {
       this.board.push(...this.draw(dealt));
-      if (this.runItTwice) this.board2.push(...this.draw(dealt));
-      this.ctx.log(
-        `${cap(street)}: ${this.board.join(' ')}` +
-        (this.runItTwice ? ` | ${this.board2.join(' ')}` : '')
-      );
+      // The second board's cards for this street are drawn now, at the deck
+      // positions they have always occupied, but they are not shown yet — the
+      // table sees them once the first board is finished (revealSecondBoard).
+      if (this.runItTwice) {
+        this.board2.push(...this.draw(dealt));
+        this.board2Steps.push(dealt);
+      }
+      this.ctx.log(`${cap(street)}: ${this.board.join(' ')}`);
       this.pushEvent({
         type: 'board', cards: this.board.slice(-dealt), board: [...this.board],
         board2: this.runItTwice ? [...this.board2] : null,
       });
+      this.refreshEquity();
     }
     if (street === 'flop') {
       for (const p of this.livePlayers()) {
@@ -552,18 +568,103 @@ export class Hand {
 
   resolveRitVote(timedOut = false) {
     const live = this.livePlayers();
+    // Unanimous or it does not happen: every player still in the hand has to
+    // have said yes. A single no, or anyone who never answered, runs it once.
     const unanimous = live.length > 0 && live.every((p) => p.ritVote === true);
     this.runItTwice = unanimous;
     if (unanimous) {
       // Both boards share every card dealt before the all-in, and draw from
       // the same cursor so they can never duplicate a card.
       this.board2 = [...this.board];
-      this.ctx.log('Running it twice — everyone agreed');
+      this.ritPrefix = this.board.length;
+      this.ctx.log(`Running it twice — all ${live.length} players agreed`);
     } else {
-      this.ctx.log(timedOut ? 'Running it once — not everyone answered' : 'Running it once');
+      const refused = live.filter((p) => p.ritVote === false).map((p) => p.nickname);
+      const silent = live.filter((p) => p.ritVote === null || p.ritVote === undefined);
+      this.ctx.log(
+        refused.length
+          ? `Running it once — ${refused.join(', ')} said once`
+          : timedOut && silent.length
+            ? `Running it once — ${silent.map((p) => p.nickname).join(', ')} did not answer`
+            : 'Running it once'
+      );
     }
     this.phase = PHASES[this.street.toUpperCase()];
     this.continueStreet();
+  }
+
+  // ---- run it twice: the second board, dealt after the first ----
+
+  // How many of board two's cards are face up at each step of its reveal: the
+  // shared cards land together (they are already face up on the first row),
+  // then one street at a time, matching how the first board was dealt.
+  board2Checkpoints() {
+    const out = [];
+    let shown = this.ritPrefix;
+    if (shown > 0) out.push(shown);
+    for (const step of this.board2Steps) {
+      shown += step;
+      out.push(shown);
+    }
+    return out;
+  }
+
+  // One tick of the second board's run-out. Called on the same cadence as the
+  // first board's streets, so the table watches two run-outs in sequence
+  // instead of two boards filling in at once.
+  revealSecondBoard() {
+    const checkpoints = this.board2Checkpoints();
+    const next = checkpoints[this.board2Reveal];
+    if (next === undefined) {
+      this.showdown();
+      return;
+    }
+    this.board2Reveal++;
+    this.board2Shown = next;
+    this.ctx.log(`Second board: ${this.board2.slice(0, this.board2Shown).join(' ')}`);
+    this.refreshEquity();
+    this.ctx.changed();
+    this.ctx.setTimer('runout', TIMINGS.RUNOUT_STREET_DELAY, () => this.revealSecondBoard());
+  }
+
+  // ---- live equity ("what are my odds") ----
+
+  // The board the table is currently watching: the second row once it has
+  // started, the first one until then.
+  visibleBoard() {
+    if (this.runItTwice && this.board2 && this.board2Reveal > 0) {
+      return this.board2.slice(0, this.board2Shown);
+    }
+    return this.board;
+  }
+
+  // Published equity for the hand in progress. Computed ONLY once every
+  // remaining hand is already face up (an all-in run-out reveals them), so it
+  // can never say anything about a card the table cannot already see.
+  refreshEquity() {
+    this.equityNow = null;
+    if (!this.runOut || !this.revealed || this.finished) return;
+    if (this.variant.engine === '747') return; // no community board to run out
+    const live = this.livePlayers();
+    if (live.length < 2) return;
+    const board = this.visibleBoard();
+    if (board.length > 5) return;
+    try {
+      const shares = equity(
+        live.map((p) => ({ seat: p.seatIndex, holeCards: p.holeCards })),
+        board,
+        { omaha: !!this.variant.omaha }
+      );
+      this.equityNow = {
+        board: this.runItTwice && this.board2Reveal > 0 ? 2 : 1,
+        cards: board.length,
+        rows: live
+          .map((p) => ({ seat: p.seatIndex, pct: Math.round((shares.get(p.seatIndex) ?? 0) * 1000) / 10 }))
+          .sort((a, b) => b.pct - a.pct),
+      };
+    } catch {
+      this.equityNow = null; // never let a readout take a hand down
+    }
   }
 
   continueStreet() {
@@ -573,13 +674,19 @@ export class Hand {
       for (const p of live) {
         this.ctx.log(`${p.nickname} shows ${p.holeCards.join(' ')}`);
       }
+      // Cards just went face up, so the odds can be published now.
+      this.refreshEquity();
     }
 
     const next = NEXT_STREET[this.street];
     if (next === 'showdown') {
       if (this.runOut) {
         this.ctx.changed();
-        this.ctx.setTimer('runout', TIMINGS.RUNOUT_STREET_DELAY, () => this.showdown());
+        // The first board is finished. If the table agreed to run it twice,
+        // the second board's run-out starts now — one board at a time.
+        const second = this.runItTwice && this.board2 && this.board2Reveal === 0;
+        this.ctx.setTimer('runout', TIMINGS.RUNOUT_STREET_DELAY, () =>
+          second ? this.revealSecondBoard() : this.showdown());
       } else {
         this.showdown();
       }
@@ -743,6 +850,9 @@ export class Hand {
 
   showdown() {
     this.ctx.clearTimer();
+    // Whatever the reveal got to, the finished hand shows both boards in full.
+    if (this.runItTwice && this.board2) this.board2Shown = this.board2.length;
+    this.equityNow = null; // the result replaces the odds
     const uncalledReturn = this.returnUncalledBet();
     const live = this.livePlayers();
 

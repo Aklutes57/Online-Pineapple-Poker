@@ -127,10 +127,19 @@ export function renderActionBar(client) {
           you.seatOnRequest ? 'Buy back in' : 'Take a seat'}</button>`;
     }
   } else if (av) {
+    // Your whole stack expressed as a "raise to" total for this street, which
+    // is the unit the server validates in.
+    const allInTo = you.stack + (state.seats[you.seatIndex]?.betThisRound ?? 0);
+    const callIsAllIn = av.callAmount > 0 && av.callAmount >= you.stack;
+    // Shoving is always legal in no-limit even when the stack is smaller than
+    // the pot or than a full raise — the server already allows a short all-in
+    // raise. A pot-limit table is the one exception: its cap can sit below the
+    // stack, so only claim "all in" when the max really is the whole stack.
+    const canShove = av.canRaise && av.maxRaiseTo >= allInTo;
     const callLabel =
       av.callAmount > 0
-        ? av.callAmount >= you.stack
-          ? `All-in ${av.callAmount}`
+        ? callIsAllIn
+          ? `All in ${av.callAmount}`
           : `Call ${av.callAmount}`
         : 'Check';
     html = `
@@ -139,6 +148,9 @@ export function renderActionBar(client) {
         <button class="btn ab-btn ab-check" data-act="${av.callAmount > 0 ? 'call' : 'check'}">${callLabel}</button>
         ${av.canRaise
           ? `<button class="btn btn-green ab-btn" data-act="open-tray">${state.hand.currentBet > 0 ? 'Raise' : 'Bet'}</button>`
+          : ''}
+        ${canShove && !callIsAllIn
+          ? `<button class="btn ab-btn ab-allin" data-act="all-in" data-amount="${allInTo}">All in ${allInTo}</button>`
           : ''}
       </div>
       ${trayOpen && av.canRaise ? trayHtml(av, client) : ''}`;
@@ -246,11 +258,26 @@ function defaultRaiseAmount(av) {
 function trayHtml(av, client) {
   const pot = client.state.hand.potTotal;
   const presets = buildPresets(av, pot);
+  const verb = client.state.hand.currentBet > 0 ? 'Raise to' : 'Bet';
+  // A stack too short for a full raise has exactly one legal size — all of it.
+  // A slider whose ends are the same number is just a confusing way to say so.
+  if (av.minRaiseTo >= av.maxRaiseTo) {
+    return `
+      <div class="bet-tray">
+        <div class="tray-controls">
+          <span class="ab-note">Your stack is the only size left.</span>
+          <button class="btn btn-green" data-act="confirm-raise">
+            ${verb} <span id="tray-confirm-amt">${av.maxRaiseTo}</span>
+          </button>
+          <button class="tray-close" data-act="open-tray">Close</button>
+        </div>
+      </div>`;
+  }
   return `
     <div class="bet-tray">
       <div class="tray-presets">
         ${presets
-          .map((p) => `<button class="preset" data-preset="${p.amount}">${p.label}</button>`)
+          .map((p) => `<button class="preset${p.top ? ' preset-allin' : ''}" data-preset="${p.amount}">${p.label}</button>`)
           .join('')}
         <button class="tray-close" data-act="open-tray">Close</button>
       </div>
@@ -268,7 +295,9 @@ function trayHtml(av, client) {
 
 function buildPresets(av, pot) {
   const { minRaiseTo, maxRaiseTo, callAmount } = av;
-  const currentBet = clientRef.state.hand.currentBet;
+  const { state, you } = clientRef;
+  const currentBet = state.hand.currentBet;
+  const allInTo = you.stack + (state.seats[you.seatIndex]?.betThisRound ?? 0);
   const potRaise = currentBet + pot + callAmount; // raise "to" a pot-size bet
   const clamp = (v) => Math.max(minRaiseTo, Math.min(maxRaiseTo, Math.round(v)));
   const list = [
@@ -276,15 +305,18 @@ function buildPresets(av, pot) {
     { label: '½ pot', amount: clamp(currentBet + (pot + callAmount) / 2) },
     { label: '¾ pot', amount: clamp(currentBet + (pot + callAmount) * 0.75) },
     { label: 'Pot', amount: clamp(potRaise) },
-    { label: 'All in', amount: maxRaiseTo },
+    // The top of the range is the whole stack unless a pot-limit cap bites first.
+    { label: maxRaiseTo >= allInTo ? 'All in' : 'Max', amount: maxRaiseTo, top: true },
   ];
-  // Drop duplicates (tiny pots collapse the fractions together).
-  const seen = new Set();
-  return list.filter((p) => {
-    if (seen.has(p.amount)) return false;
-    seen.add(p.amount);
-    return true;
-  });
+  // Drop duplicates (a short stack collapses every fraction onto the shove).
+  // The top entry always wins its amount: keeping the FIRST of each amount used
+  // to label a shove "¼ pot" and drop the All in button altogether, which is
+  // the one button a short stack is looking for.
+  const byAmount = new Map();
+  for (const p of list) {
+    if (!byAmount.has(p.amount) || p.top) byAmount.set(p.amount, p);
+  }
+  return [...byAmount.values()].sort((a, b) => a.amount - b.amount);
 }
 
 function bindBarEvents(client, av) {
@@ -373,6 +405,16 @@ function handleAct(client, act, av, arg = null) {
       break;
     case 'confirm-raise': {
       const amount = clampAmount(trayAmount, av);
+      const action = hand.currentBet > 0 ? 'raise' : 'bet';
+      client.send(EVENTS.ACTION, { handId: hand.handId, action, amount });
+      trayOpen = false;
+      break;
+    }
+    case 'all-in': {
+      // One tap, straight in — no tray, no slider, whatever the stack is.
+      // Clamped against the server's own bounds so a stale bar can't send an
+      // amount that would be refused.
+      const amount = clampAmount(parseInt(arg, 10), av);
       const action = hand.currentBet > 0 ? 'raise' : 'bet';
       client.send(EVENTS.ACTION, { handId: hand.handId, action, amount });
       trayOpen = false;

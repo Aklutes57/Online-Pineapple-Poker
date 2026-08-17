@@ -112,6 +112,12 @@ function applyState(state) {
   syncAvSeats(state); // put each live webcam back into its (re-rendered) seat
   fitTableStage();    // webcam tiles make pods taller — refit around them
   renderAvControls();
+  // A signed-in player's ledger name comes back from their account; show it in
+  // the field, but never overwrite what someone is in the middle of typing.
+  const nameField = document.getElementById('real-name');
+  if (nameField && document.activeElement !== nameField && state.you?.realName) {
+    if (nameField.value.trim() !== state.you.realName) nameField.value = state.you.realName;
+  }
 
   // Tell you when host changes hands, so a silent hand-off (or reclaim) is
   // never a surprise. Skipped on the very first state so joining isn't noisy.
@@ -489,6 +495,33 @@ if (fontSel) {
   fontSel.addEventListener('change', pushFont);
   // Re-assert it on every (re)connect so the table sees your choice.
   socket.on('connect', () => setTimeout(pushFont, 250));
+}
+
+// ---- the name the ledger settles up under ----
+// Separate from the username on your seat: the felt can say whatever you like,
+// while the ledger and Settle up say who actually gets paid.
+const REAL_NAME_KEY = 'pp:realName';
+const realNameInput = document.getElementById('real-name');
+if (realNameInput) {
+  try {
+    realNameInput.value = localStorage.getItem(REAL_NAME_KEY) || '';
+  } catch { /* private browsing */ }
+  const pushRealName = () => {
+    const name = realNameInput.value.replace(/\s+/g, ' ').trim();
+    try {
+      if (name) localStorage.setItem(REAL_NAME_KEY, name);
+      else localStorage.removeItem(REAL_NAME_KEY);
+    } catch { /* still applies for this session */ }
+    client.send(EVENTS.SET_REAL_NAME, { name: name || null });
+  };
+  // On blur rather than on every keystroke — one broadcast per edit, not one
+  // per letter typed.
+  realNameInput.addEventListener('change', pushRealName);
+  realNameInput.addEventListener('blur', pushRealName);
+  // Guests have no account to hold it, so this browser re-asserts on connect.
+  socket.on('connect', () => setTimeout(() => {
+    if (realNameInput.value.trim()) pushRealName();
+  }, 250));
 }
 
 initWebrtc(client, socket);

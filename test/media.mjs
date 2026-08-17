@@ -1,5 +1,14 @@
-// End-to-end WebRTC: two real browsers with fake camera/mic join a table, turn
-// on Video, and must each see the OTHER's live webcam stream. Temp verifier.
+// End-to-end WebRTC in real browsers with fake camera/mic. Three scenarios,
+// because "the webcam works" has three different meanings:
+//
+//   A. two players who both turn Video on see each other (the mesh itself)
+//   B. a player who turns NOTHING on still sees and HEARS everyone who did
+//      — watching is not the same as broadcasting, and this is the one that
+//      used to fail: only the broadcaster ever saw a picture
+//   C. that watcher then joins, and the players already in the session start
+//      receiving their camera too (the connection is rebuilt, not left stale)
+//
+// Usage: npm run media
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,6 +16,13 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-media-'))
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
+
+let failures = 0;
+let passes = 0;
+function check(name, cond, detail = '') {
+  if (cond) { passes++; console.log(`  ok   ${name}`); }
+  else { failures++; console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
+}
 
 const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
@@ -17,7 +33,12 @@ const created = await fetch(`${base}/api/games`, {
   body: JSON.stringify({ nickname: 'Host', settings: {} }),
 }).then((r) => r.json());
 
-const args = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'];
+const args = [
+  '--use-fake-device-for-media-stream',
+  '--use-fake-ui-for-media-stream',
+  // The audio assertion below needs an AudioContext to run without a gesture.
+  '--autoplay-policy=no-user-gesture-required',
+];
 let browser;
 try { browser = await chromium.launch({ args }); }
 catch { browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args }); }
@@ -32,48 +53,149 @@ async function page(name, token, nick) {
   return p;
 }
 
+// ---- three players at the table ----
+
 const host = await page('host', created.token, 'Host');
 await host.click('.empty-seat-btn');
 await host.click('#j-request');
 await host.waitForSelector('.seat.me .nameplate');
 
+async function seatGuest(p, nick) {
+  await p.click('[data-act="open-join"]');
+  await p.fill('#j-nickname', nick);
+  await p.click('#j-request');
+  await host.waitForSelector('#seat-requests button[data-approve="yes"]');
+  await host.locator('#seat-requests button[data-approve="yes"]').first().click();
+  await p.waitForSelector('.seat.me .nameplate');
+}
+
 const guest = await page('guest', null, 'Guest');
-await guest.click('[data-act="open-join"]');
-await guest.fill('#j-nickname', 'Guest');
-await guest.click('#j-request');
-// Host approves.
-await host.waitForSelector('#seat-requests button[data-approve="yes"]');
-await host.locator('#seat-requests button[data-approve="yes"]').first().click();
-await guest.waitForSelector('.seat.me .nameplate');
+await seatGuest(guest, 'Guest');
+// The watcher: seated at the table, but never presses Join for A/V.
+const watcher = await page('watcher', null, 'Watcher');
+await seatGuest(watcher, 'Watcher');
 
-// Both turn on Video.
-await host.waitForSelector('#av-join:not(.hidden)');
-await host.click('#av-join');
-await guest.waitForSelector('#av-join:not(.hidden)');
-await guest.click('#av-join');
-
-// Give ICE time to connect and frames to flow.
-async function remoteLive(p) {
-  return p.evaluate(async () => {
+// How many live remote tiles a page can see, and whether its own is running.
+async function tiles(p, { wantRemote = 1, wantMine = true } = {}) {
+  return p.evaluate(async ({ wantRemote, wantMine }) => {
     for (let i = 0; i < 40; i++) {
       const vids = [...document.querySelectorAll('#seats-layer video.seat-cam')];
-      const remote = vids.find((v) => !v.classList.contains('mine') && v.videoWidth > 0);
-      const mineOk = vids.some((v) => v.classList.contains('mine') && v.videoWidth > 0);
-      if (remote && mineOk) return { ok: true, count: vids.length, remoteW: remote.videoWidth };
+      const remote = vids.filter((v) => !v.classList.contains('mine') && v.videoWidth > 0);
+      const mine = vids.filter((v) => v.classList.contains('mine') && v.videoWidth > 0);
+      if (remote.length >= wantRemote && (!wantMine || mine.length > 0)) {
+        return { ok: true, remote: remote.length, mine: mine.length };
+      }
       await new Promise((r) => setTimeout(r, 500));
     }
     const vids = [...document.querySelectorAll('#seats-layer video.seat-cam')];
-    return { ok: false, count: vids.length, widths: vids.map((v) => v.videoWidth) };
-  });
+    return {
+      ok: false,
+      remote: vids.filter((v) => !v.classList.contains('mine') && v.videoWidth > 0).length,
+      mine: vids.filter((v) => v.classList.contains('mine') && v.videoWidth > 0).length,
+      widths: vids.map((v) => `${v.className}:${v.videoWidth}`),
+    };
+  }, { wantRemote, wantMine });
 }
 
-const h = await remoteLive(host);
-const g = await remoteLive(guest);
-console.log('host sees:', JSON.stringify(h));
-console.log('guest sees:', JSON.stringify(g));
-const pass = h.ok && g.ok;
-console.log(pass ? 'MEDIA: peer-to-peer webcam is flowing both ways' : 'MEDIA: FAILED to establish two-way video');
+// Is sound actually arriving? The fake device emits a periodic tone, so a
+// non-zero peak off the received stream proves voice is flowing end to end —
+// not merely that an element exists with a track attached to it.
+async function voice(p, { want = 1 } = {}) {
+  return p.evaluate(async ({ want }) => {
+    const measure = async (stream) => {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AC();
+      try {
+        await ctx.resume().catch(() => {});
+        const an = ctx.createAnalyser();
+        an.fftSize = 2048;
+        ctx.createMediaStreamSource(stream).connect(an);
+        const buf = new Float32Array(an.fftSize);
+        let peak = 0;
+        for (let i = 0; i < 40; i++) {
+          an.getFloatTimeDomainData(buf);
+          for (const v of buf) { const a = Math.abs(v); if (a > peak) peak = a; }
+          if (peak > 0.01) break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return peak;
+      } finally {
+        await ctx.close().catch(() => {});
+      }
+    };
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const els = [...document.querySelectorAll('#av-audio audio')];
+      const withTracks = els.filter((el) => el.srcObject && el.srcObject.getAudioTracks().length > 0);
+      if (withTracks.length >= want) {
+        const peaks = [];
+        for (const el of withTracks) peaks.push(await measure(el.srcObject));
+        return {
+          ok: peaks.filter((x) => x > 0.01).length >= want,
+          elements: els.length,
+          peaks,
+          playing: withTracks.every((el) => !el.paused),
+          muted: withTracks.map((el) => el.muted),
+        };
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    const els = [...document.querySelectorAll('#av-audio audio')];
+    return { ok: false, elements: els.length, reason: 'no audio element ever received a track' };
+  }, { want });
+}
+
+// The A/V controls live inside the settings sheet, which is closed by default,
+// so Start video has to be reached the way a player reaches it.
+async function startVideo(p) {
+  await p.waitForSelector('#av-join:not(.hidden)', { state: 'attached' });
+  const sheet = p.locator('#top-menu');
+  if (!(await sheet.isVisible().catch(() => false))) await p.click('#menu-toggle');
+  await p.waitForSelector('#av-join:not(.hidden)');
+  await p.click('#av-join');
+  await p.click('#menu-toggle'); // put the sheet away again
+}
+
+// ---- A. two broadcasters see each other ----
+
+for (const p of [host, guest]) await startVideo(p);
+
+const a1 = await tiles(host);
+const a2 = await tiles(guest);
+check('A: host sees the guest’s webcam', a1.ok, JSON.stringify(a1));
+check('A: guest sees the host’s webcam', a2.ok, JSON.stringify(a2));
+
+// ---- B. the watcher never joined, and must still see and hear both ----
+
+const b = await tiles(watcher, { wantRemote: 2, wantMine: false });
+check('B: a player who never turned their camera on sees both webcams', b.ok, JSON.stringify(b));
+check('B: the watcher is not broadcasting anything of their own', b.mine === 0);
+
+const bVoice = await voice(watcher, { want: 2 });
+check('B: the watcher hears both players', bVoice.ok, JSON.stringify(bVoice));
+check('B: the watcher’s audio is playing, not paused', bVoice.playing === true);
+
+// A tile carries no sound of its own — voices come out of the audio elements,
+// so a hidden or rebuilt tile can never cost you the table.
+const tilesMuted = await watcher.evaluate(() =>
+  [...document.querySelectorAll('video.seat-cam')].every((v) => v.muted));
+check('B: video tiles are muted (audio is separate)', tilesMuted);
+
+// ---- C. the watcher joins: the others must start receiving them ----
+
+await startVideo(watcher);
+
+const c1 = await tiles(host, { wantRemote: 2 });
+const c2 = await tiles(guest, { wantRemote: 2 });
+const c3 = await tiles(watcher, { wantRemote: 2 });
+check('C: host receives the new joiner’s camera', c1.ok, JSON.stringify(c1));
+check('C: guest receives the new joiner’s camera', c2.ok, JSON.stringify(c2));
+check('C: the joiner still sees both others', c3.ok, JSON.stringify(c3));
+const cVoice = await voice(host, { want: 2 });
+check('C: host hears both other players', cVoice.ok, JSON.stringify(cVoice));
+
+console.log(`media: ${passes} passed, ${failures} failed`);
 
 await browser.close();
 await new Promise((r) => httpServer.close(r));
-process.exit(pass ? 0 : 1);
+process.exit(failures ? 1 : 0);

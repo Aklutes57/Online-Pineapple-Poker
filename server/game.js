@@ -173,6 +173,18 @@ export class Game {
       requestedSeat: null,
       seatedAt: null,
       avatarUrl: null,
+      // The name this player settles up under. The table shows `nickname`;
+      // the ledger shows this, so "who do I actually pay?" has one answer
+      // even when the usernames at the table are jokes. Optional — the ledger
+      // falls back to the nickname when nobody has set one.
+      realName: null,
+      // A/V session (webcam + mic). mediaOn is "broadcasting", camOn is
+      // "and the camera is live"; mediaEpoch moves whenever the outgoing
+      // tracks change, which is how peers know to rebuild their connection.
+      mediaOn: false,
+      camOn: false,
+      mediaEpoch: 0,
+      camFrame: null,
       // Once the host has let you in, you don't queue again for a re-buy —
       // this survives standing up, so busting out and coming back is one tap.
       boughtInHere: false,
@@ -523,16 +535,37 @@ export class Game {
 
   // ---- ledger ----
 
-  creditLedger(player, amount) {
-    const row = this.ledger.get(player.id) || { nickname: player.nickname, buyIns: 0, cashOuts: 0 };
-    row.buyIns += amount;
+  // The ledger keeps its own copy of both names, so a player who has left the
+  // table is still settled up under the name they gave.
+  ledgerRow(player) {
+    const row = this.ledger.get(player.id)
+      || { nickname: player.nickname, realName: player.realName || null, buyIns: 0, cashOuts: 0 };
+    row.nickname = player.nickname;
+    if (player.realName) row.realName = player.realName;
     this.ledger.set(player.id, row);
+    return row;
+  }
+
+  creditLedger(player, amount) {
+    this.ledgerRow(player).buyIns += amount;
   }
 
   cashOutLedger(player, amount) {
-    const row = this.ledger.get(player.id) || { nickname: player.nickname, buyIns: 0, cashOuts: 0 };
-    row.cashOuts += amount;
-    this.ledger.set(player.id, row);
+    this.ledgerRow(player).cashOuts += amount;
+  }
+
+  // Name the ledger settles under, whether or not this player is still here.
+  setRealName(player, raw) {
+    if (raw !== null && typeof raw !== 'string') return { ok: false, error: 'bad name' };
+    const { max } = SETTINGS_LIMITS.realName;
+    const name = raw === null ? null : raw.replace(/\s+/g, ' ').trim().slice(0, max) || null;
+    player.realName = name;
+    // Only touch the ledger if this player already has a row; creating one for
+    // somebody who never bought in would put a name in the settle-up with
+    // nothing to settle.
+    const row = this.ledger.get(player.id);
+    if (row) row.realName = name;
+    return { ok: true };
   }
 
   ledgerRows() {
@@ -544,6 +577,9 @@ export class Game {
       return {
         playerId,
         nickname: row.nickname,
+        // Public on purpose: the whole point is that the table can tell who
+        // is owed what. Absent unless this player chose to set one.
+        realName: (player?.realName ?? row.realName) || null,
         buyIns: row.buyIns,
         cashOuts: row.cashOuts,
         stack,
@@ -1065,7 +1101,16 @@ export class Game {
   nudgePlayer(targetId, immediate = false) {
     const target = this.players.get(targetId);
     const hand = this.currentHand;
-    if (!target || !hand || hand.finished || hand.toActSeat !== target.seatIndex) {
+    // toActSeat is null whenever the table is waiting on everyone at once — the
+    // run-it-twice vote, a Pineapple discard, the 747 countdown — and a
+    // spectator's seatIndex is null too. Comparing them would call that a match
+    // and hand the nudge a timer, evicting the vote's own (the game keeps a
+    // single timer slot) and wedging the table with nothing left to fire.
+    if (
+      !target || !hand || hand.finished
+      || target.seatIndex === null || hand.toActSeat === null
+      || hand.toActSeat !== target.seatIndex
+    ) {
       return { ok: false, error: 'it is not their turn' };
     }
     if (immediate) {

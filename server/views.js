@@ -58,6 +58,13 @@ export function buildViews(game) {
       connected: p.connected,
       // In the A/V session (webcam + mic shared with the table).
       mediaOn: !!p.mediaOn && p.connected,
+      // Whether the camera itself is live. A player in voice-only, or one who
+      // switched their camera off, still holds a (disabled) video track, so
+      // receivers need telling or they show a black tile instead of the picture.
+      camOn: !!p.mediaOn && !!p.camOn && p.connected,
+      // Changes whenever this player's outgoing tracks change. Peers key their
+      // connection on it, so both ends rebuild together when it moves.
+      mediaEpoch: p.mediaEpoch || 0,
       camFrame: p.camFrame || null,
       // Shown in the pod whenever this player's webcam isn't. Public by
       // design — everyone at the table needs to see who they're playing.
@@ -107,7 +114,12 @@ export function buildViews(game) {
         variant: hand.variant.key,
         phase: hand.phase,
         board: [...hand.board],
-        board2: hand.board2 ? [...hand.board2] : null,
+        // Only as much of the second board as the table has been shown: run it
+        // twice deals one board at a time, so this stays empty (null) until the
+        // first board has finished running out. A finished hand shows it whole.
+        board2: hand.board2 && (hand.finished || hand.board2Shown > 0)
+          ? hand.board2.slice(0, hand.finished ? hand.board2.length : hand.board2Shown)
+          : null,
         rabbit: hand.rabbit ? [...hand.rabbit] : null,
         bombPot: !!hand.bombPot,
         collectedPot: hand.collectedPot(),
@@ -135,10 +147,21 @@ export function buildViews(game) {
         uncalledReturn: hand.finished ? hand.results?.uncalledReturn ?? null : null,
         finished: hand.finished,
         // Run it twice is put to the table each time; this is who has answered.
+        // `yes` is public as it comes in so the table can see the agreement
+        // being built — it decides nothing on its own (unanimity does) and a
+        // vote is not a card, so there is nothing to hide.
         ritVote: hand.phase === PHASES.RIT_VOTE
-          ? hand.livePlayers().map((p) => ({ seat: p.seatIndex, voted: p.ritVote !== null && p.ritVote !== undefined }))
+          ? hand.livePlayers().map((p) => ({
+            seat: p.seatIndex,
+            voted: p.ritVote !== null && p.ritVote !== undefined,
+            yes: p.ritVote === true,
+          }))
           : null,
         runItTwice: !!hand.runItTwice,
+        // Live equity for the board being dealt, while the hand runs out with
+        // every remaining hand already face up. Null at every other moment —
+        // see Hand.refreshEquity(), which is what keeps this from being a leak.
+        equity: hand.equityNow ?? null,
         // Provably-fair proof for this hand: the committed hash and a [0,1)
         // float, visible while the hand is live. The server seed is NOT here —
         // it is revealed only after the table closes.
@@ -194,6 +217,9 @@ export function buildViews(game) {
       nickname: p.nickname,
       accountId: p.accountId ?? null,
       isHost: game.hostId === p.id,
+      // Your own ledger name, so the settings form can show what is set. The
+      // table sees it only through the ledger, never on the felt.
+      realName: p.realName || null,
       nameFont: p.nameFont || DEFAULT_NAME_FONT,
       spectator: p.status !== 'seated',
       straddleOptIn: p.straddleOptIn !== false,

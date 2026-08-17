@@ -39,14 +39,14 @@
   --glow: rgba(255, 214, 140, .16);      /* the warm bloom over the boot cover */
   --pulse: 245, 197, 66;                 /* the halo around whoever is to act, as r,g,b */
   --rail-edge: var(--accent-dark); /* the hairline around the outside */
-  --card-face: #f7f8fc;
+  --card-face: #ffffff;
   --card-ink: #14181f;
   --plate-a: rgba(93, 17, 34, .96);   /* nameplate, lit edge */
   --plate-b: rgba(58, 15, 27, .96);
   --chip-ink: #ffe9a8;                /* type on bet chips and pot pills */
-  --card-red: #c0392b;
-  --card-back-a: #27427c;
-  --card-back-b: #1d3260;
+  --card-red: #d92d2d;
+  --card-back-a: #a5252f;
+  --card-back-b: #7d1a22;
 
   /* The client-format chrome: money readouts, the felt watermark, the room
      behind the table, and the campus/backdrop silhouette layer. Strings and
@@ -97,12 +97,12 @@
   --felt-line: rgba(95, 198, 245, 0.22);
   --glow: rgba(120, 200, 245, .14);
   --pulse: 95, 198, 245;
-  --card-face: #f7f9fc;
+  --card-face: #ffffff;
   --card-ink: #0d1420;
   --plate-a: rgba(16, 24, 37, .94);
   --plate-b: rgba(6, 12, 20, .94);
   --chip-ink: #dbeefb;
-  --card-red: #c8102e;
+  --card-red: #d92d2d;
   --card-back-a: #12385a;
   --card-back-b: #0d2a44;
   --money: #9fe3ff;
@@ -148,12 +148,12 @@
   --felt-line: rgba(243, 221, 154, 0.28);
   --glow: rgba(255, 226, 150, .15);
   --pulse: 212, 175, 55;
-  --card-face: #fdfbf5;
+  --card-face: #ffffff;
   --card-ink: #171310;
   --plate-a: rgba(36, 24, 9, .96);
   --plate-b: rgba(18, 12, 5, .96);
   --chip-ink: #f3dd9a;
-  --card-red: #b3121f;
+  --card-red: #d92d2d;
   --card-back-a: #a3202f;
   --card-back-b: #6d0f1b;
   --money: #ffe08a;
@@ -199,12 +199,12 @@
   --felt-line: rgba(166, 210, 230, 0.24);
   --glow: rgba(166, 210, 230, .14);
   --pulse: 63, 142, 247;
-  --card-face: #f7fafc;
+  --card-face: #ffffff;
   --card-ink: #10233c;
   --plate-a: rgba(14, 24, 38, .96);
   --plate-b: rgba(7, 13, 22, .96);
   --chip-ink: #d5e6f2;
-  --card-red: #b3232e;
+  --card-red: #d92d2d;
   --card-back-a: #1c3a63;
   --card-back-b: #102340;
   --money: #cdeb8b;
@@ -250,12 +250,12 @@
   --felt-line: rgba(246, 239, 230, 0.22);
   --glow: rgba(218, 41, 28, .14);
   --pulse: 218, 41, 28;
-  --card-face: #f6efe6;
+  --card-face: #ffffff;
   --card-ink: #1c1517;
   --plate-a: rgba(36, 20, 21, .96);
   --plate-b: rgba(19, 9, 10, .96);
   --chip-ink: #f6e5db;
-  --card-red: #b3232e;
+  --card-red: #d92d2d;
   --card-back-a: #38292c;
   --card-back-b: #20191b;
   --money: #ffd977;
@@ -306,7 +306,7 @@
   --plate-a: rgba(74, 80, 88, .96);
   --plate-b: rgba(42, 47, 54, .96);
   --chip-ink: #f4eeda;
-  --card-red: #c0212b;
+  --card-red: #d92d2d;
   --card-back-a: #29456b;
   --card-back-b: #16294a;
   --money: #ffe9a0;
@@ -658,12 +658,12 @@ label {
   --felt-line: rgba(255, 255, 255, 0.5);
   --glow: rgba(224, 49, 39, .15);
   --pulse: 224, 49, 39;
-  --card-face: #fbf8f7;
+  --card-face: #ffffff;
   --card-ink: #17100f;
   --plate-a: rgba(30, 17, 18, .96);
   --plate-b: rgba(14, 8, 9, .96);
   --chip-ink: #ffe4e0;
-  --card-red: #c31d16;
+  --card-red: #d92d2d;
   --card-back-a: #3a1c1d;
   --card-back-b: #1d1011;
   --money: #ffffff;

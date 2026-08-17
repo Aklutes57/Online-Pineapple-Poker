@@ -23,6 +23,8 @@ export const EVENTS = {
   SET_CLIENT_SEED: 'setClientSeed',
   SET_AVATAR: 'setAvatar',
   SET_NAME_FONT: 'setNameFont',
+  // The name the ledger settles up under, kept apart from the table username.
+  SET_REAL_NAME: 'setRealName',
   RUN_IT_TWICE_VOTE: 'runItTwiceVote',
   REBUY: 'rebuy',
   LEAVE_WAITLIST: 'leaveWaitlist',
@@ -184,6 +186,8 @@ export const MAX_CHIPS = 100_000_000_000_000;
 
 export const SETTINGS_LIMITS = {
   nickname: { min: 1, max: 20 },
+  // Optional, and longer than a nickname because it is a person's actual name.
+  realName: { min: 1, max: 40 },
   smallBlind: { min: 1, max: MAX_CHIPS },
   bigBlind: { min: 2, max: MAX_CHIPS },
   buyIn: { min: 1, max: MAX_CHIPS },

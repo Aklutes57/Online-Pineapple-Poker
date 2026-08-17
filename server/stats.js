@@ -50,11 +50,12 @@ export function syncSessionResults(game) {
     const player = game.players.get(row.playerId);
     run(
       `INSERT INTO session_results
-         (table_session_id, account_id, player_id, nickname, buy_ins, cash_outs, final_stack, net, hands_played, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (table_session_id, account_id, player_id, nickname, real_name, buy_ins, cash_outs, final_stack, net, hands_played, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(table_session_id, player_id) DO UPDATE SET
          account_id = excluded.account_id,
          nickname = excluded.nickname,
+         real_name = excluded.real_name,
          buy_ins = excluded.buy_ins,
          cash_outs = excluded.cash_outs,
          final_stack = excluded.final_stack,
@@ -65,6 +66,7 @@ export function syncSessionResults(game) {
       player?.accountId ?? null,
       row.playerId,
       row.nickname,
+      row.realName ?? null,
       row.buyIns,
       row.cashOuts,
       row.stack,
@@ -92,7 +94,7 @@ export function ledgerCsvForGame(gameId) {
   );
   if (!session) return null;
   const rows = all(
-    `SELECT nickname, buy_ins, cash_outs, final_stack, net, hands_played
+    `SELECT nickname, real_name, buy_ins, cash_outs, final_stack, net, hands_played
      FROM session_results WHERE table_session_id = ? ORDER BY net DESC`,
     session.id
   );
@@ -107,11 +109,16 @@ export function ledgerCsvForGame(gameId) {
     ['Variant', session.variant],
     ['Blinds', `${session.small_blind}/${session.big_blind}`],
     [],
-    ['Player', 'Buy-ins', 'Cash-outs', 'Final stack', 'Hands', 'Net'],
-    ...rows.map((r) => [r.nickname, r.buy_ins, r.cash_outs, r.final_stack, r.hands_played, r.net]),
+    // Two name columns: who is settled up with, and who they played as.
+    ['Name', 'Username', 'Buy-ins', 'Cash-outs', 'Final stack', 'Hands', 'Net'],
+    ...rows.map((r) => [
+      r.real_name || r.nickname, r.nickname,
+      r.buy_ins, r.cash_outs, r.final_stack, r.hands_played, r.net,
+    ]),
     [],
     ['Settle up: from', 'to', 'amount'],
-    ...settleUp(rows.map((r) => ({ nickname: r.nickname, net: r.net }))).map((p) => [p.from, p.to, p.amount]),
+    ...settleUp(rows.map((r) => ({ nickname: r.nickname, realName: r.real_name, net: r.net })))
+      .map((p) => [p.from, p.to, p.amount]),
   ];
   const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
   return { filename: `pineapple-ledger-${iso}.csv`, body };
