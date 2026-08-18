@@ -112,5 +112,46 @@ check('describe full house', describe(rank5(['9h', '9c', '9d', '2s', '2h'])) ===
 check('describe high card', describe(rank5(['Ah', 'Jc', '9d', '6s', '2h'])) === 'Ace High');
 check('describe wheel', describe(rank5(['Ah', '2c', '3d', '4s', '5h'])) === 'Straight, Five high');
 
+// --- Omaha on a board that is not five cards yet ---
+// The live "what do I have" readout asks on the flop and the turn too. Indexing
+// fixed board positions 0-4 used to read past the end of a short board and rank
+// the empty slots as cards, inventing pairs and trips: a flop readout would
+// claim three of a kind on a hand that was ace high.
+{
+  const hole = ['Ah', 'Kh', '2c', '7d'];
+  check('omaha flop uses only the three board cards',
+    describe(bestOmaha(hole, ['3s', '4d', '9c']).score) === 'Ace High');
+  check('omaha flop picks a legal five',
+    bestOmaha(hole, ['3s', '4d', '9c']).bestFive.every((c) => typeof c === 'string'));
+  check('omaha turn chooses three of the four board cards',
+    describe(bestOmaha(hole, ['3s', '4d', '9c', 'Ks']).score) === 'Pair of Kings');
+  check('omaha river is unchanged',
+    describe(bestOmaha(hole, ['3s', '4d', '9c', 'Ks', '2d']).score) === 'Two Pair, Kings and Deuces');
+
+  // Exactly two hole cards, always — a board that pairs up cannot borrow a
+  // third card from the hand, and a hand that pairs up cannot play all four.
+  check('omaha never plays three hole cards',
+    describe(bestOmaha(['As', 'Ac', 'Ad', '7d'], ['Ah', '4d', '9c', 'Ks', '2d']).score)
+      === 'Three of a Kind, Aces');
+  // ...and exactly three board cards. Quads on the board are only trips in
+  // Omaha, because the fourth king cannot be played.
+  check('omaha never plays four board cards',
+    describe(bestOmaha(['As', '2c', '3d', '4h'], ['Kh', 'Kc', 'Kd', 'Ks', '9c']).score)
+      === 'Three of a Kind, Kings');
+
+  // Not enough cards for a legal Omaha five: score -1, which callers read as
+  // "nothing to describe yet" rather than as a real hand.
+  check('omaha preflop cannot be scored', bestOmaha(hole, []).score === -1);
+  check('omaha with two board cards cannot be scored', bestOmaha(hole, ['3s', '4d']).score === -1);
+  check('omaha with one hole card cannot be scored',
+    bestOmaha(['Ah'], ['3s', '4d', '9c', 'Ks', '2d']).score === -1);
+  check('omaha survives a missing hand', bestOmaha(null, ['3s', '4d', '9c']).score === -1);
+
+  // A short Pineapple-shaped hand must not be scored as if it were Omaha.
+  check('omaha with three hole cards still plays exactly two',
+    describe(bestOmaha(['Ah', 'Kh', '2c'], ['3s', '4d', '9c', 'Ks', '2d']).score)
+      === 'Two Pair, Kings and Deuces');
+}
+
 console.log(`evaluator: ${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

@@ -24,7 +24,13 @@ function handNowFor(hand, p) {
     }
     const board = hand.board || [];
     if (hand.variant.omaha) {
-      if (board.length >= 3) return describe(bestOmaha(p.holeCards, board).score);
+      // Omaha plays exactly two hole cards and three board cards, so there is
+      // nothing to describe until the flop — and bestOmaha reports -1 when a
+      // legal five cannot be formed, which is the same "not yet" answer.
+      if (board.length >= 3) {
+        const { score } = bestOmaha(p.holeCards, board);
+        if (score >= 0) return describe(score);
+      }
       return describePartial(p.holeCards);
     }
     const cards = [...p.holeCards, ...board];

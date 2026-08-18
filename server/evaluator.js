@@ -113,14 +113,31 @@ const COMBOS_7C5 = (() => {
   return out;
 })();
 
-const COMBOS_4C2 = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
-const COMBOS_5C3 = (() => {
+// Index combinations of k from n, memoised. Omaha needs "choose 2 of the hole
+// cards" and "choose 3 of the board", and the board is not always five cards:
+// the live readout asks what you have on the flop and the turn too.
+const comboCache = new Map();
+function combos(n, k) {
+  const key = `${n}:${k}`;
+  const hit = comboCache.get(key);
+  if (hit) return hit;
   const out = [];
-  for (let a = 0; a < 3; a++)
-    for (let b = a + 1; b < 4; b++)
-      for (let c = b + 1; c < 5; c++) out.push([a, b, c]);
+  if (k >= 0 && k <= n) {
+    const pick = new Array(k);
+    (function walk(start, depth) {
+      if (depth === k) {
+        out.push(pick.slice());
+        return;
+      }
+      for (let i = start; i <= n - (k - depth); i++) {
+        pick[depth] = i;
+        walk(i + 1, depth + 1);
+      }
+    })(0, 0);
+  }
+  comboCache.set(key, out);
   return out;
-})();
+}
 
 // Best five-card hand from any 5-7 cards (the live "what do I have" readout
 // mid-hand, where the board may only be partial).
@@ -189,13 +206,26 @@ export function best7(cards7) {
   return { score: best, bestFive };
 }
 
-// hole4: 4 hole cards, board5: 5 board cards. Exactly 2 + exactly 3.
-export function bestOmaha(hole4, board5) {
+// Omaha: exactly 2 hole cards + exactly 3 board cards, always.
+//
+// The board is NOT always five: the live "what do I have" readout asks on the
+// flop and the turn as well, and the combinations have to come from the cards
+// that are actually there. Indexing fixed positions 0-4 read past the end of a
+// short board and ranked the empty slots as if they were cards, which invented
+// pairs and trips out of nothing — a flop readout would claim three of a kind
+// when the hand was ace high.
+//
+// Returns score -1 when a legal Omaha five cannot be formed at all (fewer than
+// 2 hole cards or fewer than 3 board cards); every caller either guards for
+// that or is only ever handed a complete hand.
+export function bestOmaha(hole, board) {
   let best = -1;
   let bestFive = null;
-  for (const h of COMBOS_4C2) {
-    for (const b of COMBOS_5C3) {
-      const five = [hole4[h[0]], hole4[h[1]], board5[b[0]], board5[b[1]], board5[b[2]]];
+  if (!Array.isArray(hole) || !Array.isArray(board)) return { score: best, bestFive };
+  if (hole.length < 2 || board.length < 3) return { score: best, bestFive };
+  for (const h of combos(hole.length, 2)) {
+    for (const b of combos(board.length, 3)) {
+      const five = [hole[h[0]], hole[h[1]], board[b[0]], board[b[1]], board[b[2]]];
       const score = rank5(five);
       if (score > best) {
         best = score;

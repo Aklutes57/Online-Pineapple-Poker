@@ -49,6 +49,16 @@ const initiatedByMe = new Set();
 // Back-off after a failed negotiation, so a peer that cannot connect is retried
 // on a timer instead of instantly, which would spin.
 const retryAfter = new Map(); // peerId -> timestamp
+// When we sent an offer. A single dropped signal — the flood guard rejecting a
+// packet, or the relay finding the target between sockets — otherwise strands
+// the pair for good: the offerer sits in have-local-offer, which never becomes
+// 'failed', and both sides' keys still match so nothing rebuilds.
+const offeredAt = new Map(); // peerId -> timestamp
+const OFFER_TIMEOUT = 9000;
+// A broadcaster answers every watcher, and each answer is another copy of their
+// camera going up their connection. A home game never comes near this; it is
+// here so a crowd of spectators cannot melt somebody's phone.
+const MAX_PEERS = 12;
 const videoEls = new Map();  // playerId -> HTMLVideoElement (own + remote)
 // Remote audio lives in its own element, never in the seat tile. A tile can be
 // visibility:hidden (camera off), rebuilt by a re-render, or absent entirely
@@ -83,14 +93,18 @@ export async function initWebrtc(c, sock) {
   // reconnect, the same way the avatar and nameplate font do.
   socket.on('connect', () => {
     if (!joined) return;
+    // Announce FIRST, synchronously. The socket is ordered, so this reaches the
+    // server ahead of any offer (which has to wait on ICE gathering) and the
+    // table learns we are broadcasting again before it sees us connecting.
+    // Announcing after the rebuild left a window where our own mediaOn was
+    // still false server-side while we were already building connections, and
+    // the epoch bump that followed invalidated every one of them.
+    announce();
     // Our tracks are the same ones, but every peer rebuilt from scratch while
     // we were away — start their connections over too.
     myGen++;
     for (const id of [...peers.keys()]) closePeer(id);
-    setTimeout(() => {
-      announce();
-      if (client?.state) syncSeats(client.state);
-    }, 250);
+    if (client?.state) syncSeats(client.state);
   });
 }
 
@@ -274,7 +288,20 @@ export function syncSeats(state) {
       // renegotiate — both ends reach this conclusion from the same state, so
       // the rebuild is symmetric and needs no extra handshake.
       if (peers.has(pid) && peerKeys.get(pid) !== key) closePeer(pid);
-      if (!peers.has(pid) && (retryAfter.get(pid) ?? 0) <= now) {
+      // An offer that never came back: a dropped signal leaves the connection
+      // parked in have-local-offer, which never turns into 'failed', so
+      // nothing else would ever notice. Start it over, with a back-off.
+      const pc = peers.get(pid);
+      const waiting = offeredAt.get(pid);
+      if (pc && waiting && now - waiting > OFFER_TIMEOUT) {
+        if (pc.connectionState !== 'connected' && pc.connectionState !== 'connecting') {
+          retryAfter.set(pid, now + 1500);
+          closePeer(pid);
+        } else {
+          offeredAt.delete(pid); // it got there; stop watching this one
+        }
+      }
+      if (!peers.has(pid) && (retryAfter.get(pid) ?? 0) <= now && peers.size < MAX_PEERS) {
         // Receive-only side offers; when both are broadcasting, low id offers.
         makePeer(pid, joined ? myId < pid : true, key);
       }
@@ -371,6 +398,7 @@ function makePeer(peerId, initiator, key = '') {
     if (client.state) syncSeats(client.state);
   };
   pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') offeredAt.delete(peerId);
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePeer(peerId);
   };
 
@@ -398,6 +426,7 @@ async function negotiate(peerId) {
   // the meantime, shipping its offer would have the peer answer a pc that no
   // longer exists — a pair that looks connected and carries nothing.
   if (peers.get(peerId) !== pc) return;
+  offeredAt.set(peerId, Date.now());
   socket.emit(EVENTS.RTC_SIGNAL, { to: peerId, data: { sdp: pc.localDescription } });
 }
 
@@ -430,7 +459,10 @@ async function handleSignal({ from, data }) {
   let pc = peers.get(from);
   const sdp = data.sdp;
   if (sdp.type === 'offer') {
-    // Whoever offered is the initiator for this pair; we answer.
+    // Whoever offered is the initiator for this pair; we answer — up to a
+    // point. Every answer is another copy of our camera going up, so past the
+    // cap we simply do not, and that watcher falls back to the profile picture.
+    if (!pc && peers.size >= MAX_PEERS) return;
     if (!pc) pc = makePeer(from, false, peerKeyFor(from));
     await pc.setRemoteDescription(sdp);
     if (peers.get(from) !== pc) return; // replaced while we were answering
@@ -469,6 +501,7 @@ function closePeer(peerId) {
   if (pc) { try { pc.close(); } catch { /* already closed */ } peers.delete(peerId); }
   peerKeys.delete(peerId);
   initiatedByMe.delete(peerId);
+  offeredAt.delete(peerId);
   removeVideoEl(peerId);
   removeAudioEl(peerId);
   // setTimeout, not queueMicrotask: rebuilding runs through this function

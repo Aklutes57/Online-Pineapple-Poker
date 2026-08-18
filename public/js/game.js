@@ -280,6 +280,22 @@ function renderAvControls() {
   joinBtn.classList.toggle('hidden', !st.supported || !seated || st.joined);
   voiceBtn?.classList.toggle('hidden', !st.supported || !seated || st.joined);
   live.classList.toggle('hidden', !st.joined);
+
+  // Deafen belongs to LISTENING, not to broadcasting: you hear the table
+  // whether or not your own camera is on, and the choice is remembered per
+  // device. So it shows whenever there is anyone to hear (or while you are
+  // still deafened, which is the state you need it to get out of).
+  const deafen = document.getElementById('av-deafen');
+  if (deafen) {
+    const anyoneBroadcasting = !!client.state?.seats?.some((s) => s && s.mediaOn);
+    deafen.classList.toggle('hidden', !st.supported || (!anyoneBroadcasting && !st.deafened));
+    deafen.textContent = st.deafened ? 'Undeafen' : 'Deafen';
+    deafen.classList.toggle('av-off', st.deafened);
+    deafen.title = st.deafened
+      ? 'Hear everyone again'
+      : 'Deafen — you hear nobody; your own mic is unchanged';
+  }
+
   if (st.joined) {
     const cam = document.getElementById('av-cam');
     const mic = document.getElementById('av-mic');
@@ -294,14 +310,6 @@ function renderAvControls() {
     mic.title = st.micOn
       ? "Mute your mic — they see you, they can't hear you"
       : 'Unmute your mic';
-    const deafen = document.getElementById('av-deafen');
-    if (deafen) {
-      deafen.textContent = st.deafened ? 'Undeafen' : 'Deafen';
-      deafen.classList.toggle('av-off', st.deafened);
-      deafen.title = st.deafened
-        ? 'Hear everyone again'
-        : 'Deafen — you hear nobody; your own mic is unchanged';
-    }
     const leave = document.getElementById('av-leave');
     if (leave) leave.textContent = st.hasVideo ? 'End video' : 'End voice';
   }

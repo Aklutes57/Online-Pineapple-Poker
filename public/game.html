@@ -94,10 +94,14 @@
             <span id="av-live" class="av-live hidden">
               <button id="av-cam" class="btn-ghost btn top-btn" title="Turn your camera off">Camera</button>
               <button id="av-mic" class="btn-ghost btn top-btn" title="Mute your mic — they see you, they can't hear you">Mute mic</button>
-              <button id="av-deafen" class="btn-ghost btn top-btn" title="Deafen — you hear nobody; your own mic is unchanged">Deafen</button>
               <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">Frame</button>
               <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video and voice">End video</button>
             </span>
+            <!-- Deafen sits OUTSIDE av-live: you can hear the table without
+                 broadcasting anything yourself, and the setting is remembered
+                 per device — so hiding its only control the moment you stop
+                 broadcasting would leave you silenced with no way back. -->
+            <button id="av-deafen" class="btn-ghost btn top-btn hidden" title="Deafen — you hear nobody; your own mic is unchanged">Deafen</button>
             <p class="menu-note">Mute one player from the Mute button on their seat — that's just for you.</p>
           </div>
         </details>
