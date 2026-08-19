@@ -454,8 +454,19 @@ function totalChips(players, hand) {
 }
 
 // --- Straddle ---
+// Straddling is opt-IN: the table option only makes it available, and a player
+// who has not asked to be in it plays a normal hand.
 {
   const players = [makePlayer(0, 500, 'btn'), makePlayer(1, 500, 'sb'), makePlayer(2, 500, 'bb')];
+  const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('the table option alone posts no straddle', hand.straddleSeat === null);
+  check('nobody straddling leaves the big blind as the bet', hand.currentBet === 2);
+}
+{
+  const players = [makePlayer(0, 500, 'btn'), makePlayer(1, 500, 'sb'), makePlayer(2, 500, 'bb')];
+  players[0].straddleOptIn = true;
   const deck = ['2h', '7d', '9c', 'Tc', 'Ah', 'Kc', '3s', '4d', 'Jh', '8c', '5s'];
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
@@ -473,12 +484,80 @@ function totalChips(players, hand) {
   check('straddle chips conserved', totalChips(players, hand) === 1500);
 }
 {
+  // Double straddle: UTG puts up 2 big blinds, the next seat doubles it.
+  const players = [0, 1, 2, 3, 4, 5].map((i) => makePlayer(i, 500, `p${i}`));
+  players[3].straddleOptIn = true; // UTG
+  players[4].straddleOptIn = true; // UTG+1
+  const deck = Array.from({ length: 30 }, (_, i) => ['2h','7d','9c','Tc','Ah','Kc','3s','4d','Jh','8c','5s','6d','Qh','2c','3d','4h','5c','6s','7h','8d','9s','Td','Js','Qc','Kd','As','2s','3h','4c','5d'][i]);
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('double: first straddler posts 4', hand.bySeat.get(3).betThisRound === 4);
+  check('double: second straddler posts 8', hand.bySeat.get(4).betThisRound === 8);
+  check('double: both seats are flagged', hand.straddleSeats.join() === '3,4');
+  check('double: the last straddle is the bet', hand.currentBet === 8);
+  check('double: action starts left of the last straddler', hand.toActSeat === 5);
+  check('double: min raise doubles the last straddle', av(hand, 5).minRaiseTo === 16);
+  act(hand, 5, 'call');
+  act(hand, 0, 'call');
+  act(hand, 1, 'call');
+  act(hand, 2, 'call');
+  check('double: the first straddler still owes a decision', hand.toActSeat === 3);
+  act(hand, 3, 'call');
+  check('double: the last straddler gets the option', hand.toActSeat === 4);
+  check('double: the option can check', av(hand, 4).canCheck);
+  act(hand, 4, 'check');
+  check('double: checking the option ends preflop', hand.phase === PHASES.FLOP);
+  check('double: chips conserved', totalChips(players, hand) === 3000);
+}
+{
+  // Triple straddle, with a seat that is out of it in the middle: skipping a
+  // seat does not break the chain, and the doubling counts straddles, not
+  // seats. Also: the blinds are never candidates, however they voted.
+  const players = [0, 1, 2, 3, 4, 5].map((i) => makePlayer(i, 500, `p${i}`));
+  for (const p of players) p.straddleOptIn = true;
+  players[4].straddleOptIn = false; // UTG+1 sits this one out
+  const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('skip: the opted-out seat posts nothing', hand.bySeat.get(4).betThisRound === 0);
+  check('skip: the chain carries past it', hand.straddleSeats.join() === '3,5,0');
+  check('skip: sizes still double, 4/8/16', hand.bySeat.get(3).betThisRound === 4
+    && hand.bySeat.get(5).betThisRound === 8 && hand.bySeat.get(0).betThisRound === 16);
+  check('skip: the small blind never straddles', hand.bySeat.get(1).betThisRound === 1);
+  check('skip: the big blind never straddles', hand.bySeat.get(2).betThisRound === 2);
+  check('skip: the chain stops at the button', hand.straddleSeat === 0);
+  check('skip: the last straddle is the bet', hand.currentBet === 16);
+  check('skip: action starts left of the button straddle', hand.toActSeat === 1);
+  check('skip: min raise doubles the last straddle', av(hand, 1).minRaiseTo === 32);
+  check('skip: chips conserved', totalChips(players, hand) === 3000);
+}
+{
+  // A straddler who cannot cover the full post is all-in for what they have,
+  // and the chain ends there: there is no honest double of a short straddle.
+  const players = [0, 1, 2, 3, 4].map((i) => makePlayer(i, 500, `p${i}`));
+  players[3].stack = 3; // UTG can't cover the 4
+  for (const p of players) p.straddleOptIn = true;
+  const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('short: the straddler is all-in for their stack', hand.bySeat.get(3).betThisRound === 3
+    && hand.bySeat.get(3).allIn === true);
+  check('short: the chain stops at a short straddle', hand.straddleSeats.join() === '3');
+  check('short: the short post is still the bet to match', hand.currentBet === 3);
+  // A short post never resets the raise size, so the next raise is measured
+  // off the big blind: 3 to call, 5 to raise.
+  check('short: the min raise still comes off the big blind', av(hand, 4).minRaiseTo === 5);
+  check('short: chips conserved', totalChips(players, hand) === 2003);
+}
+{
   // Heads-up must not straddle: the button already posts the small blind.
   const players = [makePlayer(0, 500, 'a'), makePlayer(1, 500, 'b')];
+  for (const p of players) p.straddleOptIn = true;
   const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
   check('no straddle heads-up', hand.straddleSeat === null);
+  check('no straddle heads-up leaves no chain', hand.straddleSeats.length === 0);
 }
 
 // --- Bomb pot ---

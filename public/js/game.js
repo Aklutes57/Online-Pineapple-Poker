@@ -442,11 +442,15 @@ document.getElementById('menu-sit')?.addEventListener('click', () => {
   client.send(client.you?.sittingOut ? EVENTS.SIT_IN : EVENTS.SIT_OUT, {});
 });
 
-// Straddling is your own call: opt out and your under-the-gun hands play
-// normally even with the table's straddle switched on.
-document.getElementById('menu-straddle')?.addEventListener('click', () => {
-  client.send(EVENTS.SET_STRADDLE, { on: client.you?.straddleOptIn === false });
-});
+// Straddling is your own call, and an opt-in one: the table option only makes
+// it available. Turn it on and you post a blind raise when the chain reaches
+// your seat — twice the big blind for the first straddler, double again for
+// each one after.
+for (const id of ['menu-straddle', 'straddle-btn']) {
+  document.getElementById(id)?.addEventListener('click', () => {
+    client.send(EVENTS.SET_STRADDLE, { on: client.you?.straddleOptIn !== true });
+  });
+}
 
 // ---- how the table looks on YOUR screen ----
 // Nobody else is affected: this is a device preference, applied before the

@@ -89,6 +89,15 @@ class Bot {
     const hand = this.state?.hand;
     if (!you || !hand) return;
 
+    // Straddling is opt-in, so a soak that never opts in never tests it.
+    // About two thirds of the table says yes, once, on the hand they sit
+    // down: enough for double and triple straddles to come around, with
+    // gaps in the chain where somebody declined.
+    if (!you.spectator && !this.straddleChosen && this.state.settings?.straddle) {
+      this.straddleChosen = true;
+      if (rnd() < 0.65) this.socket.emit(EVENTS.SET_STRADDLE, { on: true });
+    }
+
     if (you.availableActions) {
       const key = `act:${hand.handId}:${hand.phase}:${hand.currentBet}:${hand.toActSeat}`;
       if (this.actedKeys.has(key)) return;

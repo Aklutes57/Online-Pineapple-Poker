@@ -231,6 +231,19 @@ try {
     await check('Close hands back the Fold/Check/Bet row',
       await toAct.locator('[data-act="open-tray"]').isVisible());
 
+    // ---- the bar never moves the felt, whatever it is showing ----
+    // The table is sized to the room the bar leaves, so a bar that grew with
+    // its contents would resize the table mid-decision. It is a fixed strip;
+    // anything bigger rises above it.
+    const feltBox = () => toAct.evaluate(() =>
+      JSON.stringify(document.getElementById('table').getBoundingClientRect()));
+    const shape = await toAct.evaluate(() => {
+      const bar = document.getElementById('action-bar').getBoundingClientRect();
+      return { w: bar.width, h: bar.height };
+    });
+    await check('the betting bar is a wide strip, not a tall block',
+      shape.w > shape.h * 2);
+
     // ---- the shove asks first ----
     // Pressing All in must not move a chip: it swaps the row for a question,
     // and Cancel puts the row back exactly as it was. Nothing here commits,
@@ -244,10 +257,14 @@ try {
         .isVisible().catch(() => false)));
     await check('the confirm button reads All in',
       (await toAct.textContent('[data-act="all-in-confirm"]')).trim() === 'All in');
+    await check('being asked about the shove never resizes the table',
+      (await feltBox()) === feltBefore);
     await toAct.click('[data-act="cancel-all-in"]');
     await toAct.waitForSelector('.ab-allin-ask', { state: 'detached' });
     await check('Cancel hands the betting row straight back',
       await toAct.locator('[data-act="open-tray"]').isVisible());
+    await check('and the table is still exactly where it was',
+      (await feltBox()) === feltBefore);
   }
 
   // ---- play hands by checking/calling until a winner shows ----
@@ -271,6 +288,34 @@ try {
     await anna.waitForTimeout(120);
   }
   await check('a hand played to a finish (winner shown)', winnerSeen);
+
+  // ---- straddling: the host offers it, each player opts in for themselves ----
+  await check('no straddle button before the host offers it',
+    !(await anna.locator('#straddle-btn').isVisible()));
+  await openMenu(anna);
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  await anna.check('#h-straddle');
+  await anna.click('#h-save');
+  await anna.click('#h-done');
+  await anna.waitForSelector('#straddle-btn:not(.hidden)');
+  await check('turning straddling on puts the button in the top bar', true);
+  await check('and it starts OFF — straddling is opted into, never assumed',
+    (await anna.textContent('#straddle-btn')) === 'Straddle: off');
+  await anna.click('#straddle-btn');
+  await anna.waitForFunction(
+    () => document.getElementById('straddle-btn').textContent === 'Straddle: on',
+    { timeout: 5000 }
+  );
+  await check('one tap opts you in', true);
+  await check('the choice is yours alone — Ben is still out',
+    (await ben.textContent('#straddle-btn')) === 'Straddle: off');
+  await anna.click('#straddle-btn');
+  await anna.waitForFunction(
+    () => document.getElementById('straddle-btn').textContent === 'Straddle: off',
+    { timeout: 5000 }
+  );
+  await check('and one more tap opts you back out', true);
 
   // ---- 747 Poker: switch the game mid-session and play a dealer hand ----
   await openMenu(anna);
@@ -351,8 +396,20 @@ try {
   await check('the reaction is attributed', reactionText.includes('Ben'));
 
   // ---- chat round-trip ----
+  // The dock starts folded (the felt is the point), so pulling up the chat is
+  // the first thing a player does before typing.
+  await ben.click('#panel-toggle');
+  await ben.waitForSelector('#chat-input', { state: 'visible' });
   await ben.fill('#chat-input', 'good game everyone');
   await ben.press('#chat-input', 'Enter');
+  // Anna still has hers folded: she must be TOLD there is something to read,
+  // or a folded dock would quietly swallow the table's chat.
+  await anna.waitForFunction(
+    () => !document.getElementById('unread-badge').classList.contains('hidden'),
+    { timeout: 5000 }
+  );
+  await check('a folded dock still badges an unread message', true);
+  await anna.click('#panel-toggle');
   await anna.waitForSelector('.chat-msg:has-text("good game everyone")');
   await check('chat message delivered to other players', true);
 
@@ -430,9 +487,19 @@ try {
   await check('the action buttons sit bottom-right', frame.barRight);
   await check('chat never overlaps the action buttons', !frame.overlap);
 
-  // The dock folds to its tab strip and the felt takes the room back.
-  const tableH = () => anna.evaluate(() =>
-    document.getElementById('table').getBoundingClientRect().height);
+  // The dock folds to its tab strip and the felt takes the room back. It
+  // starts folded, so open it first and watch the table give the room up.
+  const tableBox = () => anna.evaluate(() =>
+    JSON.stringify(document.getElementById('table').getBoundingClientRect()));
+  const tableH = async () => JSON.parse(await tableBox()).height;
+  const tableW = async () => JSON.parse(await tableBox()).width;
+  if ((await anna.textContent('#dock-toggle')) === 'Show') {
+    const foldedH = await tableH();
+    await anna.click('#dock-toggle');
+    await anna.waitForTimeout(400);
+    await check('pulling up the chat costs the table some room',
+      (await tableH()) < foldedH);
+  }
   const openH = await tableH();
   await anna.click('#dock-toggle');
   await anna.waitForTimeout(400);
@@ -440,6 +507,7 @@ try {
     !(await anna.locator('#tab-chat').isVisible())
     && (await anna.textContent('#dock-toggle')) === 'Show');
   await check('folding the chat gives the table more room', (await tableH()) > openH);
+  await check('the felt is a long oval, not a circle', (await tableW()) / (await tableH()) >= 1.8);
   await anna.click('.tab[data-tab="chat"]');
   await anna.waitForTimeout(400);
   await check('picking a tab unfolds the chat again', await anna.locator('#tab-chat').isVisible());

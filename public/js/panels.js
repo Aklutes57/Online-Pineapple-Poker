@@ -70,9 +70,12 @@ export function initPanels(client) {
   document.querySelectorAll('.tab[data-tab]').forEach((tab) => {
     tab.addEventListener('click', () => setDock(false));
   });
+  // The dock starts FOLDED. The table is what people came for, and an open
+  // chat costs it a quarter of the screen; one tap on Chat brings it back,
+  // and whichever way you leave it is what you get next time.
   let dockPref = null;
   try { dockPref = localStorage.getItem('pp:chatDock'); } catch { /* private browsing */ }
-  if (dockPref === 'closed') setDock(true);
+  if (dockPref !== 'open') setDock(true);
   document.getElementById('panel-close').addEventListener('click', () => {
     panel.classList.remove('open');
   });
@@ -400,9 +403,16 @@ export function onChatMessage(msg) {
   chatLog.push(msg);
   renderChat();
   const panel = document.getElementById('side-panel');
+  // "Visible" means you can actually read it: the chat tab is the one showing
+  // AND the panel is open — which on a laptop means the dock is unfolded, not
+  // merely that the screen is big. The dock starts folded, so treating every
+  // desktop as chat-visible would silently swallow the unread badge.
+  const desktop = window.matchMedia('(min-width: 1000px)').matches;
+  const panelShown = desktop
+    ? !panel.classList.contains('dock-closed')
+    : panel.classList.contains('open');
   const chatVisible =
-    !document.getElementById('tab-chat').classList.contains('hidden') &&
-    (panel.classList.contains('open') || window.matchMedia('(min-width: 1000px)').matches);
+    !document.getElementById('tab-chat').classList.contains('hidden') && panelShown;
   if (!chatVisible && msg.from !== clientRef?.you?.nickname) {
     unread++;
     const badge = document.getElementById('unread-badge');

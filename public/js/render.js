@@ -54,11 +54,18 @@ export function renderAll(client) {
       ? 'Deal me in again from the next hand'
       : 'Go away for a bit — the table checks or folds for you until you’re back';
   }
-  // Straddle choice: only meaningful when the table's straddle is on.
-  const straddleBtn = document.getElementById('menu-straddle');
-  if (straddleBtn) {
-    straddleBtn.classList.toggle('hidden', !seated || !state.settings.straddle);
-    straddleBtn.textContent = you?.straddleOptIn === false ? 'Straddle: out' : 'Straddle: in';
+  // Straddle choice: only meaningful when the table's straddle is on, and
+  // opt-in, so it says plainly whether you are in it. Two doors to the same
+  // switch — one in the Seat menu, one always in view on the top bar, because
+  // a choice you have to go looking for is a choice nobody makes.
+  const straddleIn = you?.straddleOptIn === true;
+  for (const id of ['menu-straddle', 'straddle-btn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.classList.toggle('hidden', !seated || !state.settings.straddle);
+    btn.classList.toggle('on', straddleIn);
+    btn.textContent = straddleIn ? 'Straddle: on' : 'Straddle: off';
+    btn.setAttribute('aria-pressed', straddleIn ? 'true' : 'false');
   }
   // The action bar's height can change with its contents, which can change the
   // space left for the table — refit, and re-place if that flipped the shape.
@@ -71,11 +78,11 @@ export function renderAll(client) {
 // overhang on every side is the logical stage; we shrink or gently grow it to
 // fill the space, so it always fits whole and never clips or scrolls.
 //
-// The table comes in two shapes and we pick whichever suits the space: the
-// usual 900×504 landscape oval, or — when the area is taller than it is wide,
-// i.e. a phone held upright — the same table stood on its end (504×900). A
-// portrait phone then gets a genuinely vertical table filling the screen
-// instead of a letterboxed landscape one shrunk to a third of the size.
+// The table lies whichever way the space does: a landscape oval, or — when the
+// area is taller than it is wide, i.e. a phone held upright — the same table
+// stood on its end. A portrait phone then gets a genuinely vertical table
+// filling the screen instead of a letterboxed landscape one shrunk to a third
+// of the size. How LONG the oval is, is decided per screen; see FELT_SHORT.
 // How far seat pods reach past the felt, measured from a full ten-handed
 // table. A pod is centred on its point, so it always spills over the rim —
 // budget too little and the bottom seat gets shaved off by the area's overflow
@@ -89,8 +96,21 @@ const OVERHANG = {
 };
 const CAM_EXTRA_Y = 74;    // half a webcam tile, top and bottom
 const AVATAR_EXTRA_Y = 44; // a profile picture is smaller than a live tile
-const FELT_LONG = 900;
-const FELT_SHORT = 504;
+
+// The felt's short axis is fixed; its LONG axis is chosen per screen so the
+// stage matches the shape of the space it has to fill. A table whose
+// proportions are frozen wastes whatever the screen has spare in one
+// direction — on a laptop that was most of the width — so instead the oval
+// stretches to fit, within limits that keep it a poker table:
+//   never rounder than RATIO_MIN, never longer than RATIO_MAX.
+// Portrait gets a shorter leash: the felt is already narrow on a phone, and
+// stretching it further would crowd the seats down the sides.
+const FELT_SHORT = 500;
+const RATIO_MIN = 1.85;
+const RATIO_MAX = { landscape: 2.75, upright: 2.3 };
+// How far the stage may be scaled UP. It exists so a very tall window makes a
+// big table rather than a cartoon one.
+const MAX_SCALE = 1.6;
 
 let portrait = false;
 
@@ -126,8 +146,6 @@ export function fitTableStage() {
   portrait = area.h > area.w;
   table.classList.toggle('upright', portrait);
 
-  const feltW = portrait ? FELT_SHORT : FELT_LONG;
-  const feltH = portrait ? FELT_LONG : FELT_SHORT;
   const pad = portrait ? OVERHANG.upright : OVERHANG.landscape;
   // Anything stacked above the cards makes every pod taller, so it has to buy
   // vertical room or the top and bottom seats get shaved off.
@@ -136,11 +154,36 @@ export function fitTableStage() {
     : document.querySelector('#seats-layer .seat-avatar:not(.hidden)')
       ? AVATAR_EXTRA_Y
       : 0;
+  const padX = pad.x;
+  const padY = pad.y + camY;
+
+  // Measured along the table's own long axis, whichever way it is lying.
+  const areaLong = portrait ? area.h : area.w;
+  const areaShort = portrait ? area.w : area.h;
+  const padLong = portrait ? padY : padX;
+  const padShort = portrait ? padX : padY;
+
+  // The long axis that would make the stage exactly as slim as its space —
+  // both dimensions run out at once, so nothing is left over. Then clamped
+  // into the range that still looks like a poker table.
+  const want = (FELT_SHORT + padShort * 2) * (areaLong / areaShort) - padLong * 2;
+  const feltLong = Math.round(Math.min(
+    Math.max(want, FELT_SHORT * RATIO_MIN),
+    FELT_SHORT * RATIO_MAX[portrait ? 'upright' : 'landscape']
+  ));
+
+  const feltW = portrait ? FELT_SHORT : feltLong;
+  const feltH = portrait ? feltLong : FELT_SHORT;
   const scale = Math.min(
-    area.w / (feltW + pad.x * 2),
-    area.h / (feltH + (pad.y + camY) * 2),
-    1.25
+    area.w / (feltW + padX * 2),
+    area.h / (feltH + padY * 2),
+    MAX_SCALE
   );
+  // Set as one piece: the box, then the scale. Everything inside is placed in
+  // percentages of this box, so a longer box spreads the seats along it
+  // without moving anything off the rim.
+  table.style.width = `${feltW}px`;
+  table.style.height = `${feltH}px`;
   table.style.transform = `scale(${scale.toFixed(4)})`;
 }
 
@@ -465,6 +508,8 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   if (!seat.connected) statusBits.push('offline');
   else if (seat.sittingOut) statusBits.push('away');
   if (seat.allIn) statusBits.push('all-in');
+  // A straddle chain is worth naming: "straddle", then "double", "triple"…
+  if (seat.isStraddle) statusBits.push(straddleLabel(seat.straddleLevel));
   if (waitingDiscard) statusBits.push('discarding…');
   // 747 decision phase: THAT a player locked in is public, never which way.
   if (decisionPhase && seat.inHand && !seat.folded) {
@@ -553,6 +598,13 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   if (isMe && you.hasDiscarded && discardPhase) {
     plate.insertAdjacentHTML('beforeend', '<div class="np-bubble">discarded</div>');
   }
+}
+
+// What to call a seat's straddle. The first is just "straddle"; after that the
+// table counts them, because a triple straddle is the story of the hand.
+const STRADDLE_WORDS = ['', 'straddle', 'double straddle', 'triple straddle', 'quad straddle'];
+function straddleLabel(level) {
+  return STRADDLE_WORDS[level] || `${level}x straddle`;
 }
 
 // ---- bets ----

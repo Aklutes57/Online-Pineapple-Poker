@@ -68,6 +68,7 @@ export class Hand747 {
     this.sbSeat = null; // no blinds in a dealer game
     this.bbSeat = null;
     this.straddleSeat = null;
+    this.straddleSeats = [];
     this.bombPot = false;
     this.timeline = [];
     this.startedAt = Date.now();

@@ -324,7 +324,12 @@ export function renderActionBar(client) {
     return;
   }
   el.dataset.sig = html;
-  el.innerHTML = html;
+  // The bar itself is a fixed-height strip the page grid reserves; everything
+  // it says lives in .ab-inner, which hangs off the strip's bottom edge and
+  // grows upward over the felt when it needs to. That is what keeps the table
+  // exactly the same size whether you are folding, sizing a raise, or being
+  // asked whether you really meant to shove.
+  el.innerHTML = `<div class="ab-inner">${html}</div>`;
   bindBarEvents(client, av);
 }
 
@@ -351,7 +356,7 @@ function trayHtml(av, client) {
   if (av.minRaiseTo >= av.maxRaiseTo) {
     return `
       <div class="bet-tray">
-        <div class="tray-controls">
+        <div class="tray-row">
           <span class="ab-note">Your stack is the only size left.</span>
           <button class="btn btn-green" data-act="confirm-raise">
             ${verb} <span id="tray-confirm-amt">${av.maxRaiseTo}</span>
@@ -360,22 +365,27 @@ function trayHtml(av, client) {
         </div>
       </div>`;
   }
+  // One row, left to right: the sizes you might pick, then the slider and the
+  // exact number, then the button that does it. The tray runs ALONG the bar
+  // rather than stacking above it, so it covers as little felt as it can.
   return `
     <div class="bet-tray">
-      <div class="tray-presets">
-        ${presets
-          .map((p) => `<button class="preset${p.top ? ' preset-allin' : ''}" data-preset="${p.amount}">${p.label}</button>`)
-          .join('')}
-        <button class="tray-close" data-act="open-tray">Close</button>
-      </div>
-      <div class="tray-controls">
-        <button class="step" data-step="-1">−</button>
-        <input type="range" id="tray-slider" min="${av.minRaiseTo}" max="${av.maxRaiseTo}" value="${trayAmount}">
-        <button class="step" data-step="1">+</button>
-        <input type="number" id="tray-amount" min="${av.minRaiseTo}" max="${av.maxRaiseTo}" value="${trayAmount}">
-        <button class="btn btn-green" data-act="confirm-raise">
-          ${client.state.hand.currentBet > 0 ? 'Raise to' : 'Bet'} <span id="tray-confirm-amt">${trayAmount}</span>
-        </button>
+      <div class="tray-row">
+        <div class="tray-presets">
+          ${presets
+            .map((p) => `<button class="preset${p.top ? ' preset-allin' : ''}" data-preset="${p.amount}">${p.label}</button>`)
+            .join('')}
+          <button class="tray-close" data-act="open-tray">Close</button>
+        </div>
+        <div class="tray-controls">
+          <button class="step" data-step="-1">−</button>
+          <input type="range" id="tray-slider" min="${av.minRaiseTo}" max="${av.maxRaiseTo}" value="${trayAmount}">
+          <button class="step" data-step="1">+</button>
+          <input type="number" id="tray-amount" min="${av.minRaiseTo}" max="${av.maxRaiseTo}" value="${trayAmount}">
+          <button class="btn btn-green" data-act="confirm-raise">
+            ${client.state.hand.currentBet > 0 ? 'Raise to' : 'Bet'} <span id="tray-confirm-amt">${trayAmount}</span>
+          </button>
+        </div>
       </div>
     </div>`;
 }

@@ -86,7 +86,10 @@ export function buildViews(game) {
       isDealer: !!hand && hand.buttonSeat === i,
       isSB: !!hand && hand.sbSeat === i,
       isBB: !!hand && hand.bbSeat === i,
-      isStraddle: !!hand && hand.straddleSeat === i,
+      // Every straddler is flagged, not just the last: a double or triple
+      // straddle is a chain, and the table should see who is in it.
+      isStraddle: !!hand && !!hand.straddleSeats?.includes(i),
+      straddleLevel: hand?.straddleSeats?.indexOf(i) >= 0 ? hand.straddleSeats.indexOf(i) + 1 : 0,
       // 747: only THAT a choice is locked is public — never which one.
       decided: inHand && hand.phase === PHASES.DECISION_747 ? p.decision747 !== null : null,
       // Public on every real site, and it makes the countdown honest.
@@ -228,7 +231,8 @@ export function buildViews(game) {
       realName: p.realName || null,
       nameFont: p.nameFont || DEFAULT_NAME_FONT,
       spectator: p.status !== 'seated',
-      straddleOptIn: p.straddleOptIn !== false,
+      // Straddling is opt-IN: you are out until you ask to be in.
+      straddleOptIn: p.straddleOptIn === true,
       status: p.status,
       seatIndex: p.seatIndex,
       stack: p.stack,

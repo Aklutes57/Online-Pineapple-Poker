@@ -379,9 +379,10 @@ export class Game {
     return { ok: true };
   }
 
-  // Straddling is each player's own choice. The table option only makes the
-  // straddle AVAILABLE; whether your UTG posts it is up to you, and the
-  // default is in (matching how the option always worked).
+  // Straddling is each player's own choice, and an opt-IN one: the table
+  // option only makes the straddle available, and you are out of it until you
+  // say otherwise. It takes effect from the next hand — the chips for this
+  // one are already posted.
   setStraddle(player, on) {
     if (player.status !== 'seated') return { ok: false, error: 'not seated' };
     player.straddleOptIn = on;

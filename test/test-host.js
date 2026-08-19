@@ -274,16 +274,25 @@ function check(name, cond) {
   // Button starts somewhere; find the UTG (after the big blind) of the first
   // hand and opt them out BEFORE the deal.
   game.startHand();
-  const firstStraddler = game.currentHand.straddleSeat;
-  check('with the option on, UTG straddles by default', firstStraddler !== null);
+  check('the table option alone straddles nobody', game.currentHand.straddleSeat === null);
   game.currentHand.finished = true;
 
-  // Opt everyone out: no hand should post a straddle now.
+  // Opt everyone in: now the seat under the gun posts one.
   for (const p of [host, uma, vic]) {
-    check('a seated player can set their straddle choice', game.setStraddle(p, false).ok === true);
+    check('a seated player can set their straddle choice', game.setStraddle(p, true).ok === true);
   }
   game.startHand();
-  check('an opted-out UTG plays a normal hand', game.currentHand.straddleSeat === null);
+  check('an opted-in UTG straddles', game.currentHand.straddleSeat !== null);
+  check('three-handed leaves room for exactly one straddle',
+    game.currentHand.straddleSeats.length === 1);
+  check('the straddle is twice the big blind',
+    game.currentHand.bySeat.get(game.currentHand.straddleSeat).betThisRound === 4);
+  game.currentHand.finished = true;
+
+  // And back out again: the choice is live from the next hand either way.
+  for (const p of [host, uma, vic]) game.setStraddle(p, false);
+  game.startHand();
+  check('opting back out plays a normal hand', game.currentHand.straddleSeat === null);
   game.currentHand.finished = true;
 
   // Re-buy: floor enforced, no ceiling.

@@ -113,6 +113,16 @@ async function verifyInBrowser(f) {
 }
 
 // Rebuilds the whole state from event 0 to `index`.
+// What a forced bet is called in the log. Straddles are a chain — the second
+// one is twice the first, the third twice that — so they are numbered.
+const STRADDLE_NAMES = ['straddle', 'straddle', 'double straddle', 'triple straddle', 'quad straddle'];
+function postName(event) {
+  if (event.kind === 'ante') return 'ante';
+  if (event.kind === 'sb') return 'small blind';
+  if (event.kind === 'straddle') return STRADDLE_NAMES[event.level || 1] || `${event.level}x straddle`;
+  return 'big blind';
+}
+
 function stateAt(index) {
   const seats = new Map();
   for (const p of hand.players) {
@@ -139,9 +149,7 @@ function stateAt(index) {
           seat.bet = event.amount;
         }
         pot += event.amount;
-        lines.push(`${seat?.nickname ?? '?'} posts the ${
-          event.kind === 'ante' ? 'ante' : event.kind === 'sb' ? 'small blind' : 'big blind'
-        } (${event.amount})`);
+        lines.push(`${seat?.nickname ?? '?'} posts the ${postName(event)} (${event.amount})`);
         break;
       case 'board':
         board = event.board;

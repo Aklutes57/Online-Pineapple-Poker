@@ -22,11 +22,13 @@
 
 /* The replay page scrolls vertically, so its table sizes by width with an
    aspect ratio rather than the live table's scale-to-fit. This restores the
-   responsive sizing after the live #table became a fixed, JS-scaled stage. */
+   responsive sizing after the live #table became a fixed, JS-scaled stage.
+   The ratio tracks the live table's default shape, so a replayed hand looks
+   like the table it was played on. */
 .replay-page #table {
-  width: min(100%, 760px);
+  width: min(100%, 940px);
   height: auto;
-  aspect-ratio: 900 / 504;
+  aspect-ratio: 1150 / 500;
   flex: 0 1 auto;
   transform: none;
 }

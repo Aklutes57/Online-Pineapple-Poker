@@ -19,6 +19,12 @@ const NEXT_STREET = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'show
 const BOARD_CARDS = { flop: 3, turn: 1, river: 1 };
 const VERBS = { fold: 'folds', check: 'checks', call: 'calls', bet: 'bets', raise: 'raises' };
 
+// 1st, 2nd, 3rd… for the straddle chain in the log.
+const ORDINALS = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
+function ordinal(n) {
+  return ORDINALS[n] || `${n}th`;
+}
+
 export const PRE_ACTIONS = ['fold', 'checkFold', 'check', 'callAny'];
 
 export class Hand {
@@ -38,7 +44,11 @@ export class Hand {
     this.sevenDeuceBounty = options.sevenDeuceBounty || 0;
     this.bombPot = !!options.bombPot;
     this.ante = options.ante || 0;
+    // The last straddler (action starts to their left) and the whole chain,
+    // in posting order, so the table can show who is in for what.
     this.straddleSeat = null;
+    this.straddleSeats = [];
+    this.straddleAmount = 0;
     this.board2 = null;
     this.runItTwice = false;
     // Run it twice deals the boards one after the other, never side by side.
@@ -156,28 +166,62 @@ export class Hand {
       `${bb.nickname} posts big blind ${this.bigBlind}`
     );
 
-    // Straddle: UTG posts double the big blind before the deal, and action
-    // starts to their left. Skipped heads-up, where the button already posts
-    // the small blind and is the only candidate seat. The table option makes
-    // the straddle available; each player opts in or out for themselves
-    // (default in), so an opted-out UTG just plays a normal hand.
-    if (this.straddleEnabled && this.players.length >= 3
-        && this.bySeat.get(this.seatAfter(this.bbSeat))?.straddleOptIn !== false) {
-      const seat = this.seatAfter(this.bbSeat);
-      const straddler = this.bySeat.get(seat);
-      const want = this.bigBlind * 2;
-      const paid = betting.pay(straddler, want);
-      this.straddleSeat = seat;
-      this.currentBet = Math.max(this.currentBet, straddler.betThisRound);
-      // Only a full straddle resets the raise size; a short all-in straddle
-      // follows the same rule as any other undersized all-in.
-      if (paid >= want) this.lastFullRaiseSize = want;
-      this.pushEvent({ type: 'post', seat, kind: 'straddle', amount: paid });
-      this.ctx.log(`${straddler.nickname} straddles ${paid}${straddler.allIn ? ' (all-in)' : ''}`);
-    }
+    this.postStraddles();
 
     this.dealHoleCards();
     this.enterStreet('preflop', true);
+  }
+
+  // Straddles: a chain of blind raises posted before the deal, each one twice
+  // the last. The first straddler puts up two big blinds, the second four, the
+  // third eight, and so on for as many players as want in.
+  //
+  // Who is asked: the seats from under the gun round to the button, in that
+  // order. The blinds have already posted and are never candidates, and
+  // heads-up has no seat that isn't a blind — hence the three-player floor.
+  // Straddling is opt-in: the table option only makes it AVAILABLE, and a
+  // player who hasn't asked for it is skipped rather than committed. Skipping
+  // does not end the chain — one player who forgot the button shouldn't stop
+  // the rest of the table straddling — so the doubling counts straddles, not
+  // seats.
+  //
+  // Action then starts left of the LAST straddler, and every straddler still
+  // owes a decision (hasActed is false), so the last one gets the option in
+  // the ordinary way.
+  postStraddles() {
+    this.straddleSeats = [];
+    if (!this.straddleEnabled || this.players.length < 3) return;
+    let want = this.bigBlind * 2;
+    let seat = this.seatAfter(this.bbSeat);
+    // UTG through the button: every seat except the two blinds.
+    for (let i = 0; i < this.players.length - 2; i++) {
+      const straddler = this.bySeat.get(seat);
+      if (straddler?.straddleOptIn === true) {
+        const paid = betting.pay(straddler, want);
+        this.straddleSeats.push(seat);
+        this.straddleSeat = seat;
+        this.straddleAmount = Math.max(this.straddleAmount, straddler.betThisRound);
+        this.currentBet = Math.max(this.currentBet, straddler.betThisRound);
+        // Only a full straddle resets the raise size; a short all-in straddle
+        // follows the same rule as any other undersized all-in. A straddle
+        // raises TO its own size, so the next raise has to double it — that is
+        // what makes a 4 straddle a 8 minimum, exactly as a big blind does.
+        if (paid >= want) this.lastFullRaiseSize = want;
+        this.pushEvent({
+          type: 'post', seat, kind: 'straddle', amount: paid, level: this.straddleSeats.length,
+        });
+        this.ctx.log(
+          `${straddler.nickname} straddles ${paid}` +
+          `${this.straddleSeats.length > 1 ? ` (${ordinal(this.straddleSeats.length)} straddle)` : ''}` +
+          `${straddler.allIn ? ' (all-in)' : ''}`
+        );
+        // A straddle nobody could cover in full is the end of the chain:
+        // there is no honest "double the last straddle" after a short post.
+        if (paid < want) break;
+        want *= 2;
+      }
+      seat = this.seatAfter(seat);
+    }
   }
 
   dealHoleCards() {
