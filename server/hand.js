@@ -10,7 +10,7 @@
 import { VARIANTS, PHASES, TIMINGS } from '../shared/constants.js';
 import * as betting from './betting.js';
 import { buildPots, payoutPots, splitPotsForBoards } from './pots.js';
-import { best7, bestAny, bestOmaha, describe } from './evaluator.js';
+import { best7, bestAny, bestOmaha, describe, describePartial } from './evaluator.js';
 import { shuffledDeck } from './deck.js';
 import { equity } from './equity.js';
 import { detectCooler } from './cooler.js';
@@ -1063,7 +1063,15 @@ export class Hand {
       return { ok: false, error: 'your cards are already face up' };
     }
     player.showedCards = true;
-    this.ctx.log(`${player.nickname} shows ${player.holeCards.join(' ')}`);
+    // Turning the cards over should say what they WERE. Without this the table
+    // sees five cards and has to read the hand themselves, which is the one
+    // moment nobody wants homework — you showed to make a point.
+    const desc = this.describeShown(player);
+    if (player.handResult) player.handResult.desc = player.handResult.desc || desc;
+    else player.handResult = { desc, won: 0 };
+    this.ctx.log(
+      `${player.nickname} shows ${player.holeCards.join(' ')}${desc ? ` — ${desc}` : ''}`
+    );
     // A fold-winner who shows a 6-2 earns the callout after the fact.
     if (this.results?.byFold && this.results.winners?.[0]?.seat === player.seatIndex) {
       this.announceSixTwo(player);
@@ -1071,6 +1079,25 @@ export class Hand {
     this.ctx.handShown?.();
     this.ctx.changed();
     return { ok: true };
+  }
+
+  // What a voluntarily shown hand actually is. The board may be short (a hand
+  // that ended preflop has none at all), so a partial description is the honest
+  // answer rather than no answer.
+  describeShown(player) {
+    try {
+      if (this.variant.engine === '747') return null;
+      const board = this.board || [];
+      if (this.variant.omaha) {
+        const { score } = bestOmaha(player.holeCards, board);
+        return score >= 0 ? describe(score) : describePartial(player.holeCards);
+      }
+      const cards = [...player.holeCards, ...board];
+      if (cards.length < 5) return describePartial(cards);
+      return describe(bestAny(cards).score);
+    } catch {
+      return null; // a readout must never cost somebody their reveal
+    }
   }
 
   clearCommitments() {

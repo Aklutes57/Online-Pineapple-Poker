@@ -11,6 +11,7 @@
 
 import { run, get, all, now } from './db.js';
 import { settleUp } from '../shared/settle.js';
+import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '../shared/xlsx.js';
 
 export function ensureTableSession(game) {
   if (game.tableSessionId) return game.tableSessionId;
@@ -140,6 +141,49 @@ export function ledgerCsvForGame(gameId) {
   ];
   const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
   return { filename: `pineapple-ledger-${iso}.csv`, body };
+}
+
+// The same saved ledger as a coloured spreadsheet: winners green, losers red.
+// Built from the persisted rows, so it outlives the table exactly as the CSV
+// does. Returns { filename, body: Uint8Array } or null.
+export function ledgerXlsxForGame(gameId) {
+  const session = get(
+    `SELECT id, variant, small_blind, big_blind, started_at
+     FROM table_sessions WHERE game_id = ?`,
+    gameId
+  );
+  if (!session) return null;
+  const rows = all(
+    `SELECT player_id, nickname, real_name, buy_ins, cash_outs, final_stack, net, hands_played
+     FROM session_results WHERE table_session_id = ? ORDER BY net DESC`,
+    session.id
+  );
+  if (!rows.length) return null;
+
+  const iso = new Date(session.started_at).toISOString().slice(0, 10);
+  const shaped = rows.map((r) => ({
+    playerId: r.player_id,
+    nickname: r.nickname,
+    realName: r.real_name,
+    buyIns: r.buy_ins,
+    cashOuts: r.cash_outs,
+    stack: r.final_stack,
+    net: r.net,
+    handsPlayed: r.hands_played,
+  }));
+  const body = buildXlsx(
+    ledgerSheet(shaped, {
+      meta: [
+        ['Game', gameId],
+        ['Date', iso],
+        ['Variant', session.variant],
+        ['Blinds', `${session.small_blind}/${session.big_blind}`],
+      ],
+      settle: settleUp(shaped),
+    }),
+    { widths: LEDGER_WIDTHS }
+  );
+  return { filename: `reg-poker-ledger-${iso}.xlsx`, body };
 }
 
 // Rolls one finished hand's per-player flags into each account's aggregates.

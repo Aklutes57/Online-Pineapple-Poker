@@ -10,6 +10,12 @@ let clientRef = null;
 let trayOpen = false;
 let trayAmount = 0;
 let lastTurnKey = '';
+// True once you have tapped Fold on a hand you could check for free, and the
+// bar is waiting for you to confirm.
+let foldArmed = false;
+// Set when the tray is summoned, so the render that follows knows to put the
+// caret in the amount box. Cleared as soon as it has been honoured.
+let trayJustOpened = false;
 
 export function initActionBar(client) {
   clientRef = client;
@@ -31,6 +37,57 @@ export function initActionBar(client) {
     if (confirm('Stand up and cash out your stack to the ledger?')) {
       client.send(EVENTS.STAND_UP, {});
     }
+  });
+
+  installShortcuts(client);
+}
+
+// ---- keyboard ----
+
+// One letter per action, the way every desk-bound player already thinks:
+//   f fold · c call · k check · b bet · r raise
+// Nothing fires unless the server says the action is legal for you right now,
+// so a stray keystroke can never invent a move — and an open fold still has to
+// be confirmed, by pressing f again.
+const SHORTCUTS = {
+  f: 'fold',
+  c: 'call',
+  k: 'check',
+  b: 'raise',
+  r: 'raise',
+};
+
+function typingSomewhere() {
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
+
+function installShortcuts(client) {
+  document.addEventListener('keydown', (e) => {
+    // Never steal a key from the chat box, the bet amount, or a modal's form.
+    if (typingSomewhere()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const want = SHORTCUTS[e.key.toLowerCase()];
+    if (!want) return;
+    const av = client.you?.availableActions;
+    if (!av) return; // not your turn — the bar is showing something else
+
+    if (want === 'fold') {
+      // Same two-step as the button: an open fold arms, a second f confirms.
+      handleAct(client, av.canCheck ? (foldArmed ? 'fold-confirm' : 'arm-fold') : 'fold', av);
+    } else if (want === 'call' && av.callAmount > 0) {
+      handleAct(client, 'call', av);
+    } else if (want === 'check' && av.canCheck) {
+      handleAct(client, 'check', av);
+    } else if (want === 'raise' && av.canRaise) {
+      if (!trayOpen) handleAct(client, 'open-tray', av);
+      return; // leave the tray open and focused; Enter commits
+    } else {
+      return; // that action is not available — do nothing at all
+    }
+    e.preventDefault();
   });
 }
 
@@ -102,6 +159,7 @@ export function renderActionBar(client) {
     lastTurnKey = turnKey;
     // The tray never opens itself: Bet/Raise summons it, Close puts it away.
     trayOpen = false;
+    foldArmed = false;
     trayAmount = av ? defaultRaiseAmount(av) : 0;
   }
 
@@ -142,9 +200,18 @@ export function renderActionBar(client) {
           ? `All in ${av.callAmount}`
           : `Call ${av.callAmount}`
         : 'Check';
+    // Folding when checking is free gives up a hand for nothing — always a
+    // misclick, never a play. It takes a second tap, and only in that case:
+    // folding to a bet is a real decision and stays one tap.
+    const openFold = av.canCheck;
+    const foldAct = openFold ? (foldArmed ? 'fold-confirm' : 'arm-fold') : 'fold';
+    const foldLabel = openFold && foldArmed ? 'Really fold?' : 'Fold';
     html = `
       <div class="ab-actions">
-        <button class="btn btn-red ab-btn" data-act="fold">Fold</button>
+        <button class="btn btn-red ab-btn${openFold && foldArmed ? ' ab-confirm' : ''}"
+                data-act="${foldAct}"
+                title="${openFold ? 'Nobody has bet — you can check for free' : 'Give up the hand'}"
+                >${foldLabel}</button>
         <button class="btn ab-btn ab-check" data-act="${av.callAmount > 0 ? 'call' : 'check'}">${callLabel}</button>
         ${av.canRaise
           ? `<button class="btn btn-green ab-btn" data-act="open-tray">${state.hand.currentBet > 0 ? 'Raise' : 'Bet'}</button>`
@@ -361,6 +428,21 @@ function bindBarEvents(client, av) {
         syncTrayInputs(true);
       }
     });
+    // Enter is the bet. Opening the tray and reaching for the mouse to press a
+    // button you are already looking at is the slow way round.
+    number.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      handleAct(clientRef, 'confirm-raise', av);
+    });
+  }
+  // Opening the tray puts the caret in the amount, with the suggested size
+  // selected so the first digit you type replaces it rather than appending.
+  if (trayJustOpened) {
+    trayJustOpened = false;
+    const target = number || el.querySelector('[data-act="confirm-raise"]');
+    target?.focus();
+    if (number) number.select?.();
   }
 }
 
@@ -390,6 +472,17 @@ function handleAct(client, act, av, arg = null) {
       client.send(EVENTS.LEAVE_WAITLIST, {});
       break;
     case 'fold':
+      foldArmed = false;
+      client.send(EVENTS.ACTION, { handId: hand.handId, action: 'fold' });
+      break;
+    // First tap on a free check: arm the confirm rather than fold.
+    case 'arm-fold':
+      foldArmed = true;
+      bar().dataset.sig = '';
+      renderActionBar(client);
+      break;
+    case 'fold-confirm':
+      foldArmed = false;
       client.send(EVENTS.ACTION, { handId: hand.handId, action: 'fold' });
       break;
     case 'check':
@@ -400,6 +493,7 @@ function handleAct(client, act, av, arg = null) {
       break;
     case 'open-tray':
       trayOpen = !trayOpen;
+      trayJustOpened = trayOpen;
       bar().dataset.sig = '';
       renderActionBar(client);
       break;

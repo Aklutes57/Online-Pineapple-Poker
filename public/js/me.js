@@ -166,7 +166,7 @@ function renderSummary({ totals, sessions, stats }) {
               <td>${s.buyIns}</td>
               <td>${s.cashOuts + s.finalStack}</td>
               <td class="${s.net >= 0 ? 'pos' : 'neg'}">${s.net >= 0 ? '+' : ''}${s.net}</td>
-              <td><a class="csv-link" href="/api/games/${encodeURIComponent(s.gameId)}/ledger.csv" target="_blank" rel="noopener" title="Download this game's ledger">⬇ CSV</a></td>
+              <td><a class="csv-link" href="/api/games/${encodeURIComponent(s.gameId)}/ledger.xlsx" target="_blank" rel="noopener" title="Download this game's ledger — winners green, losers red">⬇ Ledger</a></td>
             </tr>`
           )
           .join('')}</tbody>

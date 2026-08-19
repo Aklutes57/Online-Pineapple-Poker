@@ -140,6 +140,11 @@ export const DEFAULT_SETTINGS = {
   rabbitHunt: false, // show what would have come after a hand ends early
   runItTwice: false, // deal two boards when everyone is all-in
   bombPotEvery: 0, // every N hands: everyone antes, straight to the flop
+  // …or leave it to chance. A fixed cadence is predictable and people start
+  // waiting for it; a frequency means the table never knows which hand it is.
+  // 'off' | 'frequent' | 'semi' | 'rare' — see BOMB_POT_ODDS.
+  bombPotFrequency: 'off',
+  bombPotAnte: 0, // chips each player antes; 0 means "use the big blind"
   sevenDeuceBounty: 0, // chips each opponent pays for a win with 7-2
   // 747 only. ante747 = 0 means "use the big blind", which is what 747 tables
   // did before the ante became host-settable.
@@ -195,6 +200,23 @@ export const SETTINGS_LIMITS = {
   chatLength: 300,
 };
 
+// How often a random bomb pot comes around, as a per-hand chance. Roughly one
+// in six, one in twelve, one in twenty-five — often enough to change how a
+// session feels, rare enough to still be a surprise.
+export const BOMB_POT_ODDS = {
+  off: 0,
+  frequent: 1 / 6,
+  semi: 1 / 12,
+  rare: 1 / 25,
+};
+
+export const BOMB_POT_LABELS = {
+  off: 'Off',
+  frequent: 'Random — often',
+  semi: 'Random — now and then',
+  rare: 'Random — rare',
+};
+
 export const TIMINGS = {
   DISCARD_TIME: 15000, // ms for the pineapple discard decision
   RIT_VOTE_TIME: 12000, // ms to answer 'run it twice?' — no answer means no
@@ -202,7 +224,10 @@ export const TIMINGS = {
   NUDGE_GRACE: 15000, // ms a nudged player gets before the host's prod lands
   COUNTDOWN_747: 3200, // the 3-2-1 before stay/fold choices are revealed
   NEXT_HAND_DELAY: 3000, // ms between hands
-  RUNOUT_STREET_DELAY: 1500, // ms between streets on an all-in run-out
+  // ms between streets on an all-in run-out. Long on purpose: when the money
+  // is already in, the run-out IS the hand, and a flop that lands four
+  // seconds before the turn is the part people are actually watching.
+  RUNOUT_STREET_DELAY: 4000,
   AWAY_GRACE: 1000, // ms before auto-acting for a sitting-out player
   DISCONNECT_GRACE: 10000, // ms an offline player gets before their hand is folded for them
   HOST_TRANSFER_AFTER: 120000, // ms of host disconnect before host passes

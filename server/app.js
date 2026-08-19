@@ -14,7 +14,7 @@ import {
   createAccount, login, logout, accountForRequest, tokenFromRequest,
   updateDisplayName, updatePrefs, setPayments, setAvatar, purgeExpiredSessions,
 } from './accounts.js';
-import { accountSummary, ledgerCsvForGame } from './stats.js';
+import { accountSummary, ledgerCsvForGame, ledgerXlsxForGame } from './stats.js';
 import {
   storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
   saveSoundClip, listSoundClips, deleteSoundClip, defaultTheme, LIMITS as UPLOAD_LIMITS,
@@ -605,6 +605,21 @@ export function buildServer() {
       'Content-Disposition': `attachment; filename="${csv.filename}"`,
     });
     res.send(csv.body);
+  });
+
+  // The same ledger as a colour-coded spreadsheet. A .csv cannot carry a fill,
+  // so "highlight the winners green" needs a real workbook.
+  app.get('/api/games/:id/ledger.xlsx', (req, res) => {
+    const book = ledgerXlsxForGame(req.params.id);
+    if (!book) {
+      res.status(404).json({ error: 'no ledger for that game yet' });
+      return;
+    }
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${book.filename}"`,
+    });
+    res.send(Buffer.from(book.body));
   });
 
   app.post('/api/games', createGameLimiter, (req, res) => {

@@ -4,7 +4,7 @@
 
 import {
   GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS,
-  MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT, blindsForLevel,
+  MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT, blindsForLevel, BOMB_POT_ODDS,
 } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
@@ -18,6 +18,13 @@ import {
 } from './fairness.js';
 import { AVATAR_URL_RE } from './accounts.js';
 import { randomUUID, randomBytes } from 'node:crypto';
+
+// A uniform [0,1) from the system CSPRNG. Used for things that are random but
+// are NOT part of the deal — which hand is a bomb pot, say — so nothing here
+// touches the shuffle's committed seed.
+function randomFloat() {
+  return randomBytes(4).readUInt32BE(0) / 2 ** 32;
+}
 
 function shortId() {
   return randomBytes(6).toString('base64url');
@@ -684,6 +691,7 @@ export class Game {
     if (patch.defaultBuyIn !== undefined) next.defaultBuyIn = patch.defaultBuyIn;
     if (patch.tableTheme !== undefined) next.tableTheme = patch.tableTheme;
     for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery',
+      'bombPotFrequency', 'bombPotAnte',
       'sevenDeuceBounty', 'ante747', 'penaltyCap747',
       'tournament', 'levelMinutes', 'rebuyMinutes']) {
       if (patch[key] !== undefined) next[key] = patch[key];
@@ -927,7 +935,11 @@ export class Game {
 
     // Top the time bank back up each hand so it is a per-decision reserve
     // rather than a per-session one.
-    const bombPot = s.bombPotEvery > 0 && this.handNo % s.bombPotEvery === 0;
+    // A bomb pot arrives either on a fixed cadence (every N hands) or at random
+    // on the frequency the host picked. Random is the point of the setting: a
+    // known cadence gets played around, a chance does not.
+    const bombPot = this.rollBombPot(s);
+    const bombAnte = s.bombPotAnte > 0 ? s.bombPotAnte : s.bigBlind;
     const fair = this.fairnessForHand();
     this.currentHand = new Hand({
       handNo: this.handNo,
@@ -945,7 +957,7 @@ export class Game {
         runItTwice: s.runItTwice,
         sevenDeuceBounty: s.sevenDeuceBounty,
         bombPot,
-        ante: bombPot ? s.bigBlind : 0,
+        ante: bombPot ? bombAnte : 0,
       },
       ctx: this.handCtx(),
     });
@@ -1084,6 +1096,17 @@ export class Game {
       return;
     }
     this.setTimer('nexthand', TIMINGS.NEXT_HAND_DELAY, () => this.startHand());
+  }
+
+  // Is this hand a bomb pot? The fixed cadence wins if it is set, so a table
+  // that already used "every N hands" keeps behaving exactly as it did.
+  rollBombPot(s) {
+    if (s.bombPotEvery > 0) return this.handNo % s.bombPotEvery === 0;
+    const odds = BOMB_POT_ODDS[s.bombPotFrequency] || 0;
+    if (odds <= 0) return false;
+    // Not the shuffle RNG: which hand is a bomb pot is not part of the deal's
+    // integrity proof, and drawing from the shuffle would consume it.
+    return randomFloat() < odds;
   }
 
   // Kick the hand loop after seating/top-up/sit-in changes when the table is idle.
@@ -1308,6 +1331,10 @@ export function sanitizeSettings(s) {
     rabbitHunt: !!s.rabbitHunt,
     runItTwice: !!s.runItTwice,
     bombPotEvery: bounded(s.bombPotEvery, 0, 100, 0),
+    bombPotFrequency: BOMB_POT_ODDS[s.bombPotFrequency] !== undefined
+      ? s.bombPotFrequency
+      : DEFAULT_SETTINGS.bombPotFrequency,
+    bombPotAnte: bounded(s.bombPotAnte, 0, MAX_CHIPS, 0),
     sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, MAX_CHIPS, 0),
     ante747: bounded(s.ante747, 0, MAX_CHIPS, DEFAULT_SETTINGS.ante747),
     penaltyCap747: bounded(s.penaltyCap747, 0, MAX_CHIPS, DEFAULT_SETTINGS.penaltyCap747),

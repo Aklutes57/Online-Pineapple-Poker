@@ -898,5 +898,47 @@ function totalChips(players, hand) {
     (ctx.timer?.name ?? null) === timerBefore && ctx.timer?.name !== 'action');
 }
 
+// --- Showing after a fold-win says what the hand WAS ---
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  // Seat 1 takes the first block: Ah Kh. Seat 0 gets 2c 7d.
+  const deck = ['Ah', 'Kh', '2c', '7d', 'Qh', 'Jh', '3s', '4d', '9c'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 20);
+  act(hand, 1, 'fold');
+  ctx.fireAll();
+  check('fold-win: the hand is over', hand.finished);
+  const winner = hand.bySeat.get(0);
+  check('fold-win: no description until they choose to show', !winner.handResult.desc);
+  const res = hand.handleShowCards(winner);
+  check('fold-win: showing is allowed', res.ok === true);
+  check('fold-win: the shown hand is described',
+    winner.handResult.desc === 'Seven High');
+  check('fold-win: the log carries the description',
+    ctx.logs.some((l) => l.includes('shows 2c 7d') && l.includes('Seven High')));
+  check('fold-win: winnings are not overwritten', winner.handResult.won > 0);
+}
+
+// A hand that reached a board describes against it, not against the two cards.
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  const deck = ['Ah', 'Kh', '2c', '7d', 'Qh', 'Jh', '3s', '4d', '9c'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'call');
+  act(hand, 1, 'check');
+  check('board reached: flop is out', hand.board.length === 3);
+  act(hand, 1, 'bet', 10);
+  act(hand, 0, 'fold');
+  ctx.fireAll();
+  const winner = hand.bySeat.get(1);
+  hand.handleShowCards(winner);
+  // Ah Kh on Qh Jh 3s is ace-high, and the description must come from the
+  // five cards actually available.
+  check('fold-win on a flop: described against the board',
+    winner.handResult.desc === 'Ace High');
+}
+
 console.log(`betting: ${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

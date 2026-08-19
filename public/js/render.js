@@ -355,6 +355,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   const sig = JSON.stringify([
     seat.playerId, seat.nickname, seat.stack, seat.connected, seat.sittingOut,
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
+    isMe && seat.folded ? (myCards || []).join(',') : null,
     seat.isDealer, toAct, waitingDiscard, seat.handResult,
     isMe, you?.canDiscard, you?.hasDiscarded,
     seat.mediaOn, seat.camFrame, seat.avatarUrl, isMuted(seat.playerId), seat.nameFont,
@@ -423,10 +424,18 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
 
   const fan = document.createElement('div');
   fan.className = 'cards-fan' + (isMe ? ' mine' : '');
-  if (seat.inHand && seat.folded && seat.cards) {
-    for (let ci = 0; ci < seat.cards.length; ci++) {
-      fan.appendChild(makeCardEl(seat.cards[ci], cardOpts(ci)));
+  if (seat.inHand && seat.folded && (seat.cards || (isMe && myCards))) {
+    // Your own folded hand stays on the table for you to look at — you want to
+    // know what you let go. It is drawn washed out and struck through so it can
+    // never be mistaken for a live hand, and it is still only ever yours: the
+    // public view sends `cards` for a folded player solely once they show.
+    const cards = seat.cards || myCards;
+    for (let ci = 0; ci < cards.length; ci++) {
+      const card = makeCardEl(cards[ci], cardOpts(ci));
+      if (!seat.cards) card.classList.add('mucked');
+      fan.appendChild(card);
     }
+    if (!seat.cards) fan.classList.add('mucked-fan');
   } else if (seat.inHand && !seat.folded) {
     if (shownCards) {
       for (let ci = 0; ci < shownCards.length; ci++) {

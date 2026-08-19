@@ -807,6 +807,58 @@ body.disconnected::after {
   opacity: 0.45;
 }
 
+/* Your own folded hand, kept on the table so you can see what you let go.
+   It has to be unmistakably out of play: washed out, desaturated, and struck
+   through. Only ever your own — nobody else is sent a folded player's cards
+   unless that player chooses to show them. */
+.card.mucked {
+  opacity: 0.55;
+  filter: grayscale(0.85);
+  position: relative;
+}
+
+.card.mucked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px), rgba(0, 0, 0, 0.55) 50%, transparent calc(50% + 1px)
+  );
+  border-radius: inherit;
+}
+
+/* One label for the hand, rather than a word on every card. */
+.cards-fan.mucked-fan {
+  position: relative;
+}
+
+.cards-fan.mucked-fan::after {
+  content: 'Folded';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Fold, on a hand you could check for free, asks a second time. */
+.ab-confirm {
+  animation: pulse-confirm 900ms ease-in-out infinite;
+}
+
+@keyframes pulse-confirm {
+  50% { filter: brightness(1.35); }
+}
+
 .seat.away .nameplate,
 .seat.disconnected .nameplate {
   opacity: 0.6;

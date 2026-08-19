@@ -4,6 +4,7 @@ import { EVENTS, GAME_STATUS, VARIANTS } from '/shared/constants.js';
 import { settleUp } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
 import { PAYMENT_SERVICES, paymentUrl, displayHandle } from '/shared/payments.js';
+import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '/shared/xlsx.js';
 
 let clientRef = null;
 let chatLog = [];
@@ -144,7 +145,15 @@ export function initPanels(client) {
       bigBlind: parseInt(document.getElementById('h-bb').value, 10),
       actionTime: parseInt(document.getElementById('h-timer').value, 10),
       timeBank: parseInt(document.getElementById('h-timebank').value, 10),
-      bombPotEvery: parseInt(document.getElementById('h-bomb').value, 10),
+      // One control, two settings: "freq:x" is a random frequency, a bare
+      // number is the old fixed cadence. Only one of them is ever in force.
+      ...(() => {
+        const v = document.getElementById('h-bomb').value;
+        return v.startsWith('freq:')
+          ? { bombPotEvery: 0, bombPotFrequency: v.slice(5) }
+          : { bombPotEvery: parseInt(v, 10) || 0, bombPotFrequency: 'off' };
+      })(),
+      bombPotAnte: Math.max(0, parseInt(document.getElementById('h-bomb-ante').value, 10) || 0),
       sevenDeuceBounty: document.getElementById('h-72-on').checked
         ? parseInt(document.getElementById('h-72').value, 10) || 0
         : 0,
@@ -554,13 +563,15 @@ function renderLedger(client) {
           : '<p class="empty-note">Everyone is square.</p>'
       }
       <div class="ledger-actions">
-        <button class="btn btn-ghost ledger-export" id="ledger-csv">Download CSV</button>
-        <a class="btn btn-ghost ledger-export" href="/api/games/${encodeURIComponent(client.gameId)}/ledger.csv" target="_blank" rel="noopener" title="The copy saved on the server — safe even if the game is over">Saved copy</a>
+        <button class="btn btn-ghost ledger-export" id="ledger-xlsx" title="A spreadsheet with the winners in green and the losers in red">Download (colour)</button>
+        <button class="btn btn-ghost ledger-export" id="ledger-csv" title="Plain data, no formatting">CSV</button>
+        <a class="btn btn-ghost ledger-export" href="/api/games/${encodeURIComponent(client.gameId)}/ledger.xlsx" target="_blank" rel="noopener" title="The copy saved on the server — safe even if the game is over">Saved copy</a>
       </div>
       <p class="empty-note">The ledger is auto-saved on the server, so it's here even if nobody screenshots it.</p>
     </div>`;
 
   document.getElementById('ledger-csv').addEventListener('click', () => exportLedgerCsv(client));
+  document.getElementById('ledger-xlsx')?.addEventListener('click', () => exportLedgerXlsx(client));
 }
 
 // Pay buttons for a settle-up line: a prefilled deep link for services that
@@ -588,6 +599,34 @@ function deltaClass(delta) {
 
 function formatDelta(delta) {
   return delta > 0 ? `+${delta}` : '—';
+}
+
+// The same ledger as a spreadsheet, with each row filled by how the night went:
+// green if you are up, red if you are down. A .csv is plain text and cannot
+// carry that, so colour needs a real workbook.
+function exportLedgerXlsx(client) {
+  const rows = [...(client.state.ledger || [])].sort((a, b) => b.net - a.net);
+  if (!rows.length) {
+    showToast('Nobody has bought in yet');
+    return;
+  }
+  const settle = settleUp(rows);
+  const bytes = buildXlsx(
+    ledgerSheet(rows, {
+      meta: [['Game', client.gameId], ['Date', new Date().toISOString().slice(0, 10)]],
+      settle,
+    }),
+    { widths: LEDGER_WIDTHS }
+  );
+  const blob = new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reg-poker-ledger-${client.gameId}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function exportLedgerCsv(client) {
@@ -724,7 +763,12 @@ function openHostModal(client) {
   document.getElementById('h-bb').value = s.bigBlind;
   document.getElementById('h-timer').value = String(s.actionTime);
   document.getElementById('h-timebank').value = String(s.timeBank ?? 0);
-  document.getElementById('h-bomb').value = String(s.bombPotEvery ?? 0);
+  document.getElementById('h-bomb').value = s.bombPotEvery > 0
+    ? String(s.bombPotEvery)
+    : s.bombPotFrequency && s.bombPotFrequency !== 'off'
+      ? `freq:${s.bombPotFrequency}`
+      : '0';
+  document.getElementById('h-bomb-ante').value = s.bombPotAnte > 0 ? String(s.bombPotAnte) : '';
   const bountyOn = (s.sevenDeuceBounty ?? 0) > 0;
   document.getElementById('h-72-on').checked = bountyOn;
   document.getElementById('h-72').disabled = !bountyOn;
