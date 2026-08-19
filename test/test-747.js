@@ -64,11 +64,19 @@ check('partial: four wilds', describePartial747(['4s', '4h', '4d', '4c']) === 'F
 check('CATEGORY_747 sits above straight flush',
   CATEGORY_747.FIVE_OF_A_KIND === 9 && CATEGORY_747.NATURAL_SEVEN === 10);
 
-// Every declared variant must survive settings sanitization — a stale
-// whitelist here once silently turned 747 tables into hold'em.
-for (const key of Object.keys(VARIANTS)) {
-  check(`sanitizeSettings keeps variant ${key}`,
-    sanitizeSettings({ variant: key }).variant === key);
+// Every variant a table can be SET to must survive settings sanitization — a
+// stale whitelist here once silently turned 747 tables into hold'em. Hidden
+// variants are the exception, and deliberately so: the bomb pot's Omaha is
+// dealt by the engine for one hand, never chosen as the table's game, and
+// must be refused if it ever arrives in a settings payload.
+for (const [key, v] of Object.entries(VARIANTS)) {
+  if (v.hidden) {
+    check(`sanitizeSettings refuses the hidden variant ${key}`,
+      sanitizeSettings({ variant: key }).variant !== key);
+  } else {
+    check(`sanitizeSettings keeps variant ${key}`,
+      sanitizeSettings({ variant: key }).variant === key);
+  }
 }
 
 // ---- engine ----

@@ -4,7 +4,7 @@
 
 import {
   GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS,
-  MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT, blindsForLevel, BOMB_POT_ODDS,
+  MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT, blindsForLevel, BOMB_POT_ODDS, BOMB_POT_VARIANT,
 } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
@@ -944,7 +944,9 @@ export class Game {
     const fair = this.fairnessForHand();
     this.currentHand = new Hand({
       handNo: this.handNo,
-      variantKey: s.variant,
+      // A bomb pot is its own game: four cards each, Omaha rules and two
+      // boards, whatever the table is playing the rest of the night.
+      variantKey: bombPot ? BOMB_POT_VARIANT : s.variant,
       smallBlind: s.smallBlind,
       bigBlind: s.bigBlind,
       actionTime: s.actionTime,
@@ -1321,7 +1323,11 @@ export function sanitizeSettings(s) {
   const actionTime = SETTINGS_LIMITS.actionTimes.includes(s.actionTime)
     ? s.actionTime
     : DEFAULT_SETTINGS.actionTime;
-  const variant = VARIANTS[s.variant] ? s.variant : DEFAULT_SETTINGS.variant;
+  // Hidden variants (the bomb pot's Omaha) are dealt by the engine, never
+  // chosen as the table's game.
+  const variant = VARIANTS[s.variant] && !VARIANTS[s.variant].hidden
+    ? s.variant
+    : DEFAULT_SETTINGS.variant;
   const bounded = (v, min, max, dflt) =>
     Number.isInteger(v) ? Math.max(min, Math.min(max, v)) : dflt;
   return {

@@ -237,7 +237,9 @@ export function renderActionBar(client) {
           ? `<button class="btn btn-green ab-btn" data-act="open-tray">${state.hand.currentBet > 0 ? 'Raise' : 'Bet'}</button>`
           : ''}
         ${canShove && !callIsAllIn
-          ? `<button class="btn ab-btn ab-allin" data-act="arm-all-in" data-amount="${allInTo}">All in ${allInTo}</button>`
+          ? `<button class="btn ab-btn ab-allin" data-act="arm-all-in" data-amount="${allInTo}"
+                     title="Shove your whole stack — ${allInTo}"
+                     >All in <span class="ab-amt">${allInTo}</span></button>`
           : ''}
       </div>
       ${trayOpen && av.canRaise ? trayHtml(av, client) : ''}`;

@@ -11,7 +11,8 @@
     "smoke": "node --disable-warning=ExperimentalWarning test/smoke-ui.js",
     "media": "node --disable-warning=ExperimentalWarning test/media.mjs",
     "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs",
-    "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs"
+    "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs",
+    "bar": "node --disable-warning=ExperimentalWarning test/bar.mjs"
   },
   "license": "MIT",
   "dependencies": {

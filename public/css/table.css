@@ -1925,7 +1925,9 @@ td.dim { color: var(--text-dim); }
 }
 
 .tray-controls input[type='number'] {
-  width: 92px;
+  /* Wide enough for a six-figure raise: a tournament stack in a deep pot is
+     exactly when you least want the number you typed to be cut off. */
+  width: 104px;
   text-align: right;
 }
 
@@ -2115,8 +2117,10 @@ td.dim { color: var(--text-dim); }
     --card-h: 42px;
     --board-card-w: 40px;
     --board-card-h: 56px;
-    /* A phone gives up the least felt it can: one row of buttons and no more. */
-    --bar-h: 62px;
+    /* A phone gives up the least felt it can: one row of buttons and no more.
+       Measured against the tallest one-row state, with a couple of pixels to
+       spare — if the content ever outgrows this, it is drawn over the felt. */
+    --bar-h: 58px;
   }
 
   /* A phone has no width to spare for the ± steppers: the slider and the
@@ -2128,7 +2132,7 @@ td.dim { color: var(--text-dim); }
   }
 
   .tray-controls input[type='number'] {
-    width: 72px;
+    width: 86px;
   }
 
   /* On a phone the word labels would wrap to four rows and swallow the felt,
@@ -2235,13 +2239,47 @@ td.dim { color: var(--text-dim); }
     font-size: 11.5px;
   }
 
+  /* Four buttons have to sit on ONE line here. The bar reserves a fixed strip
+     of the screen, and anything that does not fit that strip is drawn over
+     the felt — which on a phone is your own cards and nameplate. So the
+     buttons give up width, and the shove gives up its chip count (the confirm
+     that follows states it in full anyway). */
   .ab-btn {
-    min-width: 86px;
-    padding: 11px 10px;
+    min-width: 62px;
+    padding: 9px 9px;
     font-size: 14px;
   }
 
-  #action-bar {
+  .ab-allin .ab-amt {
+    display: none;
+  }
+
+  .ab-inner {
+    gap: 8px;
+  }
+
+  .ab-actions {
+    gap: 8px;
+  }
+
+  /* The tray's pills shrink with them, so presets and controls keep to two
+     rows instead of three on a small phone. */
+  .preset {
+    min-width: 48px;
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+
+  .tray-close {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .bet-tray {
+    padding: 8px 10px 10px;
+  }
+
+  .tray-row {
     gap: 8px;
   }
 
@@ -2298,6 +2336,23 @@ td.dim { color: var(--text-dim); }
     --bar-h: 54px;
   }
 
+  /* A phone on its side is wider than 720px, so the phone rules above miss
+     it — but it has even less height to spare. Same treatment: one short row
+     of buttons, and no chip count on the shove. */
+  .ab-btn {
+    min-width: 62px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+
+  .ab-allin .ab-amt {
+    display: none;
+  }
+
+  .ab-inner {
+    padding: 5px 10px;
+  }
+
   #app {
     grid-template-rows: 40px 1fr auto;
   }
@@ -2312,7 +2367,7 @@ td.dim { color: var(--text-dim); }
 
   #table-area { padding: 3px; }
 
-  #action-bar {
+  .ab-inner {
     padding: 6px 10px;
   }
 }

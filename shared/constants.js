@@ -110,6 +110,21 @@ export const VARIANTS = {
     potLimit: true,
     omaha: true, // must use exactly 2 hole cards
   },
+  // What a bomb pot is dealt as, whatever game the table is otherwise
+  // playing: four cards each, Omaha rules (exactly two from your hand), and
+  // two boards with the pot split between them. Marked hidden because it is
+  // the shape a bomb pot takes rather than a game you sit down to play — it
+  // never appears in the host's variant list.
+  bombOmaha: {
+    key: 'bombOmaha',
+    label: 'Omaha bomb pot',
+    holeCards: 4,
+    discardBefore: null,
+    potLimit: false,
+    omaha: true,
+    doubleBoard: true,
+    hidden: true,
+  },
   '747': {
     key: '747',
     label: '747 Poker',
@@ -216,6 +231,9 @@ export const BOMB_POT_LABELS = {
   semi: 'Random — now and then',
   rare: 'Random — rare',
 };
+
+// Bomb pots are dealt as this, not as the table's own game.
+export const BOMB_POT_VARIANT = 'bombOmaha';
 
 export const TIMINGS = {
   DISCARD_TIME: 15000, // ms for the pineapple discard decision

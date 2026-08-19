@@ -258,6 +258,35 @@ function check(name, cond) {
   game.currentHand.finished = true;
 }
 
+// ---- a bomb pot is dealt as its own game: Omaha, two boards ----
+{
+  const { game, host } = createGame(
+    { variant: 'holdem', bombPotEvery: 1, bombPotAnte: 7, smallBlind: 1, bigBlind: 2 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, 300, 0);
+  for (const [name, seat] of [['Uma', 1], ['Vic', 2]]) {
+    const p = game.addPlayer(name, null);
+    p.connected = true;
+    game.requestSeat(p, 300, seat);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+  }
+  game.status = 'running';
+  game.startHand();
+  const h = game.currentHand;
+  check('the table is still a hold\'em table', game.settings.variant === 'holdem');
+  check('but the bomb pot is dealt as Omaha', h.variant.key === 'bombOmaha');
+  check('with four cards each', h.players.every((p) => p.holeCards.length === 4));
+  check('and two boards', h.doubleBoard === true && h.board2?.length === 3);
+  check('the host-set ante is what everyone posted',
+    h.players.every((p) => p.totalCommitted === 7));
+  check('a bomb pot posts no blinds', h.sbSeat === null && h.bbSeat === null);
+  check('chips are conserved at the deal',
+    h.players.reduce((a, p) => a + p.stack + p.totalCommitted, 0) === 900);
+  game.currentHand.finished = true;
+}
+
 // ---- straddling is each player's own choice, and re-buys have no ceiling ----
 {
   const { game, host } = createGame({ straddle: true, smallBlind: 1, bigBlind: 2 }, 'Host', null);

@@ -137,6 +137,9 @@ function stateAt(index) {
     });
   }
   let board = [];
+  // A second board — run it twice, or a bomb pot's two — is carried on the
+  // board events rather than saved alongside the first, so it is rebuilt here.
+  let board2 = null;
   let pot = 0;
   const lines = [];
 
@@ -153,6 +156,7 @@ function stateAt(index) {
         break;
       case 'board':
         board = event.board;
+        if (event.board2) board2 = event.board2;
         for (const s of seats.values()) s.bet = 0;
         lines.push(`${cap(event.street)}: ${event.cards.join(' ')}`);
         break;
@@ -192,7 +196,7 @@ function stateAt(index) {
         break;
     }
   }
-  return { seats, board, pot, lines };
+  return { seats, board, board2, pot, lines };
 }
 
 function describeAction(event) {
@@ -275,7 +279,19 @@ function renderSeats(view) {
 function renderBoard(view) {
   const board = document.getElementById('board');
   board.innerHTML = '';
-  for (const c of view.board) board.appendChild(makeCardEl(c));
+  board.classList.toggle('two-boards', !!view.board2);
+  const row = (cards) => {
+    const el = document.createElement('div');
+    el.className = 'board-row';
+    for (const c of cards) el.appendChild(makeCardEl(c));
+    return el;
+  };
+  if (view.board2) {
+    board.appendChild(row(view.board));
+    board.appendChild(row(view.board2));
+  } else {
+    for (const c of view.board) board.appendChild(makeCardEl(c));
+  }
   document.getElementById('pot-line').textContent = `Pot: ${view.pot}`;
 
   const message = document.getElementById('center-message');

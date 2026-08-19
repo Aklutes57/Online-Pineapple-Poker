@@ -127,7 +127,10 @@ export function initPanels(client) {
   });
 
   // Host modal.
+  // Every game a table can be set to. Hidden variants are dealt by the engine
+  // for a single hand (the bomb pot's Omaha) and are not games you choose.
   document.getElementById('h-variant').innerHTML = Object.values(VARIANTS)
+    .filter((v) => !v.hidden)
     .map((v) => `<option value="${v.key}">${escapeHtml(v.label)}</option>`)
     .join('');
   document.getElementById('host-menu-btn').addEventListener('click', () => openHostModal(client));

@@ -28,6 +28,13 @@ function handNowFor(hand, p) {
       // nothing to describe until the flop — and bestOmaha reports -1 when a
       // legal five cannot be formed, which is the same "not yet" answer.
       if (board.length >= 3) {
+        // Two boards, two hands: half the pot rides on each, so the readout
+        // has to say what you have on both rather than pick one.
+        if (hand.doubleBoard && hand.board2?.length >= 3) {
+          const a = bestOmaha(p.holeCards, board).score;
+          const b = bestOmaha(p.holeCards, hand.board2).score;
+          if (a >= 0 && b >= 0) return `${describe(a)} / ${describe(b)}`;
+        }
         const { score } = bestOmaha(p.holeCards, board);
         if (score >= 0) return describe(score);
       }
@@ -131,6 +138,10 @@ export function buildViews(game) {
           : null,
         rabbit: hand.rabbit ? [...hand.rabbit] : null,
         bombPot: !!hand.bombPot,
+        doubleBoard: !!hand.doubleBoard,
+        // What everyone put in to be dealt this bomb pot — the badge says so,
+        // because the table's blinds are not what this hand cost.
+        ante: hand.bombPot ? hand.ante : 0,
         collectedPot: hand.collectedPot(),
         potTotal: hand.finished
           ? (hand.results?.pots.reduce((a, p) => a + p.amount, 0) ?? 0)

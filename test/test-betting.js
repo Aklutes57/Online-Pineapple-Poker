@@ -547,8 +547,63 @@ function totalChips(players, hand) {
   // A short post never resets the raise size, so the next raise is measured
   // off the big blind: 3 to call, 5 to raise.
   check('short: the min raise still comes off the big blind', av(hand, 4).minRaiseTo === 5);
+  // And it does not become the seat the round is dealt around: an all-in
+  // player cannot act, so anchoring on them would quietly take the option
+  // away from the big blind.
+  check('short: a short straddle is not the action anchor', hand.straddleSeat === null);
+  check('short: action starts left of the big blind as usual', hand.toActSeat === 4);
+  act(hand, 4, 'call');
+  act(hand, 0, 'call');
+  act(hand, 1, 'call');
+  check('short: the big blind still closes the round', hand.toActSeat === 2);
+  check('short: and still has the option to raise', av(hand, 2).canRaise === true);
   check('short: chips conserved', totalChips(players, hand) === 2003);
 }
+{
+  // Everyone folds to a player who is all-in for less than the money in
+  // front of them: they win what they COVERED, and the rest goes back to the
+  // people who put it in. A straddle chain is what makes this bite — it puts
+  // 4, 8 and 16 in from three seats before a card is dealt.
+  const players = [0, 1, 2, 3, 4].map((i) => makePlayer(i, 500, `p${i}`));
+  players[2].stack = 2; // the big blind is all-in from posting
+  for (const p of players) p.straddleOptIn = true;
+  const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  const before = totalChips(players, hand);
+  check('fold-cap: the chain is 4/8/16', hand.bySeat.get(3).betThisRound === 4
+    && hand.bySeat.get(4).betThisRound === 8 && hand.bySeat.get(0).betThisRound === 16);
+  check('fold-cap: the big blind is all-in for 2', players[2].allIn === true);
+  // Everyone with chips behind folds, leaving only the all-in big blind.
+  act(hand, 1, 'fold');
+  act(hand, 3, 'fold');
+  act(hand, 4, 'fold');
+  act(hand, 0, 'fold');
+  check('fold-cap: the hand is over', hand.finished === true);
+  // Seat 2 covered 2 apiece: their own 2, the small blind's 1, and 2 from
+  // each of the three straddlers — nine chips, not the whole 31.
+  check('fold-cap: the winner is paid what they covered', players[2].stack === 9);
+  check('fold-cap: the small blind loses only its 1', players[1].stack === 499);
+  check('fold-cap: the first straddler gets 2 back', players[3].stack === 498);
+  check('fold-cap: the second straddler gets 6 back', players[4].stack === 498);
+  check('fold-cap: the third straddler gets 14 back', players[0].stack === 498);
+  check('fold-cap: chips conserved', totalChips(players, hand) === before);
+}
+{
+  // The ordinary case is unchanged: bet, everyone folds, the bettor takes it
+  // and gets their own uncalled chips back.
+  const players = [0, 1, 2].map((i) => makePlayer(i, 500, `p${i}`));
+  const deck = Array.from({ length: 20 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 50);
+  act(hand, 1, 'fold');
+  act(hand, 2, 'fold');
+  check('fold-plain: the raiser wins the blinds', players[0].stack === 503);
+  check('fold-plain: the uncalled part came back', hand.results.uncalledReturn?.amount === 48);
+  check('fold-plain: chips conserved', totalChips(players, hand) === 1500);
+}
+
 {
   // Heads-up must not straddle: the button already posts the small blind.
   const players = [makePlayer(0, 500, 'a'), makePlayer(1, 500, 'b')];
@@ -575,6 +630,85 @@ function totalChips(players, hand) {
   check('first to act is left of the button', hand.toActSeat === 1);
   act(hand, 1, 'check'); act(hand, 2, 'check'); act(hand, 0, 'check');
   check('bomb pot advances to the turn', hand.phase === PHASES.TURN);
+}
+{
+  // The bomb pot as it is actually dealt: Omaha, four cards each, and TWO
+  // boards with half the pot riding on each. The table's own variant does not
+  // come into it — this hand is built as the bomb-pot variant.
+  //
+  // Hole cards are dealt in blocks starting left of the button, so with the
+  // button on seat 0 the deck runs: seat 1, seat 2, seat 0, then the two
+  // boards street by street.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = [
+    'As', 'Ks', 'Qs', 'Js',       // seat 1
+    '2c', '3c', '4d', '5d',       // seat 2
+    '7h', '8h', '9h', 'Th',       // seat 0
+    'Ac', 'Kc', '2s',             // board one, flop
+    '7c', '8c', '9s',             // board two, flop
+    '3h',                         // board one, turn
+    'Td',                         // board two, turn
+    '4h',                         // board one, river
+    'Jd',                         // board two, river
+  ];
+  const { hand } = makeHand({
+    players, deck, variantKey: 'bombOmaha', options: { bombPot: true, ante: 10 },
+  });
+  hand.start();
+  check('bomb pot: dealt as a double board', hand.doubleBoard === true);
+  check('bomb pot: four cards each', players.every((p) => p.holeCards.length === 4));
+  check('bomb pot: two boards flop together',
+    hand.board.length === 3 && hand.board2.length === 3);
+  check('bomb pot: both boards are face up as they are dealt',
+    hand.board2Shown === hand.board2.length);
+  check('bomb pot: the boards are different cards',
+    hand.board.every((c) => !hand.board2.includes(c)));
+  check('bomb pot: no run-it-twice vote to hold', hand.runItTwiceEnabled === false);
+
+  act(hand, 1, 'check'); act(hand, 2, 'check'); act(hand, 0, 'check');
+  check('bomb pot: both boards get their turn card',
+    hand.board.length === 4 && hand.board2.length === 4 && hand.board2Shown === 4);
+  act(hand, 1, 'check'); act(hand, 2, 'check'); act(hand, 0, 'check');
+  check('bomb pot: both boards get their river',
+    hand.board.length === 5 && hand.board2.length === 5);
+  act(hand, 1, 'check'); act(hand, 2, 'check'); act(hand, 0, 'check');
+
+  check('bomb pot: finished at showdown', hand.finished === true);
+  check('bomb pot: the result carries both boards', hand.results?.boards?.length === 2);
+  // Board one is Ac Kc 2s 3h 4h: seat 2 plays 5d+3c for the wheel, which beats
+  // seat 1's two pair. Board two is 7c 8c 9s Td Jd: seat 1 plays Ks+Qs for a
+  // king-high straight, which beats seat 0's jack-high one.
+  check('bomb pot: board one goes to the wheel', players[2].stack === 205);
+  check('bomb pot: board two goes to the bigger straight', players[1].stack === 205);
+  check('bomb pot: the third player wins neither', players[0].stack === 190);
+  check('bomb pot: the pot really did split in half',
+    hand.results.boards[0].winners[0].amount === 15
+    && hand.results.boards[1].winners[0].amount === 15);
+  check('bomb pot: chips conserved across two boards', totalChips(players, hand) === 600);
+}
+{
+  // An odd pot cannot be halved evenly: the extra chip goes to the first
+  // board rather than evaporating.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = [
+    'As', 'Ks', 'Qs', 'Js', '2c', '3c', '4d', '5d', '7h', '8h', '9h', 'Th',
+    'Ac', 'Kc', '2s', '7c', '8c', '9s', '3h', 'Td', '4h', 'Jd',
+  ];
+  const { hand } = makeHand({
+    players, deck, variantKey: 'bombOmaha', options: { bombPot: true, ante: 5 },
+  });
+  hand.start();
+  for (let street = 0; street < 3; street++) {
+    act(hand, 1, 'check'); act(hand, 2, 'check'); act(hand, 0, 'check');
+  }
+  const paid = hand.results.boards.reduce(
+    (a, b) => a + b.winners.reduce((x, w) => x + w.amount, 0), 0
+  );
+  check('bomb pot: an odd pot is paid out whole', paid === 15);
+  check('bomb pot: the odd chip lands on the first board',
+    hand.results.boards[0].winners[0].amount === 8
+    && hand.results.boards[1].winners[0].amount === 7);
+  check('bomb pot: odd-pot chips conserved', totalChips(players, hand) === 600);
 }
 {
   // A player whose whole stack is the ante goes all-in rather than negative.

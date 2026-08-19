@@ -51,6 +51,16 @@ export class Hand {
     this.straddleAmount = 0;
     this.board2 = null;
     this.runItTwice = false;
+    // A double board (the bomb pot's) reuses the run-it-twice machinery — two
+    // boards, the pot split in half between them — with none of its ceremony.
+    // There is no vote to hold and nothing to hold back: both boards are dealt
+    // face up, street by street, and played through the betting rounds.
+    this.doubleBoard = !!this.variant.doubleBoard;
+    if (this.doubleBoard) {
+      this.board2 = [];
+      this.runItTwice = true;
+      this.runItTwiceEnabled = false;
+    }
     // Run it twice deals the boards one after the other, never side by side.
     // The cards are still DRAWN street by street at their own deck positions
     // (that is what the integrity proof is over), but the second row stays
@@ -199,14 +209,22 @@ export class Hand {
       if (straddler?.straddleOptIn === true) {
         const paid = betting.pay(straddler, want);
         this.straddleSeats.push(seat);
-        this.straddleSeat = seat;
         this.straddleAmount = Math.max(this.straddleAmount, straddler.betThisRound);
         this.currentBet = Math.max(this.currentBet, straddler.betThisRound);
-        // Only a full straddle resets the raise size; a short all-in straddle
-        // follows the same rule as any other undersized all-in. A straddle
-        // raises TO its own size, so the next raise has to double it — that is
-        // what makes a 4 straddle a 8 minimum, exactly as a big blind does.
-        if (paid >= want) this.lastFullRaiseSize = want;
+        // Only a straddle posted IN FULL moves the game. It is a blind raise,
+        // so the round starts to its left and it owns the option — and the
+        // next raise has to double it, which is what makes a 4 straddle an 8
+        // minimum, exactly as a big blind does.
+        //
+        // A short all-in post buys none of that. It is an undersized all-in
+        // like any other: it does not reopen the betting, and it must not
+        // become the anchor the round is dealt around, or an all-in player
+        // who cannot act would take the option away from the seat that owns
+        // it — the big blind, or the last straddler who could cover.
+        if (paid >= want) {
+          this.straddleSeat = seat;
+          this.lastFullRaiseSize = want;
+        }
         this.pushEvent({
           type: 'post', seat, kind: 'straddle', amount: paid, level: this.straddleSeats.length,
         });
@@ -242,7 +260,10 @@ export class Hand {
     this.sbSeat = null;
     this.bbSeat = null;
     this.pushEvent({ type: 'bombPot', amount: this.ante });
-    this.ctx.log(`Bomb pot — everyone antes ${this.ante}, straight to the flop`);
+    this.ctx.log(
+      `Bomb pot — everyone antes ${this.ante}, straight to the flop` +
+      (this.doubleBoard ? '. Omaha, two boards, half the pot on each.' : '')
+    );
     this.dealHoleCards();
     // Zero betThisRound/hasActed but keep totalCommitted, then let the normal
     // street machinery handle the pineapple discard and any all-in run-out.
@@ -294,8 +315,12 @@ export class Hand {
       if (this.runItTwice) {
         this.board2.push(...this.draw(dealt));
         this.board2Steps.push(dealt);
+        // Face up as it is dealt: only a run-it-twice second board waits.
+        if (this.doubleBoard) this.board2Shown = this.board2.length;
       }
-      this.ctx.log(`${cap(street)}: ${this.board.join(' ')}`);
+      this.ctx.log(this.doubleBoard
+        ? `${cap(street)}: ${this.board.join(' ')}  |  ${this.board2.join(' ')}`
+        : `${cap(street)}: ${this.board.join(' ')}`);
       this.pushEvent({
         type: 'board', cards: this.board.slice(-dealt), board: [...this.board],
         board2: this.runItTwice ? [...this.board2] : null,
@@ -701,6 +726,10 @@ export class Hand {
     if (this.variant.engine === '747') return; // no community board to run out
     const live = this.livePlayers();
     if (live.length < 2) return;
+    if (this.doubleBoard && this.board2) {
+      this.equityNow = this.doubleBoardEquity(live);
+      return;
+    }
     const board = this.visibleBoard();
     if (board.length > 5) return;
     // Running it twice, the first board's cards are gone from the deck: they
@@ -726,6 +755,28 @@ export class Hand {
       this.equityNow = this.equityFrom(shares, live, board);
     } catch {
       this.equityNow = null; // never let a readout take a hand down
+    }
+  }
+
+  // Two boards, half the pot on each: your share of the money is the average
+  // of your share of the two. Each board is enumerated with the other one's
+  // cards dead, because they are — one deck deals both, so a card already on
+  // the other row can never come on this one.
+  doubleBoardEquity(live) {
+    if (this.board.length < 3 || this.board.length > 5) return null;
+    if (this.board2.length !== this.board.length) return null;
+    try {
+      const hands = live.map((p) => ({ seat: p.seatIndex, holeCards: p.holeCards }));
+      const omaha = !!this.variant.omaha;
+      const one = equity(hands, this.board, { omaha, dead: this.board2 });
+      const two = equity(hands, this.board2, { omaha, dead: this.board });
+      const mean = new Map(live.map((p) => [
+        p.seatIndex,
+        ((one.get(p.seatIndex) ?? 0) + (two.get(p.seatIndex) ?? 0)) / 2,
+      ]));
+      return { ...this.equityFrom(mean, live, this.board), board: 0 };
+    } catch {
+      return null; // never let a readout take a hand down
     }
   }
 
@@ -756,7 +807,10 @@ export class Hand {
         this.ctx.changed();
         // The first board is finished. If the table agreed to run it twice,
         // the second board's run-out starts now — one board at a time.
-        const second = this.runItTwice && this.board2 && this.board2Reveal === 0;
+        // A second board that has been face up all along has no run-out of
+        // its own to watch — that is only the run-it-twice reveal.
+        const second = this.runItTwice && this.board2 && this.board2Reveal === 0
+          && !this.doubleBoard;
         this.ctx.setTimer('runout', TIMINGS.RUNOUT_STREET_DELAY, () =>
           second ? this.revealSecondBoard() : this.showdown());
       } else {
@@ -870,9 +924,42 @@ export class Hand {
     return null;
   }
 
+  // Chips nobody can win: everything committed above what the sole survivor
+  // put in goes back to whoever put it in, folded or not. Returns what was
+  // handed back, for the log.
+  returnAboveCap(winner) {
+    const cap = winner.totalCommitted;
+    const returned = [];
+    for (const p of this.players) {
+      if (p === winner) continue;
+      const excess = p.totalCommitted - cap;
+      if (excess <= 0) continue;
+      p.totalCommitted -= excess;
+      p.stack += excess;
+      returned.push({ seat: p.seatIndex, amount: excess });
+    }
+    return returned;
+  }
+
   finishByFold(winner) {
     this.ctx.clearTimer();
+    // Everyone folded, so the survivor takes the pot — but only as much of it
+    // as they actually covered. Their own overbet comes back (the classic
+    // uncalled bet), and so does every chip anybody else put in ABOVE the
+    // survivor's own commitment: a player all-in for two big blinds cannot
+    // win the eight a straddler put in and then folded. Both directions are
+    // capped here; handing over potTotal paid the difference out of the
+    // folders' pockets.
     const uncalledReturn = this.returnUncalledBet();
+    const covered = this.returnAboveCap(winner);
+    if (covered.length) {
+      for (const r of covered) {
+        this.ctx.log(
+          `${this.bySeat.get(r.seat).nickname} takes back ${r.amount} — ` +
+          `more than ${winner.nickname} could cover`
+        );
+      }
+    }
     const pot = betting.potTotal(this);
     winner.stack += pot;
     this.clearCommitments();
@@ -905,18 +992,27 @@ export class Hand {
   // made hand at all, so it records nothing.
   recordMadeHand(player) {
     if (!player || player.folded || !player.handStats) return;
-    const cards = [...player.holeCards, ...this.board];
-    if (cards.length < 5) return;
-    try {
-      const score = this.variant.omaha && this.board.length >= 5
-        ? bestOmaha(player.holeCards, this.board)
-        : bestAny(cards);
-      if (score > player.handStats.madeScore) {
-        player.handStats.madeScore = score;
-        player.handStats.madeDesc = describe(score);
+    // Both rows count on a double board: you really did make that flush, and
+    // "best hand ever made" should not depend on which row it landed on.
+    const boards = this.doubleBoard && this.board2?.length >= 5
+      ? [this.board, this.board2]
+      : [this.board];
+    for (const board of boards) {
+      const cards = [...player.holeCards, ...board];
+      if (cards.length < 5) continue;
+      try {
+        // Both evaluators return { score, bestFive }; reading the object
+        // itself compares as NaN, which is why this used to record nothing.
+        const { score } = this.variant.omaha && board.length >= 5
+          ? bestOmaha(player.holeCards, board)
+          : bestAny(cards);
+        if (score > player.handStats.madeScore) {
+          player.handStats.madeScore = score;
+          player.handStats.madeDesc = describe(score);
+        }
+      } catch {
+        /* a hand this engine can't score is simply not recorded */
       }
-    } catch {
-      /* a hand this engine can't score is simply not recorded */
     }
   }
 
@@ -1088,7 +1184,14 @@ export class Hand {
     if (this.bySeat.get(player.seatIndex) !== player) {
       return { ok: false, error: 'you were not in this hand' };
     }
-    this.rabbit = this.draw(5 - this.board.length);
+    // Two boards and ten players is fifty cards off a fifty-two card deck.
+    // There is not always a run-out left to show, and asking for one there is
+    // no room for used to throw out of the engine.
+    const need = 5 - this.board.length;
+    if (this.deckIndex + need > this.deck.length) {
+      return { ok: false, error: 'no cards left in the deck to hunt with' };
+    }
+    this.rabbit = this.draw(need);
     this.ctx.log(`${player.nickname} rabbit hunts: ${this.rabbit.join(' ')}`);
     this.ctx.changed();
     return { ok: true };

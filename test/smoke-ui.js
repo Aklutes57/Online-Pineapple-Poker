@@ -317,6 +317,46 @@ try {
   );
   await check('and one more tap opts you back out', true);
 
+  // ---- bomb pot: Omaha and two boards, whatever the table is playing ----
+  await openMenu(anna);
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  await anna.selectOption('#h-bomb', '1');
+  await anna.fill('#h-bomb-ante', '5');
+  await anna.click('#h-save');
+  await anna.click('#h-done');
+
+  let bombSeen = false;
+  for (let i = 0; i < 140 && !bombSeen; i++) {
+    for (const page of [anna, ben, cara]) {
+      try {
+        const btn = page
+          .locator('[data-act="check"], [data-act="call"], [data-act="all-in-confirm"], [data-act="arm-all-in-call"]')
+          .first();
+        if (await btn.isVisible({ timeout: 50 })) await btn.click({ timeout: 500 });
+      } catch { /* not this page's turn */ }
+    }
+    bombSeen = (await anna.locator('#board .board-row').count()) === 2;
+    await anna.waitForTimeout(120);
+  }
+  await check('a bomb pot comes around and deals two boards', bombSeen);
+  await check('a bomb pot deals four cards each, not the table\'s game',
+    (await anna.locator('.cards-fan.mine .card').count()) === 4);
+  await check('the header says what this hand costs',
+    (await anna.textContent('#game-badge')).includes('Bomb pot · ante 5'));
+  await check('everyone anted into it',
+    (await anna.textContent('#pot-line')).includes('15'));
+  await check('both boards show where their next card lands',
+    (await anna.locator('#board .board-row:nth-child(2) .board-slot').count()) > 0);
+
+  // Back off again — the rest of the run is not a bomb-pot table.
+  await openMenu(anna);
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  await anna.selectOption('#h-bomb', '0');
+  await anna.click('#h-save');
+  await anna.click('#h-done');
+
   // ---- 747 Poker: switch the game mid-session and play a dealer hand ----
   await openMenu(anna);
   await anna.click('#host-menu-btn');

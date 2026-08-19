@@ -59,10 +59,13 @@ export function renderAll(client) {
   // switch — one in the Seat menu, one always in view on the top bar, because
   // a choice you have to go looking for is a choice nobody makes.
   const straddleIn = you?.straddleOptIn === true;
+  // 747 is an ante game with no blinds and no straddles, so the switch has
+  // nothing to switch there — offering it would be a button that lies.
+  const straddleGame = VARIANTS[state.hand?.variant || state.settings.variant]?.engine !== '747';
   for (const id of ['menu-straddle', 'straddle-btn']) {
     const btn = document.getElementById(id);
     if (!btn) continue;
-    btn.classList.toggle('hidden', !seated || !state.settings.straddle);
+    btn.classList.toggle('hidden', !seated || !state.settings.straddle || !straddleGame);
     btn.classList.toggle('on', straddleIn);
     btn.textContent = straddleIn ? 'Straddle: on' : 'Straddle: off';
     btn.setAttribute('aria-pressed', straddleIn ? 'true' : 'false');
@@ -91,7 +94,10 @@ export function renderAll(client) {
 // each shape gets its own allowance. A webcam tile makes every pod taller, so
 // that cost is only paid when cameras are actually on.
 const OVERHANG = {
-  landscape: { x: 44, y: 98 },
+  // The bottom pod is the tall one: nameplate, your own enlarged cards and the
+  // live hand readout under them. Measured at 104 — budget less and the plate's
+  // last few pixels are shaved off by the area's overflow clip.
+  landscape: { x: 44, y: 104 },
   upright: { x: 16, y: 88 },
 };
 const CAM_EXTRA_Y = 74;    // half a webcam tile, top and bottom
@@ -271,10 +277,14 @@ function renderHeader(client) {
   // matters as much as the ante (it's what a lost challenge costs), so both
   // live in the badge — but only in 747.
   const cap747 = state.settings.penaltyCap747;
-  const stakes = v?.engine === '747'
-    ? `Ante ${state.settings.ante747 > 0 ? state.settings.ante747 : state.settings.bigBlind}`
-      + (cap747 > 0 ? ` · Penalty up to ${cap747}` : '')
-    : `Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}`;
+  // A bomb pot has no blinds to advertise either: everyone bought in for the
+  // ante, and that — not the table's stakes — is what this hand costs.
+  const stakes = state.hand?.bombPot
+    ? `Bomb pot · ante ${state.hand.ante || state.settings.bigBlind}`
+    : v?.engine === '747'
+      ? `Ante ${state.settings.ante747 > 0 ? state.settings.ante747 : state.settings.bigBlind}`
+        + (cap747 > 0 ? ` · Penalty up to ${cap747}` : '')
+      : `Blinds ${state.settings.smallBlind}/${state.settings.bigBlind}`;
   badge.textContent = `${v ? v.label : variantKey} · ${stakes}${handNo}`;
   renderTournamentClock(state);
   syncTopBar();
@@ -399,7 +409,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     seat.playerId, seat.nickname, seat.stack, seat.connected, seat.sittingOut,
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
     isMe && seat.folded ? (myCards || []).join(',') : null,
-    seat.isDealer, toAct, waitingDiscard, seat.handResult,
+    seat.isDealer, seat.isStraddle, seat.straddleLevel, toAct, waitingDiscard, seat.handResult,
     isMe, you?.canDiscard, you?.hasDiscarded,
     seat.mediaOn, seat.camFrame, seat.avatarUrl, isMuted(seat.playerId), seat.nameFont,
     decisionPhase ? seat.decided : null, myHandNow,
@@ -781,16 +791,23 @@ function renderBoard(client) {
     }
     // The streets still to come: dashed outlines where cards will land, so
     // the board always shows its shape. Community games only — 747's dealer
-    // area draws itself, and a second run-out board fills all five at once.
+    // area draws itself. A run-it-twice second board is exempt: it is filled
+    // in one go at the end, so there is no shape to promise. A bomb pot's
+    // double board is NOT exempt — both rows are dealt street by street with
+    // betting in between, so both show where the next card lands.
     const communityGame = hand
       ? !hand.dealer
       : VARIANTS[state.settings.variant]?.engine !== '747';
-    if (!second && communityGame) {
-      for (let i = cards.length + (rabbit ? rabbit.length : 0); i < 5; i++) {
+    const doubleBoard = !!hand?.doubleBoard;
+    const fillSlots = (row, from) => {
+      for (let i = from; i < 5; i++) {
         const slot = document.createElement('div');
         slot.className = 'board-slot';
-        firstRow.appendChild(slot);
+        row.appendChild(slot);
       }
+    };
+    if ((!second || doubleBoard) && communityGame) {
+      fillSlots(firstRow, cards.length + (rabbit ? rabbit.length : 0));
     }
     board.appendChild(firstRow);
 
@@ -800,6 +817,7 @@ function renderBoard(client) {
       for (let i = 0; i < second.length; i++) {
         secondRow.appendChild(makeCardEl(second[i], opts(showAt2, i)));
       }
+      if (doubleBoard && communityGame) fillSlots(secondRow, second.length);
       board.appendChild(secondRow);
     }
     board.dataset.showAt = JSON.stringify(showAt.slice(0, cards.length + (rabbit ? rabbit.length : 0)));
@@ -947,7 +965,13 @@ function oddsStrip(state) {
   const eq = state.hand.equity;
   const rows = (eq.rows || []).filter((r) => state.seats[r.seat]);
   if (!rows.length) return '';
-  const label = state.hand.runItTwice ? `Odds · board ${eq.board}` : 'Odds';
+  // board 0 means "both at once" — a double board plays them side by side, so
+  // the number is your share of the WHOLE pot, averaged over the two.
+  const label = !state.hand.runItTwice
+    ? 'Odds'
+    : eq.board === 0
+      ? 'Odds · both boards'
+      : `Odds · board ${eq.board}`;
   const cells = rows
     .map((r) => {
       const seat = state.seats[r.seat];
