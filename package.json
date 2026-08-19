@@ -10,7 +10,8 @@
     "soak": "node --disable-warning=ExperimentalWarning test/bots.js",
     "smoke": "node --disable-warning=ExperimentalWarning test/smoke-ui.js",
     "media": "node --disable-warning=ExperimentalWarning test/media.mjs",
-    "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs"
+    "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs",
+    "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs"
   },
   "license": "MIT",
   "dependencies": {

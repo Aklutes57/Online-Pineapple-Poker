@@ -230,6 +230,24 @@ try {
     await toAct.waitForSelector('#tray-slider', { state: 'detached' });
     await check('Close hands back the Fold/Check/Bet row',
       await toAct.locator('[data-act="open-tray"]').isVisible());
+
+    // ---- the shove asks first ----
+    // Pressing All in must not move a chip: it swaps the row for a question,
+    // and Cancel puts the row back exactly as it was. Nothing here commits,
+    // so the hand carries on into the play loop below untouched.
+    await toAct.click('[data-act="arm-all-in"]');
+    await toAct.waitForSelector('.ab-allin-ask');
+    await check('All in asks before it shoves',
+      (await toAct.textContent('.ab-allin-ask')).includes('Are you sure you want to go all in?'));
+    await check('the question replaces the buttons rather than sitting beside them',
+      !(await toAct.locator('[data-act="fold"], [data-act="arm-fold"]').first()
+        .isVisible().catch(() => false)));
+    await check('the confirm button reads All in',
+      (await toAct.textContent('[data-act="all-in-confirm"]')).trim() === 'All in');
+    await toAct.click('[data-act="cancel-all-in"]');
+    await toAct.waitForSelector('.ab-allin-ask', { state: 'detached' });
+    await check('Cancel hands the betting row straight back',
+      await toAct.locator('[data-act="open-tray"]').isVisible());
   }
 
   // ---- play hands by checking/calling until a winner shows ----
@@ -237,7 +255,11 @@ try {
   for (let i = 0; i < 80 && !winnerSeen; i++) {
     for (const page of [anna, ben, cara]) {
       try {
-        const btn = page.locator('[data-act="check"], [data-act="call"]').first();
+        // A stack-sized call now asks first, so the confirm is part of the
+        // ordinary "just keep calling" path a player would take.
+        const btn = page
+          .locator('[data-act="check"], [data-act="call"], [data-act="all-in-confirm"], [data-act="arm-all-in-call"]')
+          .first();
         if (await btn.isVisible({ timeout: 50 })) await btn.click({ timeout: 500 });
       } catch {
         /* not this page's turn or button re-rendered — fine */
@@ -264,7 +286,11 @@ try {
   for (let i = 0; i < 100 && !sawDecision; i++) {
     for (const page of [anna, ben, cara]) {
       try {
-        const btn = page.locator('[data-act="check"], [data-act="call"]').first();
+        // A stack-sized call now asks first, so the confirm is part of the
+        // ordinary "just keep calling" path a player would take.
+        const btn = page
+          .locator('[data-act="check"], [data-act="call"], [data-act="all-in-confirm"], [data-act="arm-all-in-call"]')
+          .first();
         if (await btn.isVisible({ timeout: 50 })) await btn.click({ timeout: 500 });
       } catch {
         /* fine */

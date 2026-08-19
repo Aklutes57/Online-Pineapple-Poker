@@ -1663,6 +1663,19 @@ td.dim { color: var(--text-dim); }
   font-weight: 600;
 }
 
+/* The shove's second look. The question and the cost each take a full line so
+   the two buttons underneath read as the answer to it, rather than as three
+   more choices in the same row. */
+.ab-allin-ask,
+.ab-allin-ask + .ab-note {
+  flex-basis: 100%;
+  text-align: right;
+}
+
+.ab-allin-ask {
+  font-size: 16px;
+}
+
 .ab-actions {
   display: flex;
   gap: 12px;

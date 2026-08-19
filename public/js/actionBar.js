@@ -16,6 +16,11 @@ let foldArmed = false;
 // Set when the tray is summoned, so the render that follows knows to put the
 // caret in the amount box. Cleared as soon as it has been honoured.
 let trayJustOpened = false;
+// The shove waiting on a second look: { action, amount } or null. Your whole
+// stack is the one bet you cannot take back, so it is always asked about —
+// whether it came from the All in button, the bet tray, or a call that happens
+// to cost everything you have.
+let pendingAllIn = null;
 
 export function initActionBar(client) {
   clientRef = client;
@@ -73,12 +78,16 @@ function installShortcuts(client) {
     if (!want) return;
     const av = client.you?.availableActions;
     if (!av) return; // not your turn — the bar is showing something else
+    // A shove waiting on its confirm owns the bar: none of these letters is on
+    // screen, so none of them may fire. The confirm is a deliberate click.
+    if (pendingAllIn) return;
 
     if (want === 'fold') {
       // Same two-step as the button: an open fold arms, a second f confirms.
       handleAct(client, av.canCheck ? (foldArmed ? 'fold-confirm' : 'arm-fold') : 'fold', av);
     } else if (want === 'call' && av.callAmount > 0) {
-      handleAct(client, 'call', av);
+      // c on a call that costs everything asks first, exactly as the button does.
+      handleAct(client, av.callAmount >= client.you.stack ? 'arm-all-in-call' : 'call', av);
     } else if (want === 'check' && av.canCheck) {
       handleAct(client, 'check', av);
     } else if (want === 'raise' && av.canRaise) {
@@ -160,6 +169,7 @@ export function renderActionBar(client) {
     // The tray never opens itself: Bet/Raise summons it, Close puts it away.
     trayOpen = false;
     foldArmed = false;
+    pendingAllIn = null;
     trayAmount = av ? defaultRaiseAmount(av) : 0;
   }
 
@@ -184,6 +194,14 @@ export function renderActionBar(client) {
         <button class="btn btn-primary" data-act="open-join">${
           you.seatOnRequest ? 'Buy back in' : 'Take a seat'}</button>`;
     }
+  } else if (av && pendingAllIn) {
+    html = `
+      <span class="ab-note ab-highlight ab-allin-ask">Are you sure you want to go all in?</span>
+      <span class="ab-note">That's your whole stack — ${pendingAllIn.cost} chips.</span>
+      <div class="ab-actions">
+        <button class="btn ab-btn ab-allin ab-confirm" data-act="all-in-confirm">All in</button>
+        <button class="btn ab-btn btn-ghost" data-act="cancel-all-in">Cancel</button>
+      </div>`;
   } else if (av) {
     // Your whole stack expressed as a "raise to" total for this street, which
     // is the unit the server validates in.
@@ -212,12 +230,14 @@ export function renderActionBar(client) {
                 data-act="${foldAct}"
                 title="${openFold ? 'Nobody has bet — you can check for free' : 'Give up the hand'}"
                 >${foldLabel}</button>
-        <button class="btn ab-btn ab-check" data-act="${av.callAmount > 0 ? 'call' : 'check'}">${callLabel}</button>
+        <button class="btn ab-btn ab-check${callIsAllIn ? ' ab-allin' : ''}"
+                data-act="${av.callAmount > 0 ? (callIsAllIn ? 'arm-all-in-call' : 'call') : 'check'}"
+                >${callLabel}</button>
         ${av.canRaise
           ? `<button class="btn btn-green ab-btn" data-act="open-tray">${state.hand.currentBet > 0 ? 'Raise' : 'Bet'}</button>`
           : ''}
         ${canShove && !callIsAllIn
-          ? `<button class="btn ab-btn ab-allin" data-act="all-in" data-amount="${allInTo}">All in ${allInTo}</button>`
+          ? `<button class="btn ab-btn ab-allin" data-act="arm-all-in" data-amount="${allInTo}">All in ${allInTo}</button>`
           : ''}
       </div>
       ${trayOpen && av.canRaise ? trayHtml(av, client) : ''}`;
@@ -459,6 +479,23 @@ function syncTrayInputs(skipNumber = false) {
   if (confirmAmt) confirmAmt.textContent = trayAmount;
 }
 
+// Your whole stack expressed as a "raise to" total for this street — the unit
+// the server validates in, and the number a shove has to reach to count as one.
+function wholeStackTo(client) {
+  const { state, you } = client;
+  return you.stack + (state.seats[you.seatIndex]?.betThisRound ?? 0);
+}
+
+// Holds a shove one beat, so the bar can ask before the chips go in. Stores the
+// exact move that was legal at the moment of the tap; the confirm just replays
+// it. Any turn change wipes it (see the turn-key reset in renderActionBar), so
+// a stale confirm can never fire into a different decision.
+function armAllIn(client, move) {
+  pendingAllIn = { ...move, cost: client.you.stack };
+  bar().dataset.sig = '';
+  renderActionBar(client);
+}
+
 function handleAct(client, act, av, arg = null) {
   const hand = client.state.hand;
   switch (act) {
@@ -500,20 +537,47 @@ function handleAct(client, act, av, arg = null) {
     case 'confirm-raise': {
       const amount = clampAmount(trayAmount, av);
       const action = hand.currentBet > 0 ? 'raise' : 'bet';
+      // Sizing the slider all the way to the top is still a shove, so it gets
+      // the same second look the All in button does.
+      if (amount >= wholeStackTo(client)) {
+        trayOpen = false;
+        armAllIn(client, { action, amount });
+        break;
+      }
       client.send(EVENTS.ACTION, { handId: hand.handId, action, amount });
       trayOpen = false;
       break;
     }
-    case 'all-in': {
-      // One tap, straight in — no tray, no slider, whatever the stack is.
-      // Clamped against the server's own bounds so a stale bar can't send an
-      // amount that would be refused.
-      const amount = clampAmount(parseInt(arg, 10), av);
-      const action = hand.currentBet > 0 ? 'raise' : 'bet';
-      client.send(EVENTS.ACTION, { handId: hand.handId, action, amount });
+    // Every route to "all of it" arms the confirm instead of firing. The chips
+    // are clamped against the server's own bounds here, at the moment the
+    // button was pressed, so a stale bar can never send an amount that would
+    // be refused — the confirm only replays what was already checked.
+    case 'arm-all-in':
+      armAllIn(client, {
+        action: hand.currentBet > 0 ? 'raise' : 'bet',
+        amount: clampAmount(parseInt(arg, 10), av),
+      });
+      break;
+    // Calling a bet that costs everything you have is a shove too, however it
+    // is labelled.
+    case 'arm-all-in-call':
+      armAllIn(client, { action: 'call' });
+      break;
+    case 'all-in-confirm': {
+      const pending = pendingAllIn;
+      pendingAllIn = null;
+      if (!pending) break;
+      const payload = { handId: hand.handId, action: pending.action };
+      if (pending.amount !== undefined) payload.amount = pending.amount;
+      client.send(EVENTS.ACTION, payload);
       trayOpen = false;
       break;
     }
+    case 'cancel-all-in':
+      pendingAllIn = null;
+      bar().dataset.sig = '';
+      renderActionBar(client);
+      break;
     case 'stay-747':
       client.send(EVENTS.DECISION_747, { handId: hand.handId, stay: true });
       break;
