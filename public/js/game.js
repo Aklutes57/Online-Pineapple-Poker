@@ -118,6 +118,7 @@ function applyState(state) {
   if (nameField && document.activeElement !== nameField && state.you?.realName) {
     if (nameField.value.trim() !== state.you.realName) nameField.value = state.you.realName;
   }
+  reassertRealName(state);
 
   // Tell you when host changes hands, so a silent hand-off (or reclaim) is
   // never a surprise. Skipped on the very first state so joining isn't noisy.
@@ -509,6 +510,11 @@ if (fontSel) {
 // Separate from the username on your seat: the felt can say whatever you like,
 // while the ledger and Settle up say who actually gets paid.
 const REAL_NAME_KEY = 'pp:realName';
+// Set up below when the field exists; called once per connection from
+// applyState, when the server's answer is actually in hand.
+let reassertRealName = () => {};
+let reassertedRealName = false;
+socket.on('connect', () => { reassertedRealName = false; });
 const realNameInput = document.getElementById('real-name');
 if (realNameInput) {
   try {
@@ -526,10 +532,29 @@ if (realNameInput) {
   // per letter typed.
   realNameInput.addEventListener('change', pushRealName);
   realNameInput.addEventListener('blur', pushRealName);
-  // Guests have no account to hold it, so this browser re-asserts on connect.
-  socket.on('connect', () => setTimeout(() => {
-    if (realNameInput.value.trim()) pushRealName();
-  }, 250));
+  // Guests have no account to hold it, so this browser re-asserts what it
+  // remembers. A signed-in player's account is the source of truth and is
+  // applied server-side on JOIN, so we must never push over it: the key is a
+  // single global one, and a shared laptop would otherwise publish whoever
+  // used it last under the name of whoever is playing now — and, worse, write
+  // that into their account permanently.
+  //
+  // Driven off the state rather than a fixed delay, so it cannot race the JOIN
+  // ack on a slow connection: re-assert only once the server has told us it
+  // has nothing of its own.
+  reassertRealName = (state) => {
+    if (reassertedRealName) return;
+    if (!state?.you) return;
+    reassertedRealName = true;
+    // getAccountToken(), not currentAccount(): the account object arrives from
+    // an async fetch that the first state can easily beat, and a signed-in
+    // player must be recognised as one from the very first tick or the stale
+    // value goes out anyway. The token is read straight from localStorage.
+    if (getAccountToken()) return;         // signed in: the account owns this
+    if (state.you.realName) return;        // the server has one; leave it alone
+    const name = realNameInput.value.trim();
+    if (name) pushRealName();
+  };
 }
 
 initWebrtc(client, socket);

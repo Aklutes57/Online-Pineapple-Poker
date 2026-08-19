@@ -94,7 +94,7 @@ export function ledgerCsvForGame(gameId) {
   );
   if (!session) return null;
   const rows = all(
-    `SELECT nickname, real_name, buy_ins, cash_outs, final_stack, net, hands_played
+    `SELECT player_id, nickname, real_name, buy_ins, cash_outs, final_stack, net, hands_played
      FROM session_results WHERE table_session_id = ? ORDER BY net DESC`,
     session.id
   );
@@ -102,6 +102,23 @@ export function ledgerCsvForGame(gameId) {
 
   const iso = new Date(session.started_at).toISOString().slice(0, 10);
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+  // A ledger name is free text, so two people at one table can share one. The
+  // settle-up block is the part people actually pay from, and "Carl pays John
+  // Smith 100" twice is unusable — so a shared name is qualified by the
+  // username, which the table does keep unique.
+  const nameCount = new Map();
+  for (const r of rows) {
+    const n = r.real_name || r.nickname;
+    nameCount.set(n, (nameCount.get(n) || 0) + 1);
+  }
+  const byId = new Map(rows.map((r) => [r.player_id, r]));
+  const settleLabel = (id, fallback) => {
+    const r = byId.get(id);
+    if (!r) return fallback;
+    const n = r.real_name || r.nickname;
+    return nameCount.get(n) > 1 ? `${n} (${r.nickname})` : n;
+  };
   const lines = [
     ['Reg-Poker Online ledger'],
     ['Game', gameId],
@@ -117,8 +134,9 @@ export function ledgerCsvForGame(gameId) {
     ]),
     [],
     ['Settle up: from', 'to', 'amount'],
-    ...settleUp(rows.map((r) => ({ nickname: r.nickname, realName: r.real_name, net: r.net })))
-      .map((p) => [p.from, p.to, p.amount]),
+    ...settleUp(rows.map((r) => ({
+      playerId: r.player_id, nickname: r.nickname, realName: r.real_name, net: r.net,
+    }))).map((p) => [settleLabel(p.fromId, p.from), settleLabel(p.toId, p.to), p.amount]),
   ];
   const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
   return { filename: `pineapple-ledger-${iso}.csv`, body };

@@ -41,7 +41,11 @@ function scoreFor(holeCards, board, omaha) {
 
 // hands: [{ seat, holeCards }]. Returns Map<seat, equity 0..1>.
 // Equity splits ties evenly, which is what "share of the pot" means.
-export function equity(hands, board, { omaha = false, rng = Math.random } = {}) {
+// `dead` is cards that are out of the deck but not part of THIS board — the
+// other board when a hand is run twice. Without it board one's five cards are
+// counted as live outs for board two, and a player drawing dead is shown with
+// real equity.
+export function equity(hands, board, { omaha = false, rng = Math.random, dead = [] } = {}) {
   const result = new Map();
   if (hands.length === 0) return result;
   if (hands.length === 1) {
@@ -49,7 +53,7 @@ export function equity(hands, board, { omaha = false, rng = Math.random } = {}) 
     return result;
   }
 
-  const known = new Set([...board, ...hands.flatMap((h) => h.holeCards)]);
+  const known = new Set([...board, ...dead, ...hands.flatMap((h) => h.holeCards)]);
   const remaining = freshDeck().filter((c) => !known.has(c));
   const toCome = 5 - board.length;
 

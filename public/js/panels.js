@@ -455,12 +455,28 @@ function renderLedger(client) {
     return;
   }
   const payments = settleUp(rows);
-  // Keyed by the same name settleUp pays out under — the ledger name when a
-  // player set one — or the Pay buttons would vanish for exactly the players
-  // who took the trouble to say who they are.
+  // Keyed by PLAYER ID, never by the displayed name. A ledger name is free text
+  // and nothing stops two people choosing the same one, so a name key let a
+  // second player's payment handles overwrite the winner's — and the Pay button
+  // on "Carl pays Ayden 300" would have opened Venmo pointed at whoever claimed
+  // the name last. Money follows identity.
   const payTo = new Map(
-    rows.filter((r) => r.payments).map((r) => [r.realName || r.nickname, r.payments])
+    rows.filter((r) => r.payments).map((r) => [r.playerId, r.payments])
   );
+  // Two rows that display the same name are disambiguated by the username the
+  // table actually knows them by, so a settle-up line is never ambiguous.
+  const nameCount = new Map();
+  for (const r of rows) {
+    const n = r.realName || r.nickname;
+    nameCount.set(n, (nameCount.get(n) || 0) + 1);
+  }
+  const byId = new Map(rows.map((r) => [r.playerId, r]));
+  const payeeLabel = (id, fallback) => {
+    const r = byId.get(id);
+    if (!r) return fallback;
+    const n = r.realName || r.nickname;
+    return nameCount.get(n) > 1 ? `${n} (${r.nickname})` : n;
+  };
 
   // The books check everyone can see: every chip bought in is either in a
   // stack, cashed out, or riding in the 747 pot. Σnet is stacks + cash-outs
@@ -530,8 +546,8 @@ function renderLedger(client) {
           ? `<ul class="settle-list">${payments
               .map(
                 (p) => `<li>
-                  <div class="settle-line"><strong>${escapeHtml(p.from)}</strong> pays <strong>${escapeHtml(p.to)}</strong> <span class="settle-amt">${p.amount}</span></div>
-                  ${payButtons(payTo.get(p.to), p.amount)}
+                  <div class="settle-line"><strong>${escapeHtml(payeeLabel(p.fromId, p.from))}</strong> pays <strong>${escapeHtml(payeeLabel(p.toId, p.to))}</strong> <span class="settle-amt">${p.amount}</span></div>
+                  ${payButtons(payTo.get(p.toId), p.amount)}
                 </li>`
               )
               .join('')}</ul>`

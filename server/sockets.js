@@ -206,7 +206,17 @@ export function attachSockets(io) {
       // A reconnecting current actor gets their turn timer re-evaluated
       // (restores the "no timer" state when the action clock is off).
       const hand = game.currentHand;
-      if (hand && !hand.finished && hand.isBettingPhase() && hand.toActSeat === player.seatIndex) {
+      // Both sides of that comparison can be null — toActSeat is null whenever
+      // the table is waiting on everyone at once (an all-in run-out, a discard,
+      // the run-it-twice vote), and a spectator or a player who stood up has no
+      // seatIndex. null === null used to pass the guard and call beginTurn for
+      // a seat that does not exist, which threw and took the process (and with
+      // it every other table) down.
+      if (
+        hand && !hand.finished && hand.isBettingPhase()
+        && player.seatIndex !== null && hand.toActSeat !== null
+        && hand.toActSeat === player.seatIndex
+      ) {
         hand.beginTurn();
       }
 

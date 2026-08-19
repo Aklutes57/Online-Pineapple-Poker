@@ -866,5 +866,37 @@ function totalChips(players, hand) {
   check('equity: folded hand stays face down', hand.revealed === false);
 }
 
+// --- Nobody to act: a seatless player must never arm a turn ---
+// toActSeat is null whenever the table waits on everyone at once (an all-in
+// run-out, a discard, the run-it-twice vote), and a spectator or a player who
+// stood up has seatIndex null. `hand.toActSeat === player.seatIndex` is then
+// null === null, which used to pass the guard, call beginTurn for a seat that
+// is not in the hand, and throw — taking down the process, and with it every
+// other table on the machine.
+{
+  const players = [makePlayer(0, 100, 'a'), makePlayer(1, 100, 'b')];
+  for (const p of players) p.connected = true;
+  const deck = ['Ah', '2c', 'Kh', '7d', 'Qh', 'Jh', '3s', '4d', '9c'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 100);
+  act(hand, 1, 'call');
+  check('run-out: nobody is to act', hand.toActSeat === null);
+  check('run-out: still counts as a betting phase', hand.isBettingPhase() === true);
+  const timerBefore = ctx.timer?.name ?? null;
+  let threw = null;
+  try {
+    hand.beginTurn();
+  } catch (err) {
+    threw = err;
+  }
+  check('beginTurn with no seat to act returns instead of throwing', threw === null);
+  // The run-out's own timer is pending and must survive: the game keeps a
+  // single timer slot, so arming an action clock here would evict the run-out
+  // and strand the hand.
+  check('...and leaves the run-out timer alone',
+    (ctx.timer?.name ?? null) === timerBefore && ctx.timer?.name !== 'action');
+}
+
 console.log(`betting: ${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

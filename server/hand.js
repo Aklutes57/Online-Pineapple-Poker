@@ -72,6 +72,7 @@ export class Hand {
     this.runOut = false;
     this.revealed = false;
     this.allInEquity = null;
+    this.allInEquityCards = -1;
     // Live equity for the board currently being dealt, published only while
     // every remaining hand is already face up. See refreshEquity().
     this.equityNow = null;
@@ -335,6 +336,11 @@ export class Hand {
 
   beginTurn() {
     const player = this.bySeat.get(this.toActSeat);
+    // Nobody is to act: the table is waiting on everyone at once, or a caller
+    // reached here with a seat that is not in this hand. Arming a turn for a
+    // player who does not exist is how a stray reconnect used to crash the
+    // whole process, so this is the last line rather than the only one.
+    if (!player) return;
     let ms = null;
     if (player.sittingOut) ms = TIMINGS.AWAY_GRACE;
     // An offline player folds (or checks) on the short disconnect clock no
@@ -524,8 +530,12 @@ export class Hand {
           this.board,
           { omaha: !!this.variant.omaha }
         );
+        // What it was computed over, so refreshEquity can tell whether it is
+        // still the right answer instead of enumerating it all over again.
+        this.allInEquityCards = this.board.length;
       } catch {
         this.allInEquity = null;
+        this.allInEquityCards = -1;
       }
       // Running it twice is never automatic: everyone still in the hand has to
       // agree, every time. Ask them, and carry on once the answers are in.
@@ -649,22 +659,40 @@ export class Hand {
     if (live.length < 2) return;
     const board = this.visibleBoard();
     if (board.length > 5) return;
+    // Running it twice, the first board's cards are gone from the deck: they
+    // cannot come again on the second one. Counting them as live outs told a
+    // player drawing dead that they still had a chance.
+    const secondBoard = this.runItTwice && this.board2Reveal > 0;
+    const dead = secondBoard ? this.board : [];
     try {
+      // The odds at the moment the chips went in are already computed for the
+      // cooler detector. When nothing about the board has moved since, reuse
+      // that snapshot rather than paying for the same enumeration twice — a
+      // multi-way all-in preflop in PLO is seconds of work, and this process
+      // serves every table on the machine.
+      if (!secondBoard && this.allInEquity && board.length === this.allInEquityCards) {
+        this.equityNow = this.equityFrom(this.allInEquity, live, board);
+        return;
+      }
       const shares = equity(
         live.map((p) => ({ seat: p.seatIndex, holeCards: p.holeCards })),
         board,
-        { omaha: !!this.variant.omaha }
+        { omaha: !!this.variant.omaha, dead }
       );
-      this.equityNow = {
-        board: this.runItTwice && this.board2Reveal > 0 ? 2 : 1,
-        cards: board.length,
-        rows: live
-          .map((p) => ({ seat: p.seatIndex, pct: Math.round((shares.get(p.seatIndex) ?? 0) * 1000) / 10 }))
-          .sort((a, b) => b.pct - a.pct),
-      };
+      this.equityNow = this.equityFrom(shares, live, board);
     } catch {
       this.equityNow = null; // never let a readout take a hand down
     }
+  }
+
+  equityFrom(shares, live, board) {
+    return {
+      board: this.runItTwice && this.board2Reveal > 0 ? 2 : 1,
+      cards: board.length,
+      rows: live
+        .map((p) => ({ seat: p.seatIndex, pct: Math.round((shares.get(p.seatIndex) ?? 0) * 1000) / 10 }))
+        .sort((a, b) => b.pct - a.pct),
+    };
   }
 
   continueStreet() {

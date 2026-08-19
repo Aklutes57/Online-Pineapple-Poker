@@ -7,14 +7,17 @@
 //
 // WATCHING IS NOT THE SAME AS BROADCASTING. Turning your own camera on is not
 // the price of seeing anyone else's: a player who never pressed Join still
-// connects to everyone who did, receive-only, and sees and hears them. That is
-// what the `present` set below is for — it is built from who is broadcasting,
-// not from whether you are.
+// connects to everyone who did, receive-only, and sees and hears them. The set
+// we connect to is built from who is broadcasting, not from whether you are.
+//
+// Watching still requires a SEAT. Anyone with the table link can open the page,
+// and answering a stranger would hand them a live camera and microphone with
+// nothing on screen to say so — so offers are answered only for players the
+// table can actually see sitting there (see isSeated).
 //
 // Glare-free by construction, with two cases:
 //   - one side broadcasting: the RECEIVING side offers. It has to be that way
-//     round — a spectator isn't in `state.seats` at all, so the broadcaster
-//     cannot see them to offer first.
+//     round — the broadcaster has no way to tell who wants to watch.
 //   - both broadcasting: the smaller player id offers, as before.
 // Non-trickle ICE (we wait for gathering to finish, then send one SDP with the
 // candidates baked in) keeps the signalling to two messages a pair, so it never
@@ -459,9 +462,15 @@ async function handleSignal({ from, data }) {
   let pc = peers.get(from);
   const sdp = data.sdp;
   if (sdp.type === 'offer') {
-    // Whoever offered is the initiator for this pair; we answer — up to a
-    // point. Every answer is another copy of our camera going up, so past the
-    // cap we simply do not, and that watcher falls back to the profile picture.
+    // Whoever offered is the initiator for this pair; we answer — but only for
+    // someone actually AT the table. Anyone with the link can open the page as
+    // a spectator, and answering them would hand a stranger a seated player's
+    // live camera and microphone with nothing on screen to say so. Watching
+    // without broadcasting is the point of all this; watching without sitting
+    // down is not.
+    if (!pc && !isSeated(from)) return;
+    // Every answer is another copy of our camera going up, so past the cap we
+    // simply do not, and that watcher falls back to the profile picture.
     if (!pc && peers.size >= MAX_PEERS) return;
     if (!pc) pc = makePeer(from, false, peerKeyFor(from));
     await pc.setRemoteDescription(sdp);
@@ -486,6 +495,10 @@ function waitIceComplete(pc, timeout = 2500) {
     pc.addEventListener('icegatheringstatechange', check);
     setTimeout(done, timeout); // trickle-free but never hang on a slow network
   });
+}
+
+function isSeated(playerId) {
+  return !!client?.state?.seats?.some((s) => s && s.playerId === playerId);
 }
 
 // The key a peer connection *should* have right now, so an answerer records the
