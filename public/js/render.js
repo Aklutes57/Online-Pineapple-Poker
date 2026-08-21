@@ -928,8 +928,13 @@ function renderCenter(client) {
     html = `<p>Game paused${you?.isHost ? ' — resume from the Host menu' : ''}</p>`;
   } else if (state.pauseRequested) {
     html = '<p>Pausing after this hand…</p>';
-  } else if (state.hand && !state.hand.finished && state.hand.phase === PHASES.COUNTDOWN_747) {
-    // The number itself ticks in the timer loop between broadcasts.
+  } else if (state.hand && !state.hand.finished
+             && state.hand.phase === PHASES.COUNTDOWN_747
+             && state.hand.timerName === 'countdown747') {
+    // The number itself ticks in the timer loop between broadcasts. Gated on
+    // the timer as well as the phase: once the countdown hands over to the
+    // staged reveal there is nothing counting down, and the element would sit
+    // frozen on "3" for the whole showdown.
     html = '<div class="countdown-747" id="cd747-num">3</div>';
   } else if (state.hand?.phase === PHASES.RIT_VOTE) {
     const votes = state.hand.ritVote || [];

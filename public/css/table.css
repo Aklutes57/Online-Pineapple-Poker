@@ -1626,6 +1626,14 @@ td.dim { color: var(--text-dim); }
   font-size: 13px;
 }
 
+/* The spreadsheet is THE ledger — colour-coded, and what everyone actually
+   wants. Plain CSV stays for whoever needs to paste it somewhere, but it is
+   not the thing you reach for by default. */
+.ledger-plain {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
 .empty-note {
   color: var(--text-dim);
   font-size: 13px;

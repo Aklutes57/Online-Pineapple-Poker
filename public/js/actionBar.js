@@ -279,8 +279,15 @@ export function renderActionBar(client) {
       <span class="ab-note">Beat the dealer's hand to win the pot — choices reveal together.</span>`;
   } else if (you.decided747 && hand && hand.phase === PHASES.DECISION_747) {
     html = `<span class="ab-note">Locked in — waiting for the others…</span>`;
-  } else if (hand && hand.phase === PHASES.COUNTDOWN_747 && !hand.finished) {
-    html = `<span class="ab-note ab-highlight">Revealing…</span>`;
+  } else if (hand && !hand.finished
+             && (hand.phase === PHASES.COUNTDOWN_747 || hand.phase === PHASES.REVEAL_747)) {
+    // The showdown is dealt out, so say which beat the table is watching.
+    const beat = {
+      reveal747: 'Cards up…',
+      reveal747card: 'Dealing the fifth card…',
+      reveal747dealer: "The dealer's card…",
+    }[hand.timerName];
+    html = `<span class="ab-note ab-highlight">${beat || 'Revealing…'}</span>`;
   } else if (you.canDiscard) {
     html = `<span class="ab-note ab-highlight">Tap one of your cards to throw it away</span>`;
   } else if (you.hasDiscarded && hand && (hand.phase === PHASES.DISCARD_PREFLOP || hand.phase === PHASES.DISCARD_POSTFLOP)) {

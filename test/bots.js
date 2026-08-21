@@ -20,6 +20,8 @@ TIMINGS.DISCARD_TIME = 3000;
 TIMINGS.RIT_VOTE_TIME = 2000; // a bot that declines to answer shouldn't stall the soak
 TIMINGS.AWAY_GRACE = 20;
 TIMINGS.COUNTDOWN_747 = 10;
+TIMINGS.REVEAL_747_GAP = 10;
+TIMINGS.REVEAL_747_STEP = 5;
 
 const HANDS_PER_VARIANT = parseInt(process.argv[2], 10) || 60;
 const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo', '747'];

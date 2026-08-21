@@ -38,6 +38,7 @@ export const EVENTS = {
   HOST_START_GAME: 'host:startGame',
   HOST_PAUSE: 'host:pause',
   HOST_KICK: 'host:kick',
+  HOST_TRANSFER: 'host:transfer',
   HOST_ADJUST_STACK: 'host:adjustStack',
   HOST_UPDATE_SETTINGS: 'host:updateSettings',
   HOST_CLOSE_TABLE: 'host:closeTable',
@@ -70,6 +71,11 @@ export const PHASES = {
   // 747 engine phases
   DECISION_747: 'decision747',
   COUNTDOWN_747: 'countdown747',
+  // The staged showdown: decisions turned over, then the fifth cards landing
+  // one at a time, then the dealer's. One phase for all three beats — which
+  // beat is showing is carried by the timer name and by the card counts the
+  // view already publishes.
+  REVEAL_747: 'reveal747',
 };
 
 // Each variant declares: which engine runs the hand ('community' is the
@@ -243,6 +249,13 @@ export const TIMINGS = {
   DISCARD_NO_CLOCK: 300000, // untimed tables still need a stall fallback
   NUDGE_GRACE: 15000, // ms a nudged player gets before the host's prod lands
   COUNTDOWN_747: 3200, // the 3-2-1 before stay/fold choices are revealed
+  // The 747 showdown is dealt out rather than announced. GAP is the beat the
+  // table gets to read something — who stayed, and the last card before the
+  // dealer's — and STEP is the rhythm the fifth cards land in. Total added
+  // time is 2*GAP + (n-1)*STEP for n stayers: 8s heads-up, 20s nine-handed.
+  // Keep GAP under the soak's 10s stall watchdog (test/bots.js).
+  REVEAL_747_GAP: 4000,
+  REVEAL_747_STEP: 1500,
   NEXT_HAND_DELAY: 3000, // ms between hands
   // ms between streets on an all-in run-out. Long on purpose: when the money
   // is already in, the run-out IS the hand, and a flop that lands four

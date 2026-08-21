@@ -10,7 +10,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-pay-')), 
 const { buildServer } = await import('../server/app.js');
 const { initDb, run } = await import('../server/db.js');
 const accounts = await import('../server/accounts.js');
-const { ledgerCsvForGame } = await import('../server/stats.js');
+const { ledgerCsvForGame, ledgerXlsxForGame } = await import('../server/stats.js');
 
 let failures = 0;
 let passes = 0;
@@ -90,6 +90,25 @@ check('the ledger CSV is downloadable by game id (no auth)',
   csvRes.ok && csvRes.headers.get('content-type').includes('text/csv')
   && csvRes.headers.get('content-disposition').includes('pineapple-ledger-2023-11-14.csv'));
 check('an unknown game CSV is 404', (await fetch(`${url}/api/games/nope/ledger.csv`)).status === 404);
+
+// ---- the colour-coded spreadsheet, which is the download people actually get ----
+const book = ledgerXlsxForGame('GAME123');
+check('a spreadsheet is generated for a played game',
+  !!book && book.body instanceof Uint8Array && book.body.length > 0);
+check('the spreadsheet filename carries the game date',
+  book.filename === 'reg-poker-ledger-2023-11-14.xlsx');
+// A .xlsx is a ZIP; every one starts "PK".
+check('the spreadsheet really is a workbook',
+  book.body[0] === 0x50 && book.body[1] === 0x4b);
+check('an unknown game yields no spreadsheet', ledgerXlsxForGame('nope') === null);
+
+const xlsxRes = await fetch(`${url}/api/games/GAME123/ledger.xlsx`);
+check('the ledger spreadsheet is downloadable by game id (no auth)',
+  xlsxRes.ok
+  && xlsxRes.headers.get('content-type').includes('spreadsheetml')
+  && xlsxRes.headers.get('content-disposition').includes('reg-poker-ledger-2023-11-14.xlsx'));
+check('an unknown game spreadsheet is 404',
+  (await fetch(`${url}/api/games/nope/ledger.xlsx`)).status === 404);
 
 console.log(`payments: ${passes} passed, ${failures} failed`);
 await new Promise((r) => httpServer.close(r));

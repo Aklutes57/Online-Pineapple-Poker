@@ -75,6 +75,10 @@ export class Hand747 {
 
     this.dealerCards = []; // SECRET until showdown
     this.dealerOriginalFour = null; // the four it is judged on for a Natural Seven
+    // The staged reveal: who is still owed a fifth card, and how far through
+    // that list we are. Frozen at reveal() time and only ever walked forward.
+    this.revealQueue = null;
+    this.revealIndex = 0;
     this.dealerRevealed = false;
     this.ctx = ctx;
 
@@ -219,8 +223,32 @@ export class Hand747 {
   }
 
   // ---- reveal, fifth card, showdown ----
+  //
+  // The showdown is dealt out rather than announced: the decisions turn over,
+  // then one fifth card lands at a time in button order, then the dealer's.
+  // Each beat ends in a timer and a broadcast, so the table watches the hand
+  // happen instead of being handed the result.
+  //
+  // The rule that makes this safe: THE BEATS MOVE CARDS ONLY. Every chip
+  // movement still happens inside finishShowdown, in one tick, exactly as it
+  // always did — so a crash half way through is voided by recoverFromError
+  // with the antes handed back and nothing double-paid.
 
+  // Arms the next beat, then broadcasts. That order matters: views.js reads
+  // the game's timer while building the frame, so broadcasting first would
+  // publish one frame with no clock on it.
+  stepTimer(name, ms, fn) {
+    this.ctx.setTimer(name, ms, fn);
+    this.ctx.changed();
+  }
+
+  // Beat one: the choices turn over and nothing else. The table reads who
+  // stayed and who ducked before a card moves.
   reveal() {
+    // Only ever reachable from the countdown. Without this a second entry
+    // would re-fold, re-log and re-queue the fifth cards — dealing the deck
+    // out twice in the worst case.
+    if (this.finished || this.phase !== PHASES.COUNTDOWN_747) return;
     for (const p of this.seatsFromButton()) {
       this.pushEvent({ type: 'decision', seat: p.seatIndex, stay: p.decision747 === 'stay' });
       if (p.decision747 !== 'stay') {
@@ -233,6 +261,11 @@ export class Hand747 {
         ? `Staying: ${stayers.map((p) => p.nickname).join(', ')}`
         : 'Everyone folded — the dealer sweeps'
     );
+    // Set after the decision loop, on purpose: pushEvent stamps the current
+    // phase as the event's street, so the stored timeline stays exactly what
+    // the replayer has always seen. Nothing yields in between, so there is no
+    // window where the guard above is unarmed.
+    this.phase = PHASES.REVEAL_747;
 
     if (stayers.length === 0) {
       // House rule: when nobody plays the dealer, the best hand at the table
@@ -256,14 +289,41 @@ export class Hand747 {
         // other penalty — paying here would inflate the pot it rides behind.
         this.duckPayer = payer;
       }
-      this.finishShowdown([], new Map());
+      // Nothing to deal — but the sweep still gets its own beat rather than
+      // landing in the same frame as the folds.
+      this.stepTimer('reveal747', TIMINGS.REVEAL_747_GAP, () => this.finishShowdown([], new Map()));
       return;
     }
 
-    // Fifth card to each stayer, then the dealer's fifth.
-    for (const p of this.seatsFromButton()) {
-      if (!p.folded) p.holeCards.push(...this.draw(1));
+    // Frozen once, here — NOT rebuilt per beat. It is the same
+    // seatsFromButton() order the one-tick deal always used, and freezing it
+    // means nothing that happens between beats can change which card reaches
+    // which seat.
+    this.revealQueue = this.seatsFromButton().filter((p) => !p.folded);
+    this.revealIndex = 0;
+    this.stepTimer('reveal747', TIMINGS.REVEAL_747_GAP, () => this.dealNextFifth());
+  }
+
+  // Beat two, once per stayer: one card, one seat, in button order.
+  dealNextFifth() {
+    if (this.finished || this.phase !== PHASES.REVEAL_747) return;
+    const p = this.revealQueue[this.revealIndex++];
+    // Unconditional. The queue decides how many cards come off the deck and in
+    // what order; skipping one because a seat looks wrong would hand the NEXT
+    // player a card that was never theirs and shift the rest of the hand off
+    // the deck that was committed before the deal.
+    if (p) p.holeCards.push(...this.draw(1));
+    if (this.revealIndex < this.revealQueue.length) {
+      this.stepTimer('reveal747card', TIMINGS.REVEAL_747_STEP, () => this.dealNextFifth());
+    } else {
+      this.stepTimer('reveal747dealer', TIMINGS.REVEAL_747_GAP, () => this.revealDealer());
     }
+  }
+
+  // Beat three: the dealer's card turns over and the hand resolves.
+  revealDealer() {
+    if (this.finished || this.phase !== PHASES.REVEAL_747) return;
+    const stayers = this.livePlayers();
     this.dealerCards.push(...this.draw(1));
 
     // Natural Seven first — two or more real sevens in the original four —
@@ -302,6 +362,7 @@ export class Hand747 {
   }
 
   finishShowdown(winners, scores, dealerScore = null, losses = {}) {
+    if (this.finished) return; // paying a pot twice is the one unrecoverable bug
     this.ctx.clearTimer();
     // The pot as it stood before the round is settled: antes plus anything
     // riding in. Read BEFORE penalties are paid, so a penalty can never

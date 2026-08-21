@@ -13,6 +13,23 @@
 // anything that sends actual money must key on that, never on the name.
 const payee = (r) => r.realName || r.nickname;
 
+// Two people at one table can put the same name on the ledger — it is free
+// text — and "Carl pays John Smith 100" twice is unusable. Returns a function
+// that names a player for a settle-up line, qualifying a shared name with the
+// username, which the table does keep unique.
+//
+// rows: [{ playerId, nickname, realName? }].
+export function payeeLabeller(rows) {
+  const count = new Map();
+  for (const r of rows) count.set(payee(r), (count.get(payee(r)) || 0) + 1);
+  const byId = new Map(rows.map((r) => [r.playerId, r]));
+  return (id, fallback) => {
+    const r = byId.get(id);
+    if (!r) return fallback;
+    return count.get(payee(r)) > 1 ? `${payee(r)} (${r.nickname})` : payee(r);
+  };
+}
+
 export function settleUp(rows) {
   const side = (keep) => rows
     .filter(keep)

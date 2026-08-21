@@ -416,7 +416,15 @@ try {
 
   await ben.waitForSelector('.countdown-747', { timeout: 5000 });
   await check('3-2-1 countdown appears once everyone locks in', true);
-  await anna.waitForSelector('.dealer-title:has-text("Dealer —")', { timeout: 15000 });
+  // The showdown is dealt out: your fifth card lands a full beat before the
+  // dealer's turns over, so this is a real ordering check, not a race.
+  await anna.waitForFunction(
+    () => document.querySelectorAll('.seat.me .card').length === 5,
+    null, { timeout: 25000 }
+  );
+  await check('your fifth card lands before the dealer turns over',
+    !(await anna.locator('.dealer-title:has-text("Dealer —")').isVisible().catch(() => false)));
+  await anna.waitForSelector('.dealer-title:has-text("Dealer —")', { timeout: 30000 });
   await check('dealer hand revealed with its description', true);
   await check('747 stayers hold five cards',
     (await anna.locator('.seat.me .card').count()) === 5);
@@ -510,7 +518,11 @@ try {
     'settle-up suggests payments when someone is up',
     someoneIsUp ? settleLines.length > 0 : true
   );
-  await check('CSV export button is present', await anna.locator('#ledger-csv').isVisible());
+  await check('the colour spreadsheet is the primary download',
+    (await anna.textContent('#ledger-xlsx')).trim() === 'Download ledger'
+    && (await anna.locator('#ledger-xlsx').getAttribute('class')).includes('btn-primary'));
+  await check('plain CSV is still there, demoted',
+    (await anna.textContent('#ledger-csv')).trim() === 'Plain CSV');
 
   // The books-balance line is the ledger auditing itself, for everyone.
   await check('ledger books balance for the host', await anna.locator('#books-line.ok').isVisible());
@@ -525,6 +537,48 @@ try {
   await check('the top-bar Ledger button opens the pop-up for a guest', true);
   await check('ledger books balance for a guest too', await ben.locator('#books-line.ok').isVisible());
   await ben.click('#ledger-close');
+
+  // ---- the host can hand the table over, and hand it back ----
+  await openMenu(anna);
+  await anna.click('#host-menu-btn');
+  await anna.waitForSelector('#host-modal:not(.hidden)');
+  // Three players are seated, so there are exactly two seats to hand it to:
+  // the button is never offered against your own row.
+  await check('Make host is offered for every seat but your own',
+    (await anna.locator('#h-players [data-haction="makehost"]').count())
+      === (await anna.locator('#h-players .hp-row').count()) - 1);
+  // The confirm is a browser dialog; accept it.
+  anna.once('dialog', (d) => d.accept());
+  await anna.locator('#h-players [data-haction="makehost"]').first().click();
+  await anna.waitForFunction(
+    () => document.getElementById('host-menu-btn').classList.contains('hidden'),
+    { timeout: 5000 }
+  );
+  await check('handing over takes the host controls away from you', true);
+  // Close it: a modal left open would swallow every later click on this page.
+  await anna.click('#h-done');
+  await anna.waitForSelector('#host-modal:not(.hidden)', { state: 'detached' });
+  // The Host button lives inside the Menu sheet, so check the class rather
+  // than on-screen visibility — the sheet is closed on Ben's side.
+  await ben.waitForFunction(
+    () => !document.getElementById('host-menu-btn').classList.contains('hidden'),
+    { timeout: 5000 }
+  );
+  await check('and gives them to the player you named', true);
+
+  // Ben gives it straight back, so the rest of the run is Anna's table again.
+  await openMenu(ben);
+  await ben.click('#host-menu-btn');
+  await ben.waitForSelector('#host-modal:not(.hidden)');
+  ben.once('dialog', (d) => d.accept());
+  await ben.locator('#h-players [data-haction="makehost"]').first().click();
+  await anna.waitForFunction(
+    () => !document.getElementById('host-menu-btn').classList.contains('hidden'),
+    { timeout: 5000 }
+  );
+  await check('and the new host can hand it back', true);
+  await ben.click('#h-done');
+  await ben.waitForSelector('#host-modal:not(.hidden)', { state: 'detached' });
 
   // The client-format frame: chat docked bottom-left, buttons bottom-right,
   // and the two must never overlap.
@@ -924,9 +978,9 @@ try {
   const gameCode = gameUrl.split('/').pop();
   await check('the home page lists the table this device played at',
     (await ben.evaluate(() => document.getElementById('recent-list').innerHTML)).includes(gameCode));
-  await check('the recent-table ledger link serves the saved CSV',
+  await check('the recent-table ledger link serves the saved spreadsheet',
     (await ben.evaluate(async (id) =>
-      (await fetch(`/api/games/${id}/ledger.csv`)).status, gameCode)) === 200);
+      (await fetch(`/api/games/${id}/ledger.xlsx`)).status, gameCode)) === 200);
 
   // ---- tournament format lives in the create pop-up, cash game is default ----
   const tess = await newPage('tess');

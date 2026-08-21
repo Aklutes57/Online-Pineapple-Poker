@@ -10,8 +10,23 @@
 //    have been played.
 
 import { run, get, all, now } from './db.js';
-import { settleUp } from '../shared/settle.js';
+import { settleUp, payeeLabeller } from '../shared/settle.js';
 import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '../shared/xlsx.js';
+
+// The database speaks snake_case and every export speaks camelCase; one
+// place to cross over, so the CSV and the spreadsheet cannot drift apart.
+function shapeLedgerRows(rows) {
+  return rows.map((r) => ({
+    playerId: r.player_id,
+    nickname: r.nickname,
+    realName: r.real_name,
+    buyIns: r.buy_ins,
+    cashOuts: r.cash_outs,
+    stack: r.final_stack,
+    net: r.net,
+    handsPlayed: r.hands_played,
+  }));
+}
 
 export function ensureTableSession(game) {
   if (game.tableSessionId) return game.tableSessionId;
@@ -103,23 +118,7 @@ export function ledgerCsvForGame(gameId) {
 
   const iso = new Date(session.started_at).toISOString().slice(0, 10);
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-
-  // A ledger name is free text, so two people at one table can share one. The
-  // settle-up block is the part people actually pay from, and "Carl pays John
-  // Smith 100" twice is unusable — so a shared name is qualified by the
-  // username, which the table does keep unique.
-  const nameCount = new Map();
-  for (const r of rows) {
-    const n = r.real_name || r.nickname;
-    nameCount.set(n, (nameCount.get(n) || 0) + 1);
-  }
-  const byId = new Map(rows.map((r) => [r.player_id, r]));
-  const settleLabel = (id, fallback) => {
-    const r = byId.get(id);
-    if (!r) return fallback;
-    const n = r.real_name || r.nickname;
-    return nameCount.get(n) > 1 ? `${n} (${r.nickname})` : n;
-  };
+  const settleLabel = payeeLabeller(shapeLedgerRows(rows));
   const lines = [
     ['Reg-Poker Online ledger'],
     ['Game', gameId],
@@ -135,9 +134,9 @@ export function ledgerCsvForGame(gameId) {
     ]),
     [],
     ['Settle up: from', 'to', 'amount'],
-    ...settleUp(rows.map((r) => ({
-      playerId: r.player_id, nickname: r.nickname, realName: r.real_name, net: r.net,
-    }))).map((p) => [settleLabel(p.fromId, p.from), settleLabel(p.toId, p.to), p.amount]),
+  
+    ...settleUp(shapeLedgerRows(rows))
+      .map((p) => [settleLabel(p.fromId, p.from), settleLabel(p.toId, p.to), p.amount]),
   ];
   const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
   return { filename: `pineapple-ledger-${iso}.csv`, body };
@@ -161,16 +160,8 @@ export function ledgerXlsxForGame(gameId) {
   if (!rows.length) return null;
 
   const iso = new Date(session.started_at).toISOString().slice(0, 10);
-  const shaped = rows.map((r) => ({
-    playerId: r.player_id,
-    nickname: r.nickname,
-    realName: r.real_name,
-    buyIns: r.buy_ins,
-    cashOuts: r.cash_outs,
-    stack: r.final_stack,
-    net: r.net,
-    handsPlayed: r.hands_played,
-  }));
+  const shaped = shapeLedgerRows(rows);
+  const label = payeeLabeller(shaped);
   const body = buildXlsx(
     ledgerSheet(shaped, {
       meta: [
@@ -179,7 +170,12 @@ export function ledgerXlsxForGame(gameId) {
         ['Variant', session.variant],
         ['Blinds', `${session.small_blind}/${session.big_blind}`],
       ],
-      settle: settleUp(shaped),
+      // Same disambiguation the CSV has always had: this is the block people
+      // actually pay from, so two players called John Smith must not both
+      // appear as "John Smith".
+      settle: settleUp(shaped).map((p) => ({
+        ...p, from: label(p.fromId, p.from), to: label(p.toId, p.to),
+      })),
     }),
     { widths: LEDGER_WIDTHS }
   );

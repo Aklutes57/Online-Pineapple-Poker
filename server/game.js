@@ -74,6 +74,9 @@ export class Game {
     this.pauseRequested = false;
     this.timer = null; // { name, deadline, handle }
     this.hostTransferTimeout = null;
+    // Set once the host deliberately hands the table over, which switches off
+    // the creator's automatic reclaim for good.
+    this.hostHandedOver = false;
     this.seq = 0;
     this.lastActivity = Date.now();
     this.closed = false;
@@ -1249,10 +1252,33 @@ export class Game {
     return player.id === this.hostId;
   }
 
+  // Hands the table to somebody else, on purpose. Host has only ever moved by
+  // accident until now — a two-minute disconnect, or the creator reconnecting
+  // — so there was no way to say "you run it, I'm going to bed".
+  transferHost(playerId) {
+    const target = this.players.get(playerId);
+    if (!target) return { ok: false, error: 'no such player' };
+    if (target.id === this.hostId) return { ok: false, error: 'they are already the host' };
+    // A disconnected host is a table nobody can run: no approvals, no
+    // settings, no closing it. Refuse rather than strand everyone.
+    if (!target.connected) return { ok: false, error: 'they are not connected' };
+    this.hostId = target.id;
+    // A hand-over is final. Without this the creator's next reconnect would
+    // silently take the table back through reclaimHostIfCreator, and the
+    // hand-over would look like it simply did not work.
+    this.hostHandedOver = true;
+    clearTimeout(this.hostTransferTimeout);
+    this.addLog(`${target.nickname} is now the host`);
+    return { ok: true };
+  }
+
   // Called when a player (re)connects. If the table's creator is back and host
-  // had passed to someone else while they were gone, hand it straight back.
+  // had passed to someone else while they were gone, hand it straight back —
+  // unless the creator gave it away deliberately, which is not something to
+  // undo behind their back.
   // Returns true if host actually changed, so the caller can rebroadcast.
   reclaimHostIfCreator(player) {
+    if (this.hostHandedOver) return false;
     if (!player || player.id !== this.creatorId || this.hostId === player.id) return false;
     if (!player.connected) return false;
     this.hostId = player.id;

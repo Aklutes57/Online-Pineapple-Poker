@@ -1,7 +1,7 @@
 // Side panel (Chat / Log / Ledger tabs), seat-request queue, and host modal.
 
 import { EVENTS, GAME_STATUS, VARIANTS } from '/shared/constants.js';
-import { settleUp } from '/shared/settle.js';
+import { settleUp, payeeLabeller } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
 import { PAYMENT_SERVICES, paymentUrl, displayHandle } from '/shared/payments.js';
 import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '/shared/xlsx.js';
@@ -237,6 +237,13 @@ export function initPanels(client) {
     } else if (btn.dataset.haction === 'kick') {
       if (confirm('Remove this player from the table?')) {
         client.send(EVENTS.HOST_KICK, { playerId });
+      }
+    } else if (btn.dataset.haction === 'makehost') {
+      // Deliberately final: the table has exactly one host, and the only way
+      // back is for the new one to hand it over again.
+      const name = btn.closest('.hp-row')?.querySelector('.hp-name')?.textContent?.trim() || 'them';
+      if (confirm(`Make ${name} the host? You will lose the host controls, and only they can give them back.`)) {
+        client.send(EVENTS.HOST_TRANSFER, { playerId });
       }
     } else {
       const raw = prompt(
@@ -487,18 +494,7 @@ function renderLedger(client) {
   );
   // Two rows that display the same name are disambiguated by the username the
   // table actually knows them by, so a settle-up line is never ambiguous.
-  const nameCount = new Map();
-  for (const r of rows) {
-    const n = r.realName || r.nickname;
-    nameCount.set(n, (nameCount.get(n) || 0) + 1);
-  }
-  const byId = new Map(rows.map((r) => [r.playerId, r]));
-  const payeeLabel = (id, fallback) => {
-    const r = byId.get(id);
-    if (!r) return fallback;
-    const n = r.realName || r.nickname;
-    return nameCount.get(n) > 1 ? `${n} (${r.nickname})` : n;
-  };
+  const payeeLabel = payeeLabeller(rows);
 
   // The books check everyone can see: every chip bought in is either in a
   // stack, cashed out, or riding in the 747 pot. Σnet is stacks + cash-outs
@@ -576,8 +572,8 @@ function renderLedger(client) {
           : '<p class="empty-note">Everyone is square.</p>'
       }
       <div class="ledger-actions">
-        <button class="btn btn-ghost ledger-export" id="ledger-xlsx" title="A spreadsheet with the winners in green and the losers in red">Download (colour)</button>
-        <button class="btn btn-ghost ledger-export" id="ledger-csv" title="Plain data, no formatting">CSV</button>
+        <button class="btn btn-primary ledger-export" id="ledger-xlsx" title="The ledger as a spreadsheet — winners in green, losers in red">Download ledger</button>
+        <button class="btn btn-ghost ledger-export ledger-plain" id="ledger-csv" title="Plain text, no colour — for pasting into something else">Plain CSV</button>
         <a class="btn btn-ghost ledger-export" href="/api/games/${encodeURIComponent(client.gameId)}/ledger.xlsx" target="_blank" rel="noopener" title="The copy saved on the server — safe even if the game is over">Saved copy</a>
       </div>
       <p class="empty-note">The ledger is auto-saved on the server, so it's here even if nobody screenshots it.</p>
@@ -624,10 +620,20 @@ function exportLedgerXlsx(client) {
     return;
   }
   const settle = settleUp(rows);
+  const label = payeeLabeller(rows);
   const bytes = buildXlsx(
     ledgerSheet(rows, {
-      meta: [['Game', client.gameId], ['Date', new Date().toISOString().slice(0, 10)]],
-      settle,
+      meta: [
+        ['Game', client.gameId],
+        ['Date', new Date().toISOString().slice(0, 10)],
+        ['Variant', VARIANTS[client.state.settings.variant]?.label || client.state.settings.variant],
+        ['Blinds', `${client.state.settings.smallBlind}/${client.state.settings.bigBlind}`],
+      ],
+      // Same disambiguation the panel itself shows, so the spreadsheet never
+      // says "John Smith pays John Smith".
+      settle: settle.map((p) => ({
+        ...p, from: label(p.fromId, p.from), to: label(p.toId, p.to),
+      })),
     }),
     { widths: LEDGER_WIDTHS }
   );
@@ -832,7 +838,9 @@ function refreshHostModal(client, force = false) {
               : ''
           }
           ${p.playerId !== client.you.playerId
-            ? `<button class="btn btn-ghost hp-btn hp-kick" data-haction="kick" data-player="${p.playerId}">Kick</button>`
+            ? `<button class="btn btn-ghost hp-btn" data-haction="makehost" data-player="${p.playerId}"
+                       title="Hand the table to ${escapeHtml(p.nickname)} — you keep your seat, they get the controls">Make host</button>
+               <button class="btn btn-ghost hp-btn hp-kick" data-haction="kick" data-player="${p.playerId}">Kick</button>`
             : ''}
         </span>
       </div>`

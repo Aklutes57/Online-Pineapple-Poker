@@ -114,6 +114,12 @@ function makeCtx() {
       this.timer = null;
       t.fn();
     },
+    // The showdown is dealt out across several timers now, so most tests want
+    // "run the hand out" rather than one beat. Bounded on purpose: the untimed
+    // decision fallback re-arms itself and would otherwise spin forever.
+    fireAll(max = 25) {
+      for (let i = 0; i < max && this.timer && !this.finishedFlag; i++) this.fire();
+    },
   };
 }
 
@@ -174,7 +180,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   check('still in decision until everyone locks', hand.phase === PHASES.DECISION_747);
   hand.handleDecision(players[0], false);
   check('all locked -> countdown', hand.phase === PHASES.COUNTDOWN_747 && ctx.timer?.name === 'countdown747');
-  ctx.fire(); // countdown ends -> reveal
+  ctx.fireAll(); // countdown ends -> reveal
   check('hand finished', hand.finished && ctx.finishedFlag);
   check('folder is folded, ante stays in pot', players[0].folded && players[0].stack === 90);
   check('stayers have five cards', players[1].holeCards.length === 5 && players[2].holeCards.length === 5);
@@ -204,7 +210,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[0], false);
   hand.handleDecision(players[1], false);
   hand.handleDecision(players[2], false);
-  ctx.fire(); // countdown -> reveal
+  ctx.fireAll(); // countdown -> reveal
   check('duck: hand finished', hand.finished);
   check('duck: best hand paid 3x the ante', players[1].stack === 100 - 10 - 30);
   check('duck: the others paid only the ante',
@@ -213,6 +219,66 @@ function conserve(name, players, before, hand, carryIn = 0) {
   check('duck: penalty recorded against the ducker',
     hand.results.penalties?.some((p) => p.seat === 1 && p.amount === 30 && p.to === 'duck'));
   conserve('duck rule', players, before, hand);
+}
+
+// The showdown is DEALT OUT: the decisions turn over on their own, then one
+// fifth card per stayer in button order, then the dealer's. And staging
+// changed only WHEN the cards come off the deck, never WHICH — the deck is
+// committed before the deal, so the exact cards are pinned here.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100), makePlayer(2, 100)];
+  const before = totalChips(players);
+  const deck = [
+    '7s', '2h', '9c', '5d', // seat 1
+    'Ks', 'Qd', '8h', '3c', // seat 2
+    'Ac', 'Jd', '6s', '4h', // seat 0
+    'Td', '9s', '2c', '8d', // dealer
+    'As', 'Kh', 'Qs', 'Jh', // fifths: seat 1, seat 2, seat 0, then the dealer
+  ];
+  const { hand, ctx } = make747({ players, deck });
+  for (const p of players) hand.handleDecision(p, true);
+
+  ctx.fire(); // the countdown ends
+  check('reveal: the decisions land on their own',
+    hand.phase === PHASES.REVEAL_747 && !hand.finished);
+  check('reveal: not one card has moved yet',
+    players.every((p) => p.holeCards.length === 4) && hand.dealerCards.length === 4);
+  check('reveal: a beat is pending', ctx.timer?.name === 'reveal747');
+
+  ctx.fire();
+  check('reveal: the first card goes to the seat left of the button',
+    players[1].holeCards.length === 5 && players[2].holeCards.length === 4
+    && players[0].holeCards.length === 4);
+  ctx.fire();
+  check('reveal: then the next seat round', players[2].holeCards.length === 5);
+  ctx.fire();
+  check('reveal: the dealer waits for the last player',
+    players[0].holeCards.length === 5 && hand.dealerCards.length === 4 && !hand.finished);
+  check('reveal: and gets its own beat', ctx.timer?.name === 'reveal747dealer');
+
+  ctx.fire();
+  check('reveal: the dealer\'s card resolves the hand',
+    hand.dealerCards.length === 5 && hand.finished);
+  check('reveal: staging did not change the deal order',
+    players[1].holeCards[4] === 'As' && players[2].holeCards[4] === 'Kh'
+    && players[0].holeCards[4] === 'Qs' && hand.dealerCards[4] === 'Jh');
+  conserve('staged reveal', players, before, hand);
+}
+
+// Everyone ducking still gets its own beat — the sweep does not land in the
+// same frame as the folds — but no card is dealt to anybody.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100)];
+  const before = totalChips(players);
+  const { hand, ctx } = make747({ players, deck: null, ante: 10 });
+  for (const p of players) hand.handleDecision(p, false);
+  ctx.fire(); // the countdown ends
+  check('duck: the folds land on their own',
+    hand.phase === PHASES.REVEAL_747 && !hand.finished && ctx.timer?.name === 'reveal747');
+  ctx.fire();
+  check('duck: the sweep follows a beat later', hand.finished);
+  check('duck: the dealer never took a fifth card', hand.dealerCards.length === 4);
+  conserve('staged duck', players, before, hand);
 }
 
 // Natural Seven beats even the dealer's Five of a Kind.
@@ -228,7 +294,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   const { hand, ctx } = make747({ players, deck });
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[0], true);
-  ctx.fire();
+  ctx.fireAll();
   check('natural seven wins automatically', players[1].stack === 90 + 20);
   check('natural seven seat recorded', hand.results.naturalSevenSeats.includes(1));
   check('natural seven described', players[1].handResult.desc === 'Natural Seven');
@@ -250,7 +316,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   const { hand, ctx } = make747({ players, deck });
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   check('tie loses to the dealer', players[1].stack === 90);
   check('tied pot rides', hand.results.carryOut === 20);
   check('the ride is handed to the game before the broadcast', ctx.carried === 20);
@@ -268,7 +334,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[0], false);
   hand.handleDecision(players[1], false);
   hand.handleDecision(players[2], false);
-  ctx.fire();
+  ctx.fireAll();
   check('all-fold: finished', hand.finished);
   check('all-fold: dealer keeps four cards', hand.dealerCards.length === 4);
   // The pot rides, and the duck rule adds 3x the ante from whoever held the
@@ -293,7 +359,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   check('carry shows in the collected pot', hand.collectedPot() === 20 + 50);
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   check('winner takes antes plus the riding pot', players[1].stack === 90 + 70);
   conserve('carry in', players, before, hand, 50);
 }
@@ -318,7 +384,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[2], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   const pot = 30 + 5;
   const w1 = hand.results.winners.find((w) => w.seat === 1)?.amount ?? 0;
   const w2 = hand.results.winners.find((w) => w.seat === 2)?.amount ?? 0;
@@ -348,7 +414,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[2], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   const pot = 30; // three antes of 10, read before any penalty
   check('only the best holder plays the dealer',
     hand.results.winners.length === 1 && hand.results.winners[0].seat === 1);
@@ -383,7 +449,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   });
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[0], true);
-  ctx.fire();
+  ctx.fireAll();
   check('the dealer can hold a Natural Seven', hand.results.dealer.desc === 'Natural Seven');
   check('a tied Natural Seven loses to the house', hand.results.winners.length === 0);
   check('and the pot rides', hand.results.carryOut >= 30);
@@ -406,7 +472,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   });
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   const pot = 20;
   check('nobody beats the dealer', hand.results.winners.length === 0);
   check('the challenger pays for losing to the dealer',
@@ -435,7 +501,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[2], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   check('a short stack pays what it has and no more',
     hand.results.penalties[0].amount === 5 && players[2].stack === 0);
   conserve('short-stack penalty', players, before, hand);
@@ -457,7 +523,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[1], true);
   hand.handleDecision(players[2], true);
   hand.handleDecision(players[0], false);
-  ctx.fire();
+  ctx.fireAll();
   check('a zero cap turns penalties off',
     hand.results.penalties.length === 0 && players[2].stack === 90);
   conserve('penalties off', players, before, hand);
@@ -478,7 +544,7 @@ function conserve(name, players, before, hand, carryIn = 0) {
   hand.handleDecision(players[0], true);
   ctx.fire(); // decision timeout — seat 1 never chose
   check('timeout folds the undecided', hand.phase === PHASES.COUNTDOWN_747 && players[1].decision747 === 'fold');
-  ctx.fire(); // countdown
+  ctx.fireAll(); // countdown
   check('timeout hand finishes', hand.finished);
 }
 

@@ -531,6 +531,10 @@ export function attachSockets(io) {
       result(game, game.removeFromSeat(target, 'kick'));
     }));
 
+    socket.on(EVENTS.HOST_TRANSFER, withHost((game, _player, payload) => {
+      result(game, game.transferHost(payload.playerId));
+    }));
+
     socket.on(EVENTS.HOST_ADJUST_STACK, withHost((game, _player, payload) => {
       result(game, game.adjustStack(payload.playerId, payload.delta));
     }));

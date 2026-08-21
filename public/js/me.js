@@ -171,7 +171,7 @@ function renderSummary({ totals, sessions, stats }) {
           )
           .join('')}</tbody>
       </table>
-      <p class="empty-note">Every game's ledger is saved here as a dated CSV — nothing is lost if a screenshot isn't taken.</p>`;
+      <p class="empty-note">Every game's ledger is saved here as a dated spreadsheet, winners in green and losers in red — nothing is lost if a screenshot isn't taken.</p>`;
   }
 
   const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');

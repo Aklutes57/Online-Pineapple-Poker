@@ -59,6 +59,7 @@ const eventNames = [
   EVENTS.SHOW_CARDS, EVENTS.SIT_OUT, EVENTS.SIT_IN, EVENTS.STAND_UP, EVENTS.CHAT,
   EVENTS.HOST_APPROVE_SEAT, EVENTS.HOST_START_GAME, EVENTS.HOST_PAUSE,
   EVENTS.HOST_KICK, EVENTS.HOST_ADJUST_STACK, EVENTS.HOST_UPDATE_SETTINGS,
+  EVENTS.HOST_TRANSFER,
 ];
 const badPayloads = [null, undefined, 'a string', 42, [1, 2, 3], { __proto__: { evil: 1 } }];
 for (const event of eventNames) {

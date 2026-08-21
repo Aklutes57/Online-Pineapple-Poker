@@ -258,6 +258,37 @@ function check(name, cond) {
   game.currentHand.finished = true;
 }
 
+// ---- the host can hand the table over on purpose ----
+{
+  const { game, host } = createGame({}, 'Creator', null);
+  host.connected = true;
+  const ann = game.addPlayer('Ann', null);
+  const bob = game.addPlayer('Bob', null);
+  ann.connected = true;
+  bob.connected = false;
+  ann.status = 'seated';
+
+  check('an unknown player cannot be made host',
+    game.transferHost('nobody').ok === false && game.hostId === host.id);
+  check('a disconnected player cannot be made host',
+    game.transferHost(bob.id).ok === false && game.hostId === host.id);
+  check('the host cannot hand it to themselves', game.transferHost(host.id).ok === false);
+
+  check('the host can hand the table to a connected player',
+    game.transferHost(ann.id).ok === true && game.hostId === ann.id);
+  check('the creator id is unchanged by a hand-over', game.creatorId === host.id);
+  check('the log says who runs the table now',
+    game.logs.some((l) => l.text.includes('Ann is now the host')));
+
+  // The point of the flag: a deliberate hand-over must survive the old host's
+  // browser reconnecting, which would otherwise silently take it back.
+  check('the creator does NOT reclaim host after giving it away',
+    game.reclaimHostIfCreator(host) === false && game.hostId === ann.id);
+  // And the new host can hand it back.
+  check('the new host can hand it back',
+    game.transferHost(host.id).ok === true && game.hostId === host.id);
+}
+
 // ---- a bomb pot is dealt as its own game: Omaha, two boards ----
 {
   const { game, host } = createGame(
