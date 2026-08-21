@@ -309,6 +309,8 @@ function check(name, cond) {
   // Opt everyone in: now the seat under the gun posts one.
   for (const p of [host, uma, vic]) {
     check('a seated player can set their straddle choice', game.setStraddle(p, true).ok === true);
+    check('and their re-straddle choice, separately',
+      game.setStraddle(p, true, true).ok === true && p.straddleDeepOptIn === true);
   }
   game.startHand();
   check('an opted-in UTG straddles', game.currentHand.straddleSeat !== null);
@@ -318,8 +320,11 @@ function check(name, cond) {
     game.currentHand.bySeat.get(game.currentHand.straddleSeat).betThisRound === 4);
   game.currentHand.finished = true;
 
-  // And back out again: the choice is live from the next hand either way.
+  // And back out again: the choice is live from the next hand either way, and
+  // turning off the first straddle leaves the re-straddle switch alone.
   for (const p of [host, uma, vic]) game.setStraddle(p, false);
+  check('the two switches are independent',
+    host.straddleOptIn === false && host.straddleDeepOptIn === true);
   game.startHand();
   check('opting back out plays a normal hand', game.currentHand.straddleSeat === null);
   game.currentHand.finished = true;

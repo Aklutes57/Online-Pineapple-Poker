@@ -486,8 +486,8 @@ function totalChips(players, hand) {
 {
   // Double straddle: UTG puts up 2 big blinds, the next seat doubles it.
   const players = [0, 1, 2, 3, 4, 5].map((i) => makePlayer(i, 500, `p${i}`));
-  players[3].straddleOptIn = true; // UTG
-  players[4].straddleOptIn = true; // UTG+1
+  players[3].straddleOptIn = true;     // UTG posts the first straddle
+  players[4].straddleDeepOptIn = true; // UTG+1 is in for the re-straddle
   const deck = Array.from({ length: 30 }, (_, i) => ['2h','7d','9c','Tc','Ah','Kc','3s','4d','Jh','8c','5s','6d','Qh','2c','3d','4h','5c','6s','7h','8d','9s','Td','Js','Qc','Kd','As','2s','3h','4c','5d'][i]);
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
@@ -514,8 +514,9 @@ function totalChips(players, hand) {
   // seat does not break the chain, and the doubling counts straddles, not
   // seats. Also: the blinds are never candidates, however they voted.
   const players = [0, 1, 2, 3, 4, 5].map((i) => makePlayer(i, 500, `p${i}`));
-  for (const p of players) p.straddleOptIn = true;
-  players[4].straddleOptIn = false; // UTG+1 sits this one out
+  for (const p of players) { p.straddleOptIn = true; p.straddleDeepOptIn = true; }
+  players[4].straddleOptIn = false;     // UTG+1 sits this one out
+  players[4].straddleDeepOptIn = false;
   const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
@@ -532,11 +533,43 @@ function totalChips(players, hand) {
   check('skip: chips conserved', totalChips(players, hand) === 3000);
 }
 {
+  // The two choices are independent. Agreeing to put up two big blinds under
+  // the gun is not agreeing to put up sixteen four seats later, so a player
+  // who is only in for the FIRST straddle is skipped once somebody has
+  // already straddled — and a player who is only in for the RE-straddle is
+  // skipped when the chain has not started yet.
+  const players = [0, 1, 2, 3, 4, 5].map((i) => makePlayer(i, 500, `p${i}`));
+  players[3].straddleOptIn = true;      // UTG: first straddle only
+  players[4].straddleOptIn = true;      // UTG+1: first straddle only — too late
+  players[5].straddleDeepOptIn = true;  // UTG+2: re-straddles behind them
+  const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('split: the first-only player opens the chain', hand.bySeat.get(3).betThisRound === 4);
+  check('split: a first-only player behind them is skipped', hand.bySeat.get(4).betThisRound === 0);
+  check('split: the re-straddler posts double', hand.bySeat.get(5).betThisRound === 8);
+  check('split: only the two who posted are in the chain',
+    hand.straddleSeats.join() === '3,5');
+  check('split: chips conserved', totalChips(players, hand) === 3000);
+}
+{
+  // Re-straddle on its own straddles nothing: there is no straddle to double.
+  const players = [0, 1, 2, 3, 4, 5].map((i) => makePlayer(i, 500, `p${i}`));
+  for (const p of players) p.straddleDeepOptIn = true;
+  const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
+  const { hand } = makeHand({ players, deck, options: { straddle: true } });
+  hand.start();
+  check('split: nobody in for the first straddle means no chain at all',
+    hand.straddleSeats.length === 0 && hand.straddleSeat === null);
+  check('split: the big blind is still the bet', hand.currentBet === 2);
+}
+
+{
   // A straddler who cannot cover the full post is all-in for what they have,
   // and the chain ends there: there is no honest double of a short straddle.
   const players = [0, 1, 2, 3, 4].map((i) => makePlayer(i, 500, `p${i}`));
   players[3].stack = 3; // UTG can't cover the 4
-  for (const p of players) p.straddleOptIn = true;
+  for (const p of players) { p.straddleOptIn = true; p.straddleDeepOptIn = true; }
   const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
@@ -566,7 +599,7 @@ function totalChips(players, hand) {
   // 4, 8 and 16 in from three seats before a card is dealt.
   const players = [0, 1, 2, 3, 4].map((i) => makePlayer(i, 500, `p${i}`));
   players[2].stack = 2; // the big blind is all-in from posting
-  for (const p of players) p.straddleOptIn = true;
+  for (const p of players) { p.straddleOptIn = true; p.straddleDeepOptIn = true; }
   const deck = Array.from({ length: 30 }, (_, i) => `${'23456789TJQKA'[i % 13]}${'hdcs'[i % 4]}`);
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
@@ -607,7 +640,7 @@ function totalChips(players, hand) {
 {
   // Heads-up must not straddle: the button already posts the small blind.
   const players = [makePlayer(0, 500, 'a'), makePlayer(1, 500, 'b')];
-  for (const p of players) p.straddleOptIn = true;
+  for (const p of players) { p.straddleOptIn = true; p.straddleDeepOptIn = true; }
   const deck = ['2h', '7d', 'Ah', 'Kc', '9s', 'Ts', '3c', '4d', 'Jh'];
   const { hand } = makeHand({ players, deck, options: { straddle: true } });
   hand.start();
@@ -685,6 +718,38 @@ function totalChips(players, hand) {
     hand.results.boards[0].winners[0].amount === 15
     && hand.results.boards[1].winners[0].amount === 15);
   check('bomb pot: chips conserved across two boards', totalChips(players, hand) === 600);
+}
+{
+  // A bomb pot is POT LIMIT. Everyone is already in for the ante, so no-limit
+  // would make the first bet a shove and there would be nothing to play for.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = [
+    'As', 'Ks', 'Qs', 'Js', '2c', '3c', '4d', '5d', '7h', '8h', '9h', 'Th',
+    'Ac', 'Kc', '2s', '7c', '8c', '9s', '3h', 'Td', '4h', 'Jd',
+  ];
+  const { hand } = makeHand({
+    players, deck, variantKey: 'bombOmaha', options: { bombPot: true, ante: 10 },
+  });
+  hand.start();
+  check('bomb pot: pot limit is on', hand.potLimit === true);
+  // Three antes of 10 are in the middle, so the opening bet is capped at 30.
+  const first = av(hand, 1);
+  check('bomb pot: the opening bet is capped at the pot',
+    first.canCheck === true && first.maxRaiseTo === 30);
+  check('bomb pot: and still opens at the big blind', first.minRaiseTo === 2);
+  act(hand, 1, 'bet', 30);
+  // Facing 30 into 60: 30 to call, then the pot of 90 — a raise to 120.
+  const next = av(hand, 2);
+  check('bomb pot: a pot-limit raise is call plus the pot', next.maxRaiseTo === 120);
+  check('bomb pot: over the cap is refused',
+    hand.handleAction(hand.bySeat.get(2), 'raise', 121).ok === false);
+  act(hand, 2, 'raise', 120);
+  check('bomb pot: the capped raise stands', hand.currentBet === 120);
+  // Seat 0 faces 120 into a pot of 180, so the cap is 420 — more than they
+  // have. The stack wins, and the tray offers a genuine all-in.
+  check('bomb pot: a cap above your stack is just an all-in',
+    av(hand, 0).maxRaiseTo === 190);
+  check('bomb pot: chips conserved under pot limit', totalChips(players, hand) === 600);
 }
 {
   // An odd pot cannot be halved evenly: the extra chip goes to the first

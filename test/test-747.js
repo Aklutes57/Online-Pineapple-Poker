@@ -23,24 +23,32 @@ function check(name, cond) {
 
 // ---- evaluator ----
 
+// Two or more REAL sevens in the original four, and nothing else matters —
+// a wild alongside them no longer spoils it, and a third seven is still just
+// a Natural Seven.
 check('natural seven: two real sevens', isNaturalSeven(['7s', '7h', 'Qd', '5c']));
-check('natural seven: a four disqualifies', !isNaturalSeven(['7d', '4c', '7s', 'Kd']));
+check('natural seven: a wild four does not spoil it', isNaturalSeven(['7d', '4c', '7s', 'Kd']));
+check('natural seven: three sevens is still one', isNaturalSeven(['7d', '7c', '7s', 'Kd']));
+check('natural seven: four sevens is still one', isNaturalSeven(['7d', '7c', '7s', '7h']));
 check('natural seven: one seven is not enough', !isNaturalSeven(['7d', '2c', '9s', 'Kd']));
-check('natural seven: three sevens is not exactly two', !isNaturalSeven(['7d', '7c', '7s', 'Kd']));
-check('natural seven outranks five of a kind',
-  NATURAL_SEVEN_SCORE > evaluate747(['4c', '4d', '4h', '4s', 'Ah']));
+check('natural seven: a wild is not a seven', !isNaturalSeven(['7d', '4c', '4s', 'Kd']));
+check('natural seven outranks the best ordinary hand',
+  NATURAL_SEVEN_SCORE > evaluate747(['Ah', 'Kh', 'Qh', 'Jh', 'Th']));
 
 check('no wilds falls through to rank5',
   evaluate747(['As', 'Kd', 'Qh', 'Jc', '9s']) === rank5(['As', 'Kd', 'Qh', 'Jc', '9s']));
 
-check('four wilds + ace = five aces',
-  describe747(evaluate747(['4c', '4d', '4h', '4s', 'Ah'])) === 'Five of a Kind, Aces');
-check('two wilds + three aces = five aces',
-  describe747(evaluate747(['As', 'Ah', 'Ad', '4c', '4d'])) === 'Five of a Kind, Aces');
-check('five aces beat five kings',
-  evaluate747(['4c', '4d', '4h', '4s', 'Ah']) > evaluate747(['Ks', 'Kh', 'Kd', '4c', '4d']));
-check('five of a kind beats a natural straight flush',
-  evaluate747(['Ks', 'Kh', 'Kd', '4c', '4d']) > rank5(['As', 'Ks', 'Qs', 'Js', 'Ts']));
+// Five of a kind is not a hand: the wilds make the best ORDINARY five instead.
+check('five sevens is read as quad sevens',
+  describe747(evaluate747(['7s', '7h', '7d', '4c', '4d'])) === 'Four of a Kind, Sevens');
+check('three aces plus two wilds is quad aces, not five',
+  describe747(evaluate747(['As', 'Ah', 'Ad', '4c', '4d'])) === 'Four of a Kind, Aces');
+// Four wilds and one card: the wilds are worth more as the rest of a royal
+// flush than as a fifth ace, which is why there is no shortcut for this case.
+check('four wilds + an ace build a royal flush',
+  describe747(evaluate747(['4c', '4d', '4h', '4s', 'Ah'])) === 'Royal Flush');
+check('a natural straight flush now beats trips-plus-two-wilds',
+  rank5(['As', 'Ks', 'Qs', 'Js', 'Ts']) > evaluate747(['Ks', 'Kh', 'Kd', '4c', '4d']));
 
 check('wild completes a royal flush',
   describe747(evaluate747(['As', 'Ks', 'Qs', 'Js', '4h'])) === 'Royal Flush');
@@ -62,7 +70,7 @@ check('partial: high card is a full word', describePartial747(['2c', '3d', '5h',
 check('partial: four wilds', describePartial747(['4s', '4h', '4d', '4c']) === 'Four Wilds');
 
 check('CATEGORY_747 sits above straight flush',
-  CATEGORY_747.FIVE_OF_A_KIND === 9 && CATEGORY_747.NATURAL_SEVEN === 10);
+  CATEGORY_747.NATURAL_SEVEN === 10 && CATEGORY_747.FIVE_OF_A_KIND === undefined);
 
 // Every variant a table can be SET to must survive settings sanitization — a
 // stale whitelist here once silently turned 747 tables into hold'em. Hidden
@@ -224,7 +232,8 @@ function conserve(name, players, before, hand, carryIn = 0) {
   check('natural seven wins automatically', players[1].stack === 90 + 20);
   check('natural seven seat recorded', hand.results.naturalSevenSeats.includes(1));
   check('natural seven described', players[1].handResult.desc === 'Natural Seven');
-  check('dealer had five of a kind', hand.results.dealer.desc === 'Five of a Kind, Aces');
+  check('the dealer built the best ordinary hand it could',
+    hand.results.dealer.desc === 'Royal Flush');
   conserve('natural seven', players, before, hand);
 }
 
@@ -354,6 +363,31 @@ function conserve(name, players, before, hand, carryIn = 0) {
     hand.results.carryOut === 25 && ctx.carried === 25);
   check('the beaten holder actually paid', players[2].stack === 90 - 25);
   conserve('lost to a player', players, before, hand);
+}
+
+// The house plays by the same rule: two real sevens in ITS first four is a
+// Natural Seven too — and since ties go to the house, that is the only thing
+// a player's Natural Seven can lose to.
+{
+  const players = [makePlayer(0, 100), makePlayer(1, 100)];
+  const before = totalChips(players);
+  const { hand, ctx } = make747({
+    players,
+    deck: [
+      '7s', '7h', 'Kd', '5c', // seat 1 — NATURAL SEVEN
+      '2c', '3c', '9d', 'Th', // seat 0 — stays with junk
+      '7d', '7c', '2h', '8s', // dealer — NATURAL SEVEN as well
+      'Jd', 'Qh', 'Ah',       // fifths: seat 1, seat 0, dealer
+    ],
+    penaltyCap: 25,
+  });
+  hand.handleDecision(players[1], true);
+  hand.handleDecision(players[0], true);
+  ctx.fire();
+  check('the dealer can hold a Natural Seven', hand.results.dealer.desc === 'Natural Seven');
+  check('a tied Natural Seven loses to the house', hand.results.winners.length === 0);
+  check('and the pot rides', hand.results.carryOut >= 30);
+  conserve('dealer natural seven', players, before, hand);
 }
 
 // Losing to the dealer pays the same penalty, and the pot rides on top of it.

@@ -443,12 +443,17 @@ document.getElementById('menu-sit')?.addEventListener('click', () => {
 });
 
 // Straddling is your own call, and an opt-in one: the table option only makes
-// it available. Turn it on and you post a blind raise when the chain reaches
-// your seat — twice the big blind for the first straddler, double again for
-// each one after.
-for (const id of ['menu-straddle', 'straddle-btn']) {
+// it available. Straddle puts you in for the FIRST straddle, two big blinds
+// under the gun; Re-straddle puts you in for posting double behind somebody
+// else's. Separate switches, because agreeing to two big blinds is not
+// agreeing to sixteen.
+for (const [id, deep] of [
+  ['menu-straddle', false], ['straddle-btn', false],
+  ['menu-restraddle', true], ['restraddle-btn', true],
+]) {
   document.getElementById(id)?.addEventListener('click', () => {
-    client.send(EVENTS.SET_STRADDLE, { on: client.you?.straddleOptIn !== true });
+    const now = deep ? client.you?.straddleDeepOptIn : client.you?.straddleOptIn;
+    client.send(EVENTS.SET_STRADDLE, { on: now !== true, deep });
   });
 }
 

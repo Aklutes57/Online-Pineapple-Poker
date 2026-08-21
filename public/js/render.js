@@ -58,17 +58,24 @@ export function renderAll(client) {
   // opt-in, so it says plainly whether you are in it. Two doors to the same
   // switch — one in the Seat menu, one always in view on the top bar, because
   // a choice you have to go looking for is a choice nobody makes.
-  const straddleIn = you?.straddleOptIn === true;
-  // 747 is an ante game with no blinds and no straddles, so the switch has
-  // nothing to switch there — offering it would be a button that lies.
+  // 747 is an ante game with no blinds and no straddles, so the switches have
+  // nothing to switch there — offering them would be buttons that lie.
   const straddleGame = VARIANTS[state.hand?.variant || state.settings.variant]?.engine !== '747';
-  for (const id of ['menu-straddle', 'straddle-btn']) {
-    const btn = document.getElementById(id);
-    if (!btn) continue;
-    btn.classList.toggle('hidden', !seated || !state.settings.straddle || !straddleGame);
-    btn.classList.toggle('on', straddleIn);
-    btn.textContent = straddleIn ? 'Straddle: on' : 'Straddle: off';
-    btn.setAttribute('aria-pressed', straddleIn ? 'true' : 'false');
+  const straddleShown = seated && state.settings.straddle && straddleGame;
+  // Two independent choices: post the first straddle, and re-straddle behind
+  // somebody else for double. Same switch, twice.
+  for (const [ids, on, label] of [
+    [['menu-straddle', 'straddle-btn'], you?.straddleOptIn === true, 'Straddle'],
+    [['menu-restraddle', 'restraddle-btn'], you?.straddleDeepOptIn === true, 'Re-straddle'],
+  ]) {
+    for (const id of ids) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      btn.classList.toggle('hidden', !straddleShown);
+      btn.classList.toggle('on', on);
+      btn.textContent = `${label}: ${on ? 'on' : 'off'}`;
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
   }
   // The action bar's height can change with its contents, which can change the
   // space left for the table — refit, and re-place if that flipped the shape.

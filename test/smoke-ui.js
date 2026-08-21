@@ -302,20 +302,35 @@ try {
   await check('turning straddling on puts the button in the top bar', true);
   await check('and it starts OFF — straddling is opted into, never assumed',
     (await anna.textContent('#straddle-btn')) === 'Straddle: off');
+  await check('re-straddling is its own switch, also off',
+    (await anna.locator('#restraddle-btn').isVisible())
+    && (await anna.textContent('#restraddle-btn')) === 'Re-straddle: off');
   await anna.click('#straddle-btn');
   await anna.waitForFunction(
     () => document.getElementById('straddle-btn').textContent === 'Straddle: on',
     { timeout: 5000 }
   );
   await check('one tap opts you in', true);
+  await check('and does NOT sign you up for the re-straddle',
+    (await anna.textContent('#restraddle-btn')) === 'Re-straddle: off');
+  await anna.click('#restraddle-btn');
+  await anna.waitForFunction(
+    () => document.getElementById('restraddle-btn').textContent === 'Re-straddle: on',
+    { timeout: 5000 }
+  );
+  await check('the re-straddle switch turns on by itself', true);
   await check('the choice is yours alone — Ben is still out',
-    (await ben.textContent('#straddle-btn')) === 'Straddle: off');
+    (await ben.textContent('#straddle-btn')) === 'Straddle: off'
+    && (await ben.textContent('#restraddle-btn')) === 'Re-straddle: off');
   await anna.click('#straddle-btn');
   await anna.waitForFunction(
     () => document.getElementById('straddle-btn').textContent === 'Straddle: off',
     { timeout: 5000 }
   );
   await check('and one more tap opts you back out', true);
+  await check('leaving the re-straddle switch where it was',
+    (await anna.textContent('#restraddle-btn')) === 'Re-straddle: on');
+  await anna.click('#restraddle-btn');
 
   // ---- bomb pot: Omaha and two boards, whatever the table is playing ----
   await openMenu(anna);

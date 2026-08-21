@@ -120,7 +120,9 @@ export const VARIANTS = {
     label: 'Omaha bomb pot',
     holeCards: 4,
     discardBefore: null,
-    potLimit: false,
+    // Pot limit, the way a bomb pot is actually played: everyone is already
+    // in for the ante, so no-limit turns the first bet into a shove.
+    potLimit: true,
     omaha: true,
     doubleBoard: true,
     hidden: true,

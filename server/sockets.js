@@ -343,7 +343,7 @@ export function attachSockets(io) {
     }));
 
     socket.on(EVENTS.SET_STRADDLE, withGame((game, player, payload) => {
-      result(game, game.setStraddle(player, !!payload?.on));
+      result(game, game.setStraddle(player, !!payload?.on, !!payload?.deep));
     }));
 
     socket.on(EVENTS.STAND_UP, withGame((game, player) => {

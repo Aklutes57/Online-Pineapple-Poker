@@ -206,7 +206,14 @@ export class Hand {
     // UTG through the button: every seat except the two blinds.
     for (let i = 0; i < this.players.length - 2; i++) {
       const straddler = this.bySeat.get(seat);
-      if (straddler?.straddleOptIn === true) {
+      // Two separate choices. Posting the FIRST straddle is one thing; posting
+      // behind somebody else's, for double what they put up, is another — and
+      // by the fourth straddle it is sixteen big blinds. Nobody is signed up
+      // for the second by agreeing to the first.
+      const wanted = this.straddleSeats.length === 0
+        ? straddler?.straddleOptIn === true
+        : straddler?.straddleDeepOptIn === true;
+      if (wanted) {
         const paid = betting.pay(straddler, want);
         this.straddleSeats.push(seat);
         this.straddleAmount = Math.max(this.straddleAmount, straddler.betThisRound);

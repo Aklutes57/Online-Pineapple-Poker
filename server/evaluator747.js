@@ -1,10 +1,14 @@
 // Hand evaluation for 747 Poker: fours are fully wild (any rank, any suit),
-// Five of a Kind outranks everything except a Natural Seven, and a Natural
-// Seven — exactly two real sevens among the ORIGINAL four cards — beats all.
+// and a Natural Seven — two or more REAL sevens among the ORIGINAL four cards
+// — beats everything. Anything else is simply the best ordinary five-card hand
+// the wilds can build.
+//
+// There is deliberately no "five of a kind": with four wild cards in the deck
+// it is common enough to stop being a hand and start being an artefact, so
+// five sevens is scored as the quads-plus-kicker it can also be read as.
 //
 // Scores extend the standard packed integer from evaluator.js
-// (category << 20 | tiebreakers), with two categories above straight flush:
-//   9  five of a kind
+// (category << 20 | tiebreakers), with one category above straight flush:
 //   10 natural seven
 // so every 747 score compares directly against every standard score.
 
@@ -13,7 +17,6 @@ import { describe as describeStandard } from './evaluator.js';
 import { RANK_CHARS, SUIT_CHARS } from './deck.js';
 
 export const CATEGORY_747 = {
-  FIVE_OF_A_KIND: 9,
   NATURAL_SEVEN: 10,
 };
 
@@ -28,17 +31,14 @@ const RANK_NAMES = [
 
 export const NATURAL_SEVEN_SCORE = CATEGORY_747.NATURAL_SEVEN << 20;
 
-function fiveOfAKindScore(rankIndex) {
-  return (CATEGORY_747.FIVE_OF_A_KIND << 20) | (rankIndex << 16);
-}
-
 // The Natural Seven is judged on the four ORIGINAL cards only, before the
-// fifth card: exactly two real sevens, and no wildcard fours involved —
-// per the rules, 7♠ 7♥ Q♦ 5♣ qualifies but 7♦ 4♣ 7♠ K♦ does not.
+// fifth card: two or more REAL sevens and you hold the best hand in the game.
+// Wilds neither help nor hurt — 7♠ 7♥ Q♦ 5♣ and 7♦ 4♣ 7♠ K♦ are both Natural
+// Sevens — and a third or fourth seven is still just a Natural Seven, which
+// is why this counts rather than compares. The only hand that beats one is
+// another one, and a tie goes to the house.
 export function isNaturalSeven(originalFour) {
-  const sevens = originalFour.filter((c) => c[0] === '7').length;
-  const fours = originalFour.filter((c) => c[0] === '4').length;
-  return sevens === 2 && fours === 0;
+  return originalFour.filter((c) => c[0] === '7').length >= 2;
 }
 
 function isWild(card) {
@@ -59,12 +59,16 @@ export function evaluate747(cards5) {
 
   if (wildCount === 0) return rank5(cards5);
 
-  // All wilds would be physically impossible past four, but guard anyway:
-  // four wilds + one natural is always five of a kind of the natural's rank.
-  if (naturals.length <= 1) {
-    const rankIndex = naturals.length ? RANK_CHARS.indexOf(naturals[0][0]) : 12;
-    return fiveOfAKindScore(rankIndex);
-  }
+  // Five wilds is physically impossible — there are only four fours — but the
+  // suit lookups below would read off the end if it ever happened.
+  if (naturals.length === 0) return rank5(['As', 'Ks', 'Qs', 'Js', 'Ts']);
+
+  // Note there is no shortcut for four wilds + one natural. It looks like it
+  // ought to be quads of that rank, but the wilds can just as well take the
+  // suit and the ranks around it: A♥ + four fours is a royal flush, which
+  // beats quad aces. Enumeration is the only thing that gets that right —
+  // 13^4 assignments, about 50ms, which is worth paying for a hand that turns
+  // up once in fifty thousand deals (you have to hold all four fours).
 
   let best = -1;
 
@@ -93,17 +97,10 @@ function enumerate(naturals, wildCount, flushSuit, clashSuits) {
         const suitChar = flushSuit ?? clashSuits[i % clashSuits.length];
         cards.push(RANK_CHARS[chosen[i]] + suitChar);
       }
-      // rank5 has no concept of five of a kind, so count ranks first.
-      const counts = new Map();
-      for (const c of cards) {
-        counts.set(c[0], (counts.get(c[0]) || 0) + 1);
-      }
-      let score;
-      if (counts.size === 1) {
-        score = fiveOfAKindScore(RANK_CHARS.indexOf(cards[0][0]));
-      } else {
-        score = rank5(cards);
-      }
+      // Straight from rank5: an assignment that makes all five the same rank
+      // scores as a high card there, so the maximiser simply never picks it —
+      // which is exactly how five of a kind stops being a hand.
+      const score = rank5(cards);
       if (score > best) best = score;
       return;
     }
@@ -147,8 +144,5 @@ export function describePartial747(cards4) {
 export function describe747(score) {
   const category = score >> 20;
   if (category === CATEGORY_747.NATURAL_SEVEN) return 'Natural Seven';
-  if (category === CATEGORY_747.FIVE_OF_A_KIND) {
-    return `Five of a Kind, ${RANK_PLURALS[(score >> 16) & 0xf]}`;
-  }
   return describeStandard(score);
 }

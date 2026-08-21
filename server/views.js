@@ -242,8 +242,11 @@ export function buildViews(game) {
       realName: p.realName || null,
       nameFont: p.nameFont || DEFAULT_NAME_FONT,
       spectator: p.status !== 'seated',
-      // Straddling is opt-IN: you are out until you ask to be in.
+      // Straddling is opt-IN, twice over: the first straddle and re-straddling
+      // behind someone else are separate choices, and you are out of both
+      // until you ask to be in.
       straddleOptIn: p.straddleOptIn === true,
+      straddleDeepOptIn: p.straddleDeepOptIn === true,
       status: p.status,
       seatIndex: p.seatIndex,
       stack: p.stack,

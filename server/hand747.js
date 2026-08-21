@@ -74,6 +74,7 @@ export class Hand747 {
     this.startedAt = Date.now();
 
     this.dealerCards = []; // SECRET until showdown
+    this.dealerOriginalFour = null; // the four it is judged on for a Natural Seven
     this.dealerRevealed = false;
     this.ctx = ctx;
 
@@ -153,6 +154,9 @@ export class Hand747 {
       p.originalFour = [...p.holeCards];
     }
     this.dealerCards = this.draw(4);
+    // The dealer's Natural Seven is judged on its first four cards too, so it
+    // needs the same snapshot every player gets.
+    this.dealerOriginalFour = [...this.dealerCards];
     this.pushEvent({ type: 'deal', cards: 4, dealer: true });
 
     this.phase = PHASES.DECISION_747;
@@ -262,16 +266,18 @@ export class Hand747 {
     }
     this.dealerCards.push(...this.draw(1));
 
-    // Natural Seven first (original four cards, wilds never count), then
-    // full wildcard evaluation for everyone else and the dealer.
+    // Natural Seven first — two or more real sevens in the original four —
+    // then full wildcard evaluation for anyone without one. The house is
+    // judged by exactly the same rule, which is what makes a Natural Seven
+    // beatable at all: the only hand that takes one down is the dealer's own,
+    // because a tie goes to the house.
+    const scoreOf = (originalFour, five) =>
+      (isNaturalSeven(originalFour) ? NATURAL_SEVEN_SCORE : evaluate747(five));
     const scores = new Map();
     for (const p of stayers) {
-      scores.set(
-        p.seatIndex,
-        isNaturalSeven(p.originalFour) ? NATURAL_SEVEN_SCORE : evaluate747(p.holeCards)
-      );
+      scores.set(p.seatIndex, scoreOf(p.originalFour, p.holeCards));
     }
-    const dealerScore = evaluate747(this.dealerCards);
+    const dealerScore = scoreOf(this.dealerOriginalFour, this.dealerCards);
 
     // Only the best hand among the stayers gets to play the dealer. Everyone
     // else lost to a player — out of the hand, and they pay the penalty. A

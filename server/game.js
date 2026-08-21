@@ -383,10 +383,18 @@ export class Game {
   // option only makes the straddle available, and you are out of it until you
   // say otherwise. It takes effect from the next hand — the chips for this
   // one are already posted.
-  setStraddle(player, on) {
+  //
+  // `deep` picks which of the two choices is being set: the first straddle
+  // (two big blinds, under the gun) or re-straddling behind someone else
+  // (four, then eight, then sixteen). They are independent — you can be in
+  // for either, both, or neither.
+  setStraddle(player, on, deep = false) {
     if (player.status !== 'seated') return { ok: false, error: 'not seated' };
-    player.straddleOptIn = on;
-    this.addLog(`${player.nickname} is ${on ? 'in for' : 'out of'} the straddle`);
+    if (deep) player.straddleDeepOptIn = on;
+    else player.straddleOptIn = on;
+    this.addLog(
+      `${player.nickname} is ${on ? 'in for' : 'out of'} the ${deep ? 're-straddle' : 'straddle'}`
+    );
     return { ok: true };
   }
 
