@@ -805,8 +805,30 @@ body.disconnected::after {
 
 .seat.to-act .nameplate {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(var(--pulse), 0.6), 0 0 24px rgba(var(--pulse), 0.35);
+  border-width: 2px;
+  box-shadow: 0 0 0 3px rgba(var(--pulse), 0.85), 0 0 30px rgba(var(--pulse), 0.55);
   animation: pulse 1.6s ease-in-out infinite;
+}
+
+.seat.to-act .np-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* A halo behind the WHOLE pod, not just the plate. It has to work for a seat
+   with no picture and no camera — which used to get nothing but a faint
+   outline — so it hangs off the pod itself rather than off a tile that may
+   not be there. Click-through, and behind everything the pod draws. */
+.seat.to-act::before {
+  content: '';
+  position: absolute;
+  inset: -14px -10px -10px;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 50% 60%, rgba(var(--pulse), 0.30), transparent 72%);
+  box-shadow: 0 0 26px 6px rgba(var(--pulse), 0.28);
+  pointer-events: none;
+  z-index: -1;
+  animation: pulse-halo 1.6s ease-in-out infinite;
 }
 
 /* Whose turn it is reads from across the room: their picture (or webcam
@@ -814,11 +836,24 @@ body.disconnected::after {
 .seat.to-act .seat-avatar,
 .seat.to-act video.seat-cam {
   border-color: #35c46f !important;
-  box-shadow: 0 0 0 2px rgba(53, 196, 111, 0.65), 0 0 18px rgba(53, 196, 111, 0.55);
+  box-shadow: 0 0 0 3px rgba(53, 196, 111, 0.8), 0 0 22px rgba(53, 196, 111, 0.65);
+}
+
+/* …and everybody else steps back while they decide. Your OWN seat never
+   dims: whatever else is going on, you can always read your own cards.
+   Gated on a class the renderer only sets while somebody owes a decision,
+   so nothing fades between hands or during a run-out. */
+#seats-layer.someone-acting .seat.occupied:not(.to-act):not(.me) {
+  opacity: 0.72;
+  transition: opacity 0.25s ease;
 }
 
 @keyframes pulse {
-  50% { box-shadow: 0 0 0 2px rgba(var(--pulse), 0.25), 0 0 10px rgba(var(--pulse), 0.15); }
+  50% { box-shadow: 0 0 0 3px rgba(var(--pulse), 0.35), 0 0 12px rgba(var(--pulse), 0.2); }
+}
+
+@keyframes pulse-halo {
+  50% { box-shadow: 0 0 18px 3px rgba(var(--pulse), 0.14); }
 }
 
 .seat.folded .cards-fan,
@@ -2528,24 +2563,31 @@ video.seat-cam.cam-off { visibility: hidden; }
 
 /* ---- per-player mute + muted styling ---- */
 /* A word, not a speaker icon — you should be able to tell what it does
-   without decoding a glyph. Small enough to sit on the nameplate's corner. */
+   without decoding a glyph. It sits on the nameplate's corner and is
+   absolutely positioned on purpose: it costs the pod no height, which the
+   seat-overlap gates depend on. Big enough to read and to hit with a thumb,
+   which the 9.5px version it replaces was not. */
 .np-mute {
   position: absolute;
-  top: -9px;
-  right: -6px;
-  padding: 1px 7px;
+  top: -11px;
+  right: -8px;
+  padding: 2px 12px;
   font: inherit;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: .05em;
   text-transform: uppercase;
-  line-height: 15px;
+  line-height: 18px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--accent);
   background: var(--bg-panel);
-  color: var(--text-dim);
+  color: var(--accent);
   cursor: pointer;
+  z-index: 3;
 }
+.np-mute:hover { background: var(--ghost-hover); }
+/* Muted is a state you should never be in by accident and never wonder
+   about: filled red, and their tile greys out to match. */
 .np-mute.on { background: var(--red); border-color: var(--red); color: #fff; }
 video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
 

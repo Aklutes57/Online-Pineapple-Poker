@@ -8,7 +8,7 @@ import { play as playSound, setCustomClips } from '/js/sounds.js';
 import {
   pushSupported, savedPushEndpoint, currentPushSubscription, enablePush, disablePush,
 } from '/js/pwa.js';
-import { renderAll, startTimerLoop, fitTableStage } from '/js/render.js';
+import { renderAll, startTimerLoop, fitTableStage, clearChipsOfPods } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger, openFair } from '/js/panels.js';
 import {
@@ -111,6 +111,11 @@ function applyState(state) {
   notifyStateForPanels(client);
   syncAvSeats(state); // put each live webcam back into its (re-rendered) seat
   fitTableStage();    // webcam tiles make pods taller — refit around them
+  // …and only NOW can the chips be placed honestly. renderBets ran inside
+  // renderAll, before the tiles were back in their pods, so it was measuring
+  // against a pod that was missing the tallest thing in it — which is exactly
+  // how a bet ended up drawn over somebody's face.
+  clearChipsOfPods();
   renderAvControls();
   // A signed-in player's ledger name comes back from their account; show it in
   // the field, but never overwrite what someone is in the middle of typing.
@@ -567,7 +572,12 @@ if (realNameInput) {
 }
 
 initWebrtc(client, socket);
-setOnChange(renderAvControls);
+setOnChange(() => {
+  renderAvControls();
+  // A camera coming on or going off changes the shape of a pod without any
+  // state arriving, so the chips have to be re-placed against it.
+  clearChipsOfPods();
+});
 document.getElementById('av-join')?.addEventListener('click', async () => {
   const r = await joinAV();
   if (!r.ok && r.error) showToast(r.error);

@@ -32,6 +32,11 @@ export function renderAll(client) {
   renderTheme(client);
   renderHeader(client);
   renderSeats(client);
+  // Whose turn it is should read from across the room, so the live seat is
+  // lit and every other one steps back. Only while somebody actually owes a
+  // decision — between hands and during a run-out nothing dims.
+  const someoneActing = !!(state.hand && !state.hand.finished && state.hand.toActSeat !== null);
+  seatsLayer()?.classList.toggle('someone-acting', someoneActing);
   renderBets(client);
   renderBoard(client);
   renderCenter(client);
@@ -607,8 +612,10 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
       toggleMutePlayer(muteBtn.dataset.mute);
       renderAll(client);
       // Re-rendering empties the pod, which detaches that player's webcam
-      // tile. Put it back in the same task, or their picture stays frozen.
+      // tile. Put it back in the same task, or their picture stays frozen —
+      // and only then are the chips placed against the pod people will see.
       syncAvSeats(client.state);
+      clearChipsOfPods();
     });
   }
   if (bubble) plate.insertAdjacentHTML('beforeend', bubble);
@@ -692,6 +699,20 @@ export function clearChipsOfPods() {
     x - w / 2 < o.right - 1 && x + w / 2 > o.left + 1
     && y - h / 2 < o.bottom - 1 && y + h / 2 > o.top + 1);
 
+  // How much of an obstacle a chip would sit on, in square pixels. Used only
+  // when nothing is clear: the chip has to go SOMEWHERE, and the least-bad
+  // spot beats the anchor, which is how bets ended up square on top of
+  // somebody's face on a webcam-heavy table.
+  const overlapArea = (x, y, w, h) => {
+    let worst = 0;
+    for (const o of obstacles) {
+      const dx = Math.min(x + w / 2, o.right) - Math.max(x - w / 2, o.left);
+      const dy = Math.min(y + h / 2, o.bottom) - Math.max(y - h / 2, o.top);
+      if (dx > 0 && dy > 0) worst += dx * dy;
+    }
+    return worst;
+  };
+
   const cx = felt.left + felt.width / 2;
   const cy = felt.top + felt.height / 2;
   const stepPx = Math.max(6, Math.min(felt.width, felt.height) * 0.02);
@@ -707,6 +728,8 @@ export function clearChipsOfPods() {
     // a displaced chip still reads as belonging to the seat it came from.
     const toCentre = Math.atan2(cy - y0, cx - x0);
     let best = null;
+    // The least-bad spot seen so far, in case nothing clear turns up.
+    let fallback = { x: x0, y: y0, cost: overlapArea(x0, y0, r.width, r.height) };
     // 40 rings: a webcam-heavy arc (three tiles and full fans in a cluster)
     // needs the search to reach well past the pods into the open felt.
     for (let ring = 1; ring <= 40 && !best; ring++) {
@@ -719,12 +742,19 @@ export function clearChipsOfPods() {
         // Stay on the felt: a chip pushed off the table is no better than one
         // sitting on a name.
         if (x < felt.left + 8 || x > felt.right - 8 || y < felt.top + 8 || y > felt.bottom - 8) continue;
-        if (!clash(x, y, r.width, r.height)) best = { x, y };
+        if (!clash(x, y, r.width, r.height)) {
+          best = { x, y };
+        } else {
+          const cost = overlapArea(x, y, r.width, r.height);
+          if (cost < fallback.cost) fallback = { x, y, cost };
+        }
       }
     }
-    if (!best) continue; // nowhere clear — leave it on its anchor
-    chip.style.left = `${((best.x - box.left) / box.width) * 100}%`;
-    chip.style.top = `${((best.y - box.top) / box.height) * 100}%`;
+    // Nowhere clear: take the spot that covers the least rather than staying
+    // on the anchor, which is where a chip lands on a webcam tile.
+    const spot = best || fallback;
+    chip.style.left = `${((spot.x - box.left) / box.width) * 100}%`;
+    chip.style.top = `${((spot.y - box.top) / box.height) * 100}%`;
   }
 }
 
@@ -846,7 +876,12 @@ function renderPotLine(potLine, state, hand) {
         ? `Pot: ${total} (${hand.pots.map((p) => p.amount).join(' + ')})`
         : `Pot: ${total}`;
     } else {
-      potText = `Pot: ${hand.collectedPot}`;
+      // The running total, current street included — what you are actually
+      // playing for. The chips still sitting in front of players are part of
+      // this number rather than money the pot has not counted yet, which is
+      // the difference between a pot that moves while people bet and one that
+      // only catches up when the round closes.
+      potText = `Pot: ${hand.potTotal}`;
     }
   }
   const text = [potText, riding].filter(Boolean).join(' · ');

@@ -194,6 +194,70 @@ check('C: the joiner still sees both others', c3.ok, JSON.stringify(c3));
 const cVoice = await voice(host, { want: 2 });
 check('C: host hears both other players', cVoice.ok, JSON.stringify(cVoice));
 
+// ---- D. bets must not land on people's faces ----
+//
+// The complaint this exists for: with a camera on, the chips in front of a
+// player were drawn over their picture. The placement code always knew a tile
+// was an obstacle — it just ran too early, inside renderBets, BEFORE the
+// tiles were put back into the freshly rebuilt pods. So this has to go
+// through the app's own update path with real cameras and real chips, which
+// means dealing a hand: the blinds alone put chips on the felt.
+
+// The A/V controls live in the Menu sheet, which is still open from scenario
+// C and would swallow the click.
+if (await host.evaluate(() =>
+  document.getElementById('menu-toggle')?.getAttribute('aria-expanded') === 'true')) {
+  await host.click('#menu-toggle');
+  await host.waitForSelector('#top-menu.hidden', { state: 'attached' });
+}
+await host.click('#start-game-btn');
+await host.waitForSelector('.bet-chip', { timeout: 10000 });
+// Let the deal animation and the A/V re-attach settle.
+await host.waitForTimeout(1200);
+
+const chipsOnFaces = await host.evaluate(() => {
+  const hits = (a, b) =>
+    a.left < b.right - 1 && a.right > b.left + 1
+    && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+  const tiles = [...document.querySelectorAll('#seats-layer video.seat-cam')]
+    .map((v) => v.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+  const chips = [...document.querySelectorAll('.bet-chip')].map((c) => c.getBoundingClientRect());
+  return {
+    tiles: tiles.length,
+    chips: chips.length,
+    over: chips.filter((c) => tiles.some((t) => hits(c, t))).length,
+  };
+});
+check('D: there are live camera tiles and chips on the felt to test with',
+  chipsOnFaces.tiles > 0 && chipsOnFaces.chips > 0, JSON.stringify(chipsOnFaces));
+check('D: no bet chip is drawn over a live camera tile',
+  chipsOnFaces.over === 0, JSON.stringify(chipsOnFaces));
+
+// ---- E. the mute button is a control you can actually hit ----
+// It was a 9.5px pill in the plate's corner — present, but not something
+// anybody found. It must stay absolutely positioned (it costs the pod no
+// height, which the seat-overlap gates rely on) and be big enough to tap.
+const muteBtn = await host.evaluate(() => {
+  const b = document.querySelector('#seats-layer .np-mute');
+  if (!b) return null;
+  const r = b.getBoundingClientRect();
+  const cs = getComputedStyle(b);
+  return {
+    text: b.textContent.trim(),
+    w: Math.round(r.width), h: Math.round(r.height),
+    font: parseFloat(cs.fontSize), position: cs.position,
+  };
+});
+check('E: another player who is broadcasting has a mute button',
+  !!muteBtn, JSON.stringify(muteBtn));
+if (muteBtn) {
+  check('E: it says what it does', muteBtn.text === 'Mute', muteBtn.text);
+  check('E: it is big enough to read and hit',
+    muteBtn.font >= 11 && muteBtn.w >= 44 && muteBtn.h >= 16, JSON.stringify(muteBtn));
+  check('E: and still costs the pod no height', muteBtn.position === 'absolute');
+}
+
 console.log(`media: ${passes} passed, ${failures} failed`);
 
 await browser.close();
