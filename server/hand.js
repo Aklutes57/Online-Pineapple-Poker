@@ -1515,7 +1515,16 @@ export class Hand {
   // Seven-deuce bounty: winning with the worst starting hand collects from
   // everyone else. Strictly zero-sum and capped at each payer's stack — a
   // flat payout would mint chips against a short stack and break the ledger.
+  //
+  // Hold'em and the Pineapples only. 7-2 is the worst two-card holding, which
+  // is the entire joke; in a four-, five- or seven-card game it is neither the
+  // worst hand nor an unusual one, so the bounty simply does not apply there.
   applySevenDeuce(winner) {
+    // Only in the games it means anything in. The variant is snapshotted at
+    // the deal, so a table that rotates through Omaha pays the bounty on its
+    // Hold'em hands and not on its Omaha ones — and a bomb pot, which is dealt
+    // as Omaha whatever the table is otherwise playing, never pays it.
+    if (!this.variant.sevenDeuce) return null;
     if (!this.sevenDeuceBounty || !winner || !hasSevenDeuce(winner.holeCards)) return null;
     const transfers = [];
     let collected = 0;

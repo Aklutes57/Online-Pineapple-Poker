@@ -61,8 +61,10 @@ Data lives in a SQLite file at `data/pineapple.db` (override with
   bank, an untimed "no clock" mode, and a host nudge for stallers
 - Check/Fold, Check and Call-Any pre-action buttons
 - Home-game options: straddle, rabbit hunt, run it twice, bomb pots and a
-  toggleable 7-2 bounty with a custom payout — and a 6-2 win gets its own
-  table-wide callout (glory only, no chips)
+  toggleable 7-2 bounty with a custom payout (paid in Hold'em and the
+  Pineapples, where 7-2 is the worst hand you can be dealt — not in the
+  four-, five- or seven-card games) — and a 6-2 win gets its own table-wide
+  callout (glory only, no chips)
 - Once a hand is over anyone can show their cards: fold-winners flashing
   the bluff, folders showing what they let go
 - No caps on blinds or buy-ins — table stakes are entirely the host's call

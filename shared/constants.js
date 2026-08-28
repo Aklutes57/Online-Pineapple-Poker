@@ -107,6 +107,12 @@ export const PHASES = {
 // betting-rounds engine, '747' the dealer-vs-players engine), hole cards
 // dealt, where the discard phase slots in (null = no discard), and betting
 // style.
+//
+// `sevenDeuce` marks the games the 7-2 bounty is played in. It is the worst
+// STARTING HAND in a two-card game, which is the whole joke — so it means
+// something in Hold'em and in the Pineapples, where you end up holding two,
+// and nothing in Omaha or a bomb pot (four cards), in Draw (five) or in Stud
+// (seven), where 7-2 is neither the worst holding nor a rare one.
 export const VARIANTS = {
   holdem: {
     key: 'holdem',
@@ -114,6 +120,7 @@ export const VARIANTS = {
     holeCards: 2,
     discardBefore: null,
     potLimit: false,
+    sevenDeuce: true,
   },
   pineapple: {
     key: 'pineapple',
@@ -123,6 +130,7 @@ export const VARIANTS = {
     // two cards you are keeping.
     discardBefore: 'preflop',
     potLimit: false,
+    sevenDeuce: true,
   },
   crazyPineapple: {
     key: 'crazyPineapple',
@@ -132,6 +140,7 @@ export const VARIANTS = {
     // before the flop betting round.
     discardBefore: 'flop',
     potLimit: false,
+    sevenDeuce: true,
   },
   plo: {
     key: 'plo',

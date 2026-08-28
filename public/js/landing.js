@@ -1,6 +1,7 @@
 import { loadAccount, currentAccount, signout, authHeaders } from '/js/auth.js';
 import { openAuthModal } from '/js/authModal.js';
 import { wireInstallButton } from '/js/pwa.js';
+import { VARIANTS } from '/shared/constants.js';
 
 wireInstallButton(document.getElementById('install-btn'));
 
@@ -122,6 +123,24 @@ function sync747Fields() {
   const on = document.getElementById('c-variant').value === '747';
   document.getElementById('c-747-row').classList.toggle('hidden', !on);
   document.getElementById('c-747-note').classList.toggle('hidden', !on);
+  sync72Note();
+}
+
+// The 7-2 bounty is a two-card joke, so it only pays in the two-card games.
+// The control stays usable either way — a table can change game later — but it
+// says plainly when the game you have picked is not one that pays it.
+function sync72Note() {
+  const key = document.getElementById('c-variant').value;
+  const note = document.getElementById('c-72-note');
+  if (!note) return;
+  const pays = !!VARIANTS[key]?.sevenDeuce;
+  note.textContent = pays
+    ? "Paid in Hold'em and the Pineapples. Omaha, Draw and Stud deal more than "
+      + 'two cards, so it does not apply there — bomb pots included.'
+    : `${VARIANTS[key]?.label || 'This game'} does not pay the 7-2 bounty: it deals `
+      + 'more than two cards, and 7-2 is the worst hand you can be dealt two. '
+      + 'Leave it on and it will apply if the table changes game.';
+  note.classList.toggle('warn', !pays);
 }
 document.getElementById('c-variant').addEventListener('change', sync747Fields);
 sync747Fields();

@@ -816,6 +816,67 @@ function totalChips(players, hand) {
     players.reduce((a, p) => a + p.stack, 0) === 206);
 }
 
+// --- The 7-2 bounty only belongs to the two-card games ---
+{
+  // PLO end to end: seat 0 wins holding both a seven and a deuce among its
+  // four cards, and must collect nothing.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+  // Heads-up, button 0: seat 1 takes deck[0..3], seat 0 takes deck[4..7].
+  const deck = ['Ah','Kh','Qh','Jh', '7c','2s','3d','4d', '9h','8c','5s','Tc','Td'];
+  const { hand } = makeHand({ players, deck, variantKey: 'plo', options: { sevenDeuceBounty: 25 } });
+  hand.start();
+  check('the Omaha hand really does hold a seven and a deuce',
+    hand.bySeat.get(0).holeCards.join('') === '7c2s3d4d');
+  const av = availableActionsFor(hand, hand.bySeat.get(hand.toActSeat));
+  act(hand, hand.toActSeat, 'raise', av.minRaiseTo);
+  act(hand, hand.toActSeat, 'fold');
+  check('Omaha pays no 7-2 bounty', hand.results.bounty === null);
+  check('and no chips moved for it', totalChips(players, hand) === 400);
+  check('the winner is not forced face up either', players[0].showedCards !== true);
+}
+{
+  // The gate itself, for every game that should not pay it. Calling
+  // applySevenDeuce directly is the point: it proves the refusal is the
+  // variant, not some accident of how the hand happened to end.
+  const cases = [
+    ['plo', 4], ['bombOmaha', 4], ['fiveCardDraw', 5], ['sevenCardStud', 3],
+  ];
+  for (const [variantKey, holeCount] of cases) {
+    const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b')];
+    const deck = ['2c','3c','4c','5c','6c','7d','8d','9d','Td','Jd',
+      'Qd','Kd','Ad','2h','3h','4h','5h','6h','7h','8h','9h','Th','Jh'];
+    const { hand } = makeHand({ players, deck, variantKey, options: { sevenDeuceBounty: 25 } });
+    hand.start();
+    const winner = hand.bySeat.get(0);
+    // Hand them a seven and a deuce outright, so only the variant can refuse.
+    winner.holeCards = ['7c', '2s', ...winner.holeCards.slice(2, holeCount)];
+    check(`${variantKey} pays no 7-2 bounty`, hand.applySevenDeuce(winner) === null);
+    check(`${variantKey} moved no chips for it`, players[1].stack + players[1].totalCommitted === 200);
+  }
+}
+{
+  // …and Pineapple still does, on the two cards you keep.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  // 3 each: seat1 deck[0..2], seat2 deck[3..5], seat0 deck[6..8].
+  const deck = ['Ah','Ad','Ac', 'Kh','Kd','Kc', '7c','2s','Qd', '3s','4d','Jh','8c','5s'];
+  const { hand } = makeHand({
+    players, deck, variantKey: 'pineapple', options: { sevenDeuceBounty: 25 },
+  });
+  hand.start();
+  check('pineapple deals three', hand.bySeat.get(0).holeCards.length === 3);
+  // Everyone throws one; seat 0 keeps the seven and the deuce.
+  hand.handleDiscard(hand.bySeat.get(0), 2);
+  hand.handleDiscard(hand.bySeat.get(1), 2);
+  hand.handleDiscard(hand.bySeat.get(2), 2);
+  check('seat 0 kept the seven-deuce', hand.bySeat.get(0).holeCards.join('') === '7c2s');
+  act(hand, 0, 'raise', 20);
+  act(hand, 1, 'fold');
+  act(hand, 2, 'fold');
+  check('pineapple still pays the 7-2 bounty', hand.results.bounty?.total === 50);
+  check('pineapple bounty is still zero-sum',
+    players.reduce((a, p) => a + p.stack, 0) === 600);
+}
+
 // --- Posting dead money into the pot ---
 {
   // A post is not a bet: it must not move the current bet, must not count as

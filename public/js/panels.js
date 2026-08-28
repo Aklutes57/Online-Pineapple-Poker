@@ -799,6 +799,24 @@ function sync747Fields() {
   const on = document.getElementById('h-variant').value === '747';
   document.getElementById('h-747-row').classList.toggle('hidden', !on);
   document.getElementById('h-747-note').classList.toggle('hidden', !on);
+  sync72Note();
+}
+
+// Says whether the game currently selected actually pays the 7-2 bounty. The
+// control is never disabled: a table can change game — deliberately, or on a
+// rotation — and the setting has to survive that.
+function sync72Note() {
+  const key = document.getElementById('h-variant').value;
+  const note = document.getElementById('h-72-note');
+  if (!note) return;
+  const pays = !!VARIANTS[key]?.sevenDeuce;
+  note.textContent = pays
+    ? "Paid in Hold'em and the Pineapples, which is where 7-2 is the worst hand "
+      + 'you can be dealt. Bomb pots are dealt as Omaha, so they never pay it.'
+    : `${VARIANTS[key]?.label || 'This game'} does not pay the 7-2 bounty — it deals `
+      + 'more than two cards. Left on, it still applies to any Hold\'em or '
+      + 'Pineapple hands this table plays.';
+  note.classList.toggle('warn', !pays);
 }
 
 function openHostModal(client) {
