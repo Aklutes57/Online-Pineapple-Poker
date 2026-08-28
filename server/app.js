@@ -71,11 +71,20 @@ const CSP = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "img-src 'self' data: blob:",
+  // Video thumbnails for the table's music queue come off YouTube's image CDN.
+  "img-src 'self' data: blob: https://i.ytimg.com",
   // Inline style attributes are used throughout the table layout; they can't
   // execute script, so 'unsafe-inline' here is low-risk. Scripts stay strict.
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self'",
+  // The table's music is the official YouTube IFrame Player API, which is the
+  // only sanctioned way to play YouTube in a page. That needs its loader
+  // (www.youtube.com) and the player bundle it pulls in (s.ytimg.com). These
+  // are the ONLY third-party script origins on the site; everything we wrote
+  // is still same-origin, and there is no 'unsafe-inline' or 'unsafe-eval'.
+  "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+  // …and the player itself is an <iframe>, which needs its own directive.
+  // Nothing else may be framed, and we are still un-frameable ourselves.
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
   // Same-origin covers the Socket.IO wss upgrade and every /api fetch.
   "connect-src 'self'",
   "font-src 'self' data:",

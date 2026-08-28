@@ -201,6 +201,7 @@
       <div class="tabs">
         <button data-tab="chat" class="tab active">Chat</button>
         <button data-tab="log" class="tab">Log</button>
+        <button data-tab="music" class="tab" title="What the table is listening to">Music</button>
         <!-- The ledger is a pop-up, not a tab — this button just opens it. -->
         <button id="ledger-tab-btn" class="tab" title="Who bought in for what, who's up, who's down">Ledger</button>
         <!-- Desktop: folds the dock down to this tab strip, giving the felt
@@ -217,6 +218,26 @@
       </div>
       <div id="tab-log" class="tab-body hidden">
         <div id="log-list" class="scroll-list"></div>
+      </div>
+      <div id="tab-music" class="tab-body hidden">
+        <div class="music-now" id="music-now"></div>
+        <div class="music-controls">
+          <button class="btn btn-ghost ab-small" id="music-play" type="button">Pause</button>
+          <button class="btn btn-ghost ab-small" id="music-skip" type="button">Skip</button>
+          <button class="btn btn-ghost ab-small" id="music-mute" type="button"
+                  title="Only for you — everyone else keeps hearing it">Mute</button>
+        </div>
+        <label class="music-vol">
+          <span>Volume</span>
+          <input id="music-volume" type="range" min="0" max="100" step="1">
+        </label>
+        <p class="hint" id="music-note"></p>
+        <div id="music-queue" class="scroll-list"></div>
+        <form id="music-form">
+          <input id="music-input" maxlength="200" placeholder="Paste a YouTube link…" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Queue</button>
+        </form>
+        <button class="btn btn-ghost ab-small hidden" id="music-clear" type="button">Clear the queue</button>
       </div>
     </aside>
 

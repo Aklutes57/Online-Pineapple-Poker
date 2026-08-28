@@ -195,6 +195,18 @@ export function buildViews(game) {
     status: game.status,
     pauseRequested: game.pauseRequested,
     settings: { ...game.settings },
+    // What the table is playing, and when it started, so each browser can
+    // seek its own player to the same place. Nothing here is audio.
+    music: {
+      queue: game.music.queue.map((t) => ({ ...t })),
+      index: game.music.index,
+      // How long the current track has been running, not when it started.
+      // An absolute timestamp would be read against the client's own clock,
+      // and a browser a few minutes out would seek to the wrong place.
+      startedAgo: game.music.startedAt ? Date.now() - game.music.startedAt : null,
+      paused: game.music.paused,
+      pausedAt: game.music.pausedAt,
+    },
     // Tournament clock. Null on a cash game, which is every table by default.
     tournament: game.isTournament()
       ? {

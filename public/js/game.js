@@ -10,6 +10,7 @@ import {
 } from '/js/pwa.js';
 import { renderAll, startTimerLoop, fitTableStage, clearChipsOfPods } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
+import { initMusic, onMusicState } from '/js/music.js';
 import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger, openFair } from '/js/panels.js';
 import {
   initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic, toggleDeafen,
@@ -106,6 +107,10 @@ function applyState(state) {
   const previousStack = client.you?.stack;
   client.state = state;
   client.you = state.you;
+  // When this state landed on THIS machine. The music clock is published as a
+  // duration ("started this long ago"), so the player adds the time since it
+  // arrived rather than trusting either side's wall clock.
+  state.receivedAt = Date.now();
   clearBoot();
   renderAll(client);
   notifyStateForPanels(client);
@@ -117,6 +122,7 @@ function applyState(state) {
   // how a bet ended up drawn over somebody's face.
   clearChipsOfPods();
   renderAvControls();
+  onMusicState();
   // A signed-in player's ledger name comes back from their account; show it in
   // the field, but never overwrite what someone is in the middle of typing.
   const nameField = document.getElementById('real-name');
@@ -267,6 +273,7 @@ document.getElementById('copy-link').addEventListener('click', async () => {
 
 initActionBar(client);
 initPanels(client);
+initMusic(client);
 initReactions(client);
 startTimerLoop(client);
 

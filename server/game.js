@@ -18,6 +18,7 @@ import {
   handProof, floatFromHex, buildCommitment,
 } from './fairness.js';
 import { AVATAR_URL_RE } from './accounts.js';
+import { parseYouTubeId, cleanTrackTitle, MUSIC_LIMITS } from '../shared/music.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 // A uniform [0,1) from the system CSPRNG. Used for things that are random but
@@ -51,6 +52,18 @@ export class Game {
     this.buttonSeat = null;
     // 747: when the dealer beats everyone, the pot rides here between hands.
     this.carryPot = 0;
+    // The table's music. The server holds the queue and a clock — what is
+    // playing and when it started — and nothing else: every browser runs its
+    // own YouTube player and seeks to that offset. No audio passes through
+    // here, which is both the only sanctioned way to play YouTube and the
+    // reason volume and mute are per-device rather than table-wide.
+    this.music = {
+      queue: [],       // [{ id, title, addedBy, addedById }]
+      index: 0,        // which entry of the queue is playing
+      startedAt: null, // ms epoch the current track began, null when stopped
+      paused: false,
+      pausedAt: 0,     // seconds into the track when it was paused
+    };
     // Tournament clock. Null until the first hand is dealt, so a table that
     // sits waiting for players doesn't burn through its blind levels.
     this.tournamentStartedAt = null;
@@ -492,6 +505,105 @@ export class Game {
     this.addLog(`${player.nickname} re-buys ${want}`);
     if (player.stack > 0 && !player.kicked) player.sittingOut = false;
     this.maybeStartHand();
+    return { ok: true };
+  }
+
+  // ---- the table's music ----
+  //
+  // Anyone sitting at the table can queue something or skip what is playing —
+  // this is a home game, and every one of these lands in the action log with a
+  // name on it. Only the host can wipe the whole queue.
+
+  musicNowPlaying() {
+    return this.music.queue[this.music.index] || null;
+  }
+
+  musicAdd(player, url, title) {
+    const id = parseYouTubeId(url);
+    if (!id) return { ok: false, error: 'That is not a YouTube link' };
+    if (this.music.queue.length >= MUSIC_LIMITS.queue) {
+      return { ok: false, error: `The queue is full (${MUSIC_LIMITS.queue} tracks)` };
+    }
+    const track = {
+      id,
+      title: cleanTrackTitle(title),
+      addedBy: player.nickname,
+      addedById: player.id,
+    };
+    this.music.queue.push(track);
+    // First thing in an idle queue starts straight away; anything else waits
+    // its turn rather than cutting off what is playing.
+    if (this.musicNowPlaying() === track) this.musicStartCurrent();
+    this.addLog(`${player.nickname} queued a track`);
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  musicStartCurrent() {
+    this.music.startedAt = Date.now();
+    this.music.paused = false;
+    this.music.pausedAt = 0;
+  }
+
+  musicSkip(player) {
+    if (!this.musicNowPlaying()) return { ok: false, error: 'nothing is playing' };
+    this.music.index++;
+    if (this.music.index >= this.music.queue.length) {
+      // Off the end: stop rather than wrap, and leave the queue as a history
+      // of what got played.
+      this.music.startedAt = null;
+      this.music.paused = false;
+      this.music.pausedAt = 0;
+    } else {
+      this.musicStartCurrent();
+    }
+    this.addLog(`${player.nickname} skipped the music`);
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  // A client telling us its player reached the end. Stamped with the index it
+  // was playing, so a second client reporting the same track a moment later
+  // cannot skip the next one as well.
+  musicEnded(index) {
+    if (!Number.isInteger(index) || index !== this.music.index) return { ok: true };
+    if (!this.musicNowPlaying()) return { ok: true };
+    this.music.index++;
+    if (this.music.index >= this.music.queue.length) {
+      this.music.startedAt = null;
+    } else {
+      this.musicStartCurrent();
+    }
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  musicPause(player, paused) {
+    if (!this.musicNowPlaying()) return { ok: false, error: 'nothing is playing' };
+    if (paused === this.music.paused) return { ok: true };
+    if (paused) {
+      this.music.pausedAt = Math.max(0, (Date.now() - (this.music.startedAt || Date.now())) / 1000);
+      this.music.startedAt = null;
+      this.music.paused = true;
+    } else {
+      // Resume by backdating the start, so the same offset arithmetic every
+      // client already does keeps working with no special case.
+      this.music.startedAt = Date.now() - this.music.pausedAt * 1000;
+      this.music.paused = false;
+    }
+    this.addLog(`${player.nickname} ${paused ? 'paused' : 'resumed'} the music`);
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  musicClear() {
+    this.music.queue = [];
+    this.music.index = 0;
+    this.music.startedAt = null;
+    this.music.paused = false;
+    this.music.pausedAt = 0;
+    this.addLog('The music queue was cleared');
+    this.emitChanged();
     return { ok: true };
   }
 

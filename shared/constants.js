@@ -18,6 +18,13 @@ export const EVENTS = {
   // stack to another's, a post goes from your stack into the live pot.
   TIP_PLAYER: 'tipPlayer',
   POST_TO_POT: 'postToPot',
+  // The table's music queue. Playback is per-browser; these only move the
+  // shared queue and the clock everybody seeks against.
+  MUSIC_ADD: 'music:add',
+  MUSIC_SKIP: 'music:skip',
+  MUSIC_PAUSE: 'music:pause',
+  MUSIC_ENDED: 'music:ended',
+  MUSIC_CLEAR: 'music:clear',
   STAND_UP: 'standUp',
   CHAT: 'chat',
   REACT: 'react',

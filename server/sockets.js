@@ -362,6 +362,28 @@ export function attachSockets(io) {
       result(game, game.postToPot(player, toInt(payload?.amount)));
     }));
 
+    socket.on(EVENTS.MUSIC_ADD, withGame((game, player, payload) => {
+      result(game, game.musicAdd(player, payload?.url, payload?.title));
+    }));
+
+    socket.on(EVENTS.MUSIC_SKIP, withGame((game, player) => {
+      result(game, game.musicSkip(player));
+    }));
+
+    socket.on(EVENTS.MUSIC_PAUSE, withGame((game, player, payload) => {
+      result(game, game.musicPause(player, !!payload?.paused));
+    }));
+
+    // Fired by whichever browser reaches the end first; the rest are ignored
+    // because the index will no longer match.
+    socket.on(EVENTS.MUSIC_ENDED, withGame((game, player, payload) => {
+      result(game, game.musicEnded(toInt(payload?.index)));
+    }));
+
+    socket.on(EVENTS.MUSIC_CLEAR, withHost((game) => {
+      result(game, game.musicClear());
+    }));
+
     socket.on(EVENTS.STAND_UP, withGame((game, player) => {
       result(game, game.removeFromSeat(player, 'leave'));
     }));
