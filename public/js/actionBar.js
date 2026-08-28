@@ -328,6 +328,15 @@ export function renderActionBar(client) {
     html = `<span class="ab-note">Seated with ${you.stack} — waiting for the game to start.</span>`;
   }
 
+  // Dead money rides along with whatever the bar is already saying. It is not
+  // a bet, so it is deliberately not part of the raise tray — and canPost is
+  // only ever true off-turn, because on your turn Bet is the right control.
+  if (you.canPost) {
+    html += '<button class="btn btn-ghost ab-small" data-act="post-pot"'
+      + ' title="Put chips in the pot. It is not a bet: nobody has to call it,'
+      + ' and it does not change whose turn it is.">Post to pot</button>';
+  }
+
   if (el.dataset.sig === html) {
     syncTrayInputs();
     return;
@@ -626,6 +635,16 @@ function handleAct(client, act, av, arg = null) {
       const raw = prompt(`Re-buy how many chips? (at least ${minBuyIn} — no cap)`);
       const amount = parseInt(raw, 10);
       if (Number.isInteger(amount)) client.send(EVENTS.REBUY, { amount });
+      break;
+    }
+    case 'post-pot': {
+      const raw = prompt(
+        'Post how many chips into the pot?\n\n'
+        + 'It is dead money: nobody has to call it, it does not change whose '
+        + 'turn it is, and you only get it back by winning the pot.'
+      );
+      const amount = parseInt(raw, 10);
+      if (Number.isInteger(amount) && amount > 0) client.send(EVENTS.POST_TO_POT, { amount });
       break;
     }
     case 'stand-up':

@@ -231,6 +231,18 @@ export function initPanels(client) {
         ?.classList.toggle('hidden', !openDetails.has(pid));
       return;
     }
+    const tipBtn = e.target.closest('button[data-tip]');
+    if (tipBtn) {
+      const row = [...(clientRef.state.ledger || [])]
+        .find((x) => x.playerId === tipBtn.dataset.tip);
+      const who = row ? (row.realName || row.nickname) : 'them';
+      const raw = prompt(`Tip ${who} how many chips? It comes straight out of your stack.`);
+      const amount = parseInt(raw, 10);
+      if (Number.isInteger(amount) && amount > 0) {
+        clientRef.send(EVENTS.TIP_PLAYER, { playerId: tipBtn.dataset.tip, amount });
+      }
+      return;
+    }
     const copyBtn = e.target.closest('button[data-copy]');
     if (!copyBtn) return;
     const handle = copyBtn.dataset.copy;
@@ -509,6 +521,8 @@ function renderLedger(client) {
   // Two rows that display the same name are disambiguated by the username the
   // table actually knows them by, so a settle-up line is never ambiguous.
   const payeeLabel = payeeLabeller(rows);
+  // You cannot tip yourself, so your own row never offers the button.
+  const myId = client.you?.playerId ?? null;
 
   // The books check everyone can see: every chip bought in is either in a
   // stack, cashed out, or riding in the 747 pot. Σnet is stacks + cash-outs
@@ -555,6 +569,10 @@ function renderLedger(client) {
           <span>Last hand: <span class="${deltaClass(r.lastHandDelta)}">${formatDelta(r.lastHandDelta)}</span></span>
           <span>${r.seated ? 'Seated' : 'Away'}</span>
           ${r.net > 0 ? payButtons(r.payments, r.net) : ''}
+          ${r.seated && r.playerId !== myId
+            ? `<button type="button" class="sl-tip" data-tip="${escapeHtml(r.playerId)}"
+                 title="Move chips from your stack to theirs">Tip chips</button>`
+            : ''}
         </div>
       </div>`
         )

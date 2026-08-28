@@ -495,6 +495,58 @@ export class Game {
     return { ok: true };
   }
 
+  // A tip moves chips from one player's stack to another's. It never touches a
+  // pot and never creates or destroys a chip, so the ledger needs no entry:
+  // net is measured from the final stack, and the two moves cancel there.
+  //
+  // Held until the hand ends if either player is in it. Stacks mid-hand are
+  // load-bearing — all-in detection and side-pot levels are both read off
+  // them — so topping one up in the middle of a hand would corrupt the
+  // betting. This is the same discipline a host stack adjustment follows.
+  tipPlayer(from, toId, amount) {
+    const to = this.players.get(toId);
+    if (!from || from.status !== 'seated') return { ok: false, error: 'you are not seated' };
+    if (!to || to.status !== 'seated') return { ok: false, error: 'they are not seated' };
+    if (to === from) return { ok: false, error: 'you cannot tip yourself' };
+    if (!Number.isInteger(amount) || amount < 1) return { ok: false, error: 'bad amount' };
+    if (amount > from.stack) return { ok: false, error: 'more than you have' };
+    if (to.stack + amount > MAX_CHIPS) return { ok: false, error: 'their stack is already full' };
+
+    if (this.playerInLiveHand(from) || this.playerInLiveHand(to)) {
+      this.queueOp({ type: 'tip', playerId: from.id, toId: to.id, amount });
+      this.addLog(`${from.nickname} tips ${to.nickname} ${amount} — lands after this hand`);
+      this.emitChanged();
+      return { ok: true, queued: true };
+    }
+    this.applyTip(from, to, amount);
+    this.emitChanged();
+    return { ok: true };
+  }
+
+  applyTip(from, to, amount) {
+    // Re-check at the moment it actually moves: a queued tip can be applied a
+    // whole hand after it was asked for, by which time the tipper may have
+    // lost the chips they promised. Pay what is left rather than minting.
+    const moved = Math.max(0, Math.min(amount, from.stack, MAX_CHIPS - to.stack));
+    if (moved <= 0) {
+      this.addLog(`${from.nickname}'s tip to ${to.nickname} could not be paid`);
+      return;
+    }
+    from.stack -= moved;
+    to.stack += moved;
+    this.addLog(`${from.nickname} tips ${to.nickname} ${moved}`);
+  }
+
+  // Dead money into the live pot. The Hand owns the pot, so it owns the rules;
+  // this only finds the hand and reports back.
+  postToPot(player, amount) {
+    const hand = this.currentHand;
+    if (!hand || hand.finished) return { ok: false, error: 'no hand to post into' };
+    const result = hand.postDead(player, amount);
+    if (result.ok) this.emitChanged();
+    return result;
+  }
+
   adjustStack(playerId, delta) {
     const player = this.players.get(playerId);
     if (!player || player.status !== 'seated') return { ok: false, error: 'not seated' };
@@ -758,6 +810,13 @@ export class Game {
       }
       const player = this.players.get(op.playerId);
       if (!player) continue;
+      if (op.type === 'tip') {
+        const to = this.players.get(op.toId);
+        if (to && to.status === 'seated' && player.status === 'seated') {
+          this.applyTip(player, to, op.amount);
+        }
+        continue;
+      }
       if (op.type === 'unseat' && player.status === 'seated') {
         this.unseatNow(player, op.reason);
       } else if (op.type === 'adjustStack' && player.status === 'seated') {

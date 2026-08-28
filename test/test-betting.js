@@ -1,5 +1,6 @@
 import { Hand } from '../server/hand.js';
 import { availableActionsFor } from '../server/betting.js';
+import * as betting from '../server/betting.js';
 import { PHASES } from '../shared/constants.js';
 
 let failures = 0;
@@ -813,6 +814,86 @@ function totalChips(players, hand) {
   check('short payer never goes negative', players[1].stack >= 0);
   check('bounty is zero-sum against a short stack',
     players.reduce((a, p) => a + p.stack, 0) === 206);
+}
+
+// --- Posting dead money into the pot ---
+{
+  // A post is not a bet: it must not move the current bet, must not count as
+  // a call, and must not change whose turn it is.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah','Ad','Kh','Kd','7c','2s','3s','4d','Jh','8c','5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 20);
+  const toActBefore = hand.toActSeat;
+  const betBefore = hand.currentBet;
+  const owedBefore = availableActionsFor(hand, hand.bySeat.get(2)).callAmount;
+  const potBefore = betting.potTotal(hand);
+  // Seat 2 is the big blind here, so it already has chips in front of it —
+  // measure the post against what was there, not against the buy-in.
+  const streetBefore = hand.bySeat.get(2).betThisRound;
+  const stackBefore = players[2].stack;
+
+  const r = hand.postDead(hand.bySeat.get(2), 50);
+  check('a post is accepted off-turn', r.ok === true && r.amount === 50);
+  check('a post lands in the pot', betting.potTotal(hand) === potBefore + 50);
+  check('a post does not move the current bet', hand.currentBet === betBefore);
+  check('a post does not change whose turn it is', hand.toActSeat === toActBefore);
+  check('a post does not pay off what you owe',
+    availableActionsFor(hand, hand.bySeat.get(2)).callAmount === owedBefore);
+  check('a post leaves the street bet alone',
+    hand.bySeat.get(2).betThisRound === streetBefore);
+  check('a post comes out of the stack', players[2].stack === stackBefore - 50);
+}
+{
+  // Refused on your own turn — that is what the betting controls are for, and
+  // in a pot-limit game it would inflate the pot your own max raise is
+  // measured against, immediately before you make it.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah','Ad','Kh','Kd','7c','2s','3s','4d','Jh','8c','5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  const onTurn = hand.bySeat.get(hand.toActSeat);
+  check('no posting while the action is on you', hand.postDead(onTurn, 10).ok === false);
+  check('a post of nothing is refused', hand.postDead(hand.bySeat.get(0), 0).ok === false);
+  check('a post you cannot cover is refused',
+    hand.postDead(hand.bySeat.get(0), 100000).ok === false);
+}
+{
+  // A folded player has no interest left in the pot, and letting them post
+  // would collide with the fold-win cap handing it straight back to them.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah','Ad','Kh','Kd','7c','2s','3s','4d','Jh','8c','5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'fold');
+  check('a folded player cannot post', hand.postDead(hand.bySeat.get(0), 10).ok === false);
+}
+{
+  // Chips are conserved through a hand that had dead money posted into it.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah','Ad','Kh','Kd','7c','2s','3s','4d','Jh','8c','5s'];
+  const { hand, ctx } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 20);
+  hand.postDead(hand.bySeat.get(2), 40);
+  act(hand, 1, 'fold');
+  act(hand, 2, 'fold');
+  ctx.fireAll();
+  check('the dead money is in the pot that gets paid out',
+    totalChips(players, hand) === 600);
+  check('the winner collected the posted chips too', players[0].stack > 200);
+}
+{
+  // Posting everything you have leaves you all-in, exactly as shoving would.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 30, 'c')];
+  const deck = ['Ah','Ad','Kh','Kd','7c','2s','3s','4d','Jh','8c','5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 20);
+  hand.postDead(hand.bySeat.get(2), players[2].stack);
+  check('posting your whole stack puts you all in',
+    players[2].stack === 0 && players[2].allIn === true);
 }
 
 // --- Run it twice ---

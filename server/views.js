@@ -278,6 +278,16 @@ export function buildViews(game) {
       canPreAct:
         inHand && !hand.finished && hand.isBettingPhase() &&
         hand.toActSeat !== p.seatIndex && !p.folded && !p.allIn,
+      // Dead money into the pot: any live hand you have not folded out of, as
+      // long as the action is not on you — on your turn the betting controls
+      // are the right tool. 747 is excluded: it has no betting rounds, and a
+      // pot that rides between hands.
+      canPost:
+        inHand && !hand.finished && hand.variant.engine !== '747' &&
+        hand.toActSeat !== p.seatIndex && !p.folded && p.stack > 0,
+      // Tipping only needs chips and a seat; whether it lands now or after the
+      // hand is the server's business, not the button's.
+      canTip: p.status === 'seated' && p.stack > 0,
       waitlistPosition:
         game.waitlist.findIndex((e) => e.playerId === p.id) + 1 || null,
       canRabbitHunt:

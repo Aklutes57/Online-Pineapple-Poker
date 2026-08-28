@@ -18,6 +18,19 @@ export function pay(player, amount) {
   return actual;
 }
 
+// Chips put into the pot that are NOT a bet. They buy no action: they call
+// nothing, they do not raise the current bet, and they leave whose turn it is
+// exactly as it was. They still go through totalCommitted, because that is the
+// only thing the pot is ever built from — moving chips any other way would
+// break chip conservation and strand them outside the payout.
+export function payDead(player, amount) {
+  const actual = Math.max(0, Math.min(amount, player.stack));
+  player.stack -= actual;
+  player.totalCommitted += actual;
+  if (player.stack === 0) player.allIn = true;
+  return actual;
+}
+
 export function resetStreet(hand) {
   for (const p of hand.players) {
     p.betThisRound = 0;

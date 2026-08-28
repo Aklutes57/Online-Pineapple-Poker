@@ -1143,6 +1143,35 @@ export class Hand {
     this.ctx.finished();
   }
 
+  // Chips a player pushes into the pot that are not a bet. The point is that
+  // it buys nothing: the current bet does not move, nobody owes a call, and
+  // whose turn it is and the order of the action are untouched. It goes
+  // through payDead so it lands in totalCommitted — the only thing pots are
+  // built from — which also means side pots, the fold-win cap and a voided
+  // hand's refund all handle it without knowing it is special.
+  //
+  // Refused while the action is on you: there the betting controls are the
+  // right tool, and in a pot-limit game a post would otherwise let you inflate
+  // the pot your own maximum raise is measured against, immediately before
+  // making it.
+  postDead(player, amount) {
+    if (this.finished) return { ok: false, error: 'the hand is over' };
+    const seated = this.bySeat.get(player.seatIndex);
+    if (!seated || seated !== player) return { ok: false, error: 'you are not in this hand' };
+    if (player.folded) return { ok: false, error: 'you have folded this hand' };
+    if (!Number.isInteger(amount) || amount < 1) return { ok: false, error: 'bad amount' };
+    if (amount > player.stack) return { ok: false, error: 'more than you have' };
+    if (this.toActSeat === player.seatIndex) {
+      return { ok: false, error: 'not while the action is on you — bet instead' };
+    }
+    const paid = betting.payDead(player, amount);
+    if (paid <= 0) return { ok: false, error: 'nothing to post' };
+    this.pushEvent({ type: 'post', seat: player.seatIndex, amount: paid });
+    this.ctx.log(`${player.nickname} posts ${paid} into the pot`);
+    this.ctx.changed();
+    return { ok: true, amount: paid };
+  }
+
   // Seven-deuce bounty: winning with the worst starting hand collects from
   // everyone else. Strictly zero-sum and capped at each payer's stack — a
   // flat payout would mint chips against a short stack and break the ledger.

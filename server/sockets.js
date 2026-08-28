@@ -57,6 +57,14 @@ function asObject(payload) {
   return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
 }
 
+// Chip amounts arrive from the client as whatever the browser felt like
+// sending. Anything that is not a whole number of chips becomes null, which
+// every caller rejects with its own message rather than coercing to zero.
+function toInt(value) {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return Number.isInteger(n) ? n : null;
+}
+
 const MAX_PLAYERS_PER_GAME = 60;
 
 // Undo a socket's current player/game binding (used on disconnect and when a
@@ -344,6 +352,14 @@ export function attachSockets(io) {
 
     socket.on(EVENTS.SET_STRADDLE, withGame((game, player, payload) => {
       result(game, game.setStraddle(player, !!payload?.on, !!payload?.deep));
+    }));
+
+    socket.on(EVENTS.TIP_PLAYER, withGame((game, player, payload) => {
+      result(game, game.tipPlayer(player, payload?.playerId, toInt(payload?.amount)));
+    }));
+
+    socket.on(EVENTS.POST_TO_POT, withGame((game, player, payload) => {
+      result(game, game.postToPot(player, toInt(payload?.amount)));
     }));
 
     socket.on(EVENTS.STAND_UP, withGame((game, player) => {

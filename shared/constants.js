@@ -14,6 +14,10 @@ export const EVENTS = {
   SIT_OUT: 'sitOut',
   SIT_IN: 'sitIn',
   SET_STRADDLE: 'setStraddle',
+  // Chips moved by hand rather than by betting: a tip goes from one player's
+  // stack to another's, a post goes from your stack into the live pot.
+  TIP_PLAYER: 'tipPlayer',
+  POST_TO_POT: 'postToPot',
   STAND_UP: 'standUp',
   CHAT: 'chat',
   REACT: 'react',

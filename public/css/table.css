@@ -1597,6 +1597,28 @@ td.dim { color: var(--text-dim); }
   border-color: var(--accent);
 }
 
+/* Tipping sits in the same drawer as "how do I pay this person", because it
+   is the same question asked mid-game: it moves chips from your stack to
+   theirs and touches no pot. Accent-bordered so it reads as an action rather
+   than as another line of the ledger. */
+.sl-tip {
+  align-self: flex-start;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sl-tip:hover {
+  color: #10131c;
+  background: var(--accent);
+}
+
 .sl-net.pos { color: var(--green); font-weight: 700; }
 .sl-net.neg { color: var(--red); font-weight: 700; }
 

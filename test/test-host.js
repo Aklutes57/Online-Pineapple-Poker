@@ -417,6 +417,68 @@ function check(name, cond) {
   void host;
 }
 
+// ---- tipping another player ----
+function tableOfThree(settings = {}) {
+  const { game, host } = createGame({ actionTime: 0, ...settings }, 'Host', null);
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const pia = game.addPlayer('Pia', null);
+  const quinn = game.addPlayer('Quinn', null);
+  for (const [p, seat] of [[pia, 1], [quinn, 2]]) {
+    p.connected = true;
+    game.requestSeat(p, 200, seat);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+  }
+  game.status = 'running';
+  return { game, host, pia, quinn };
+}
+{
+  const { game, host, pia } = tableOfThree();
+  const before = host.stack + pia.stack;
+  check('a tip is accepted between hands', game.tipPlayer(host, pia.id, 25).ok === true);
+  check('the chips left the tipper', host.stack === 175);
+  check('the chips reached the other player', pia.stack === 225);
+  check('a tip creates no chips', host.stack + pia.stack === before);
+
+  check('you cannot tip yourself', game.tipPlayer(host, host.id, 5).ok === false);
+  check('you cannot tip more than you have',
+    game.tipPlayer(host, pia.id, 10_000_000).ok === false);
+  check('a tip of nothing is refused', game.tipPlayer(host, pia.id, 0).ok === false);
+  check('a fractional tip is refused', game.tipPlayer(host, pia.id, 2.5).ok === false);
+  check('you cannot tip somebody who is not seated',
+    game.tipPlayer(host, 'nobody-here', 5).ok === false);
+}
+{
+  // Stacks mid-hand are load-bearing — all-in detection and side-pot levels
+  // are both read off them — so a tip waits for the hand to finish.
+  const { game, host, pia } = tableOfThree();
+  game.startHand();
+  const hostBefore = host.stack;
+  const piaBefore = pia.stack;
+  const r = game.tipPlayer(host, pia.id, 30);
+  check('a tip during a hand is queued, not applied', r.ok === true && r.queued === true);
+  check('no chips moved while the hand was live',
+    host.stack === hostBefore && pia.stack === piaBefore);
+
+  game.currentHand.finished = true;
+  game.applyPendingOps();
+  check('the queued tip lands once the hand is over',
+    host.stack === hostBefore - 30 && pia.stack === piaBefore + 30);
+}
+{
+  // A queued tip can be applied a whole hand after it was asked for, by which
+  // time the tipper may have lost the chips they promised. Pay what is left.
+  const { game, host, pia } = tableOfThree();
+  game.startHand();
+  game.tipPlayer(host, pia.id, 150);
+  game.currentHand.finished = true;
+  host.stack = 40; // busted most of it away in the meantime
+  const piaBefore = pia.stack;
+  game.applyPendingOps();
+  check('an unaffordable queued tip pays what is left, never more',
+    host.stack === 0 && pia.stack === piaBefore + 40);
+}
+
 // ---- mixed games: the table rotates its format between hands ----
 {
   const { game } = createGame({ variant: 'holdem', rotateVariants: true, rotateEvery: 1 }, 'Mixer', null);
