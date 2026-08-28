@@ -169,6 +169,13 @@ export const DEFAULT_SETTINGS = {
   bombPotFrequency: 'off',
   bombPotAnte: 0, // chips each player antes; 0 means "use the big blind"
   sevenDeuceBounty: 0, // chips each opponent pays for a win with 7-2
+  // Mixed games. When on, the table changes format every `rotateEvery` hands,
+  // walking `rotateList` in order. An empty list means "every format that can
+  // be rotated" — see rotatableVariants(). Rotation only ever happens between
+  // hands, and never while the table is playing 747.
+  rotateVariants: false,
+  rotateEvery: 8,
+  rotateList: [],
   // 747 only. ante747 = 0 means "use the big blind", which is what 747 tables
   // did before the ante became host-settable.
   ante747: 0,
@@ -242,6 +249,17 @@ export const BOMB_POT_LABELS = {
 
 // Bomb pots are dealt as this, not as the table's own game.
 export const BOMB_POT_VARIANT = 'bombOmaha';
+
+// The formats a mixed table can rotate through. 747 is deliberately not one
+// of them: it runs a different engine — no blinds, no betting rounds, a pot
+// that rides between hands — so rotating it in mid-session would change what
+// "the next hand" means and strand the carry pot. Hidden variants are engine
+// internals (the bomb pot's Omaha), not games you sit down to play.
+export function rotatableVariants() {
+  return Object.values(VARIANTS)
+    .filter((v) => !v.hidden && v.engine !== '747')
+    .map((v) => v.key);
+}
 
 export const TIMINGS = {
   DISCARD_TIME: 15000, // ms for the pineapple discard decision

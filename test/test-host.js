@@ -13,7 +13,7 @@ const { io: ioc } = await import('socket.io-client');
 const { Game } = await import('../server/game.js');
 const { createGame } = await import('../server/gameManager.js');
 const { buildServer } = await import('../server/app.js');
-const { EVENTS, TIMINGS } = await import('../shared/constants.js');
+const { EVENTS, TIMINGS, rotatableVariants } = await import('../shared/constants.js');
 
 let failures = 0;
 let passes = 0;
@@ -415,6 +415,68 @@ function check(name, cond) {
   check('someone not at the table cannot change it',
     game.setTableImage(stranger, '/uploads/x.png').ok === false);
   void host;
+}
+
+// ---- mixed games: the table rotates its format between hands ----
+{
+  const { game } = createGame({ variant: 'holdem', rotateVariants: true, rotateEvery: 1 }, 'Mixer', null);
+  check('rotation survives sanitizeSettings', game.settings.rotateVariants === true);
+
+  const list = game.rotationList();
+  check('an empty list means every rotatable format',
+    list.join(',') === rotatableVariants().join(','));
+  check('747 is never in the rotation', !list.includes('747'));
+
+  // Walk it by hand: maybeRotateVariant is what startHand calls between deals.
+  const seen = [game.settings.variant];
+  for (let i = 0; i < list.length; i++) {
+    game.maybeRotateVariant();
+    seen.push(game.settings.variant);
+  }
+  check('every rotatable format comes round', new Set(seen).size === list.length);
+  check('the walk returns to where it started', seen[seen.length - 1] === seen[0]);
+}
+{
+  // rotateEvery holds the format for N hands before moving on.
+  const { game } = createGame(
+    { variant: 'holdem', rotateVariants: true, rotateEvery: 3, rotateList: ['holdem', 'plo'] },
+    'Mixer', null
+  );
+  check('the host list is kept as given', game.rotationList().join(',') === 'holdem,plo');
+  game.maybeRotateVariant();
+  game.maybeRotateVariant();
+  check('the format holds for the first two hands', game.settings.variant === 'holdem');
+  game.maybeRotateVariant();
+  check('and changes on the third', game.settings.variant === 'plo');
+}
+{
+  // A list of one is not a rotation; the table plays everything instead of
+  // silently pinning itself to a single game.
+  const { game } = createGame(
+    { variant: 'holdem', rotateVariants: true, rotateEvery: 1, rotateList: ['plo'] },
+    'Mixer', null
+  );
+  check('a one-format list falls back to all of them',
+    game.rotationList().length === rotatableVariants().length);
+}
+{
+  // 747 is left alone: it has a pot that rides between hands, so rotating
+  // away from it mid-session would strand that pot.
+  const { game } = createGame(
+    { variant: '747', rotateVariants: true, rotateEvery: 1 }, 'Mixer', null
+  );
+  game.maybeRotateVariant();
+  game.maybeRotateVariant();
+  check('a 747 table never rotates away', game.settings.variant === '747');
+}
+{
+  // Rubbish in the list is dropped rather than trusted.
+  const { game } = createGame(
+    { variant: 'holdem', rotateVariants: true, rotateList: ['plo', 'nonsense', '747', 'bombOmaha', 'plo'] },
+    'Mixer', null
+  );
+  check('unknown, hidden and 747 entries are stripped',
+    game.settings.rotateList.join(',') === 'plo');
 }
 
 console.log(`host: ${passes} passed, ${failures} failed`);

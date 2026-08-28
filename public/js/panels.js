@@ -1,6 +1,6 @@
 // Side panel (Chat / Log / Ledger tabs), seat-request queue, and host modal.
 
-import { EVENTS, GAME_STATUS, VARIANTS } from '/shared/constants.js';
+import { EVENTS, GAME_STATUS, VARIANTS, rotatableVariants } from '/shared/constants.js';
 import { settleUp, payeeLabeller } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
 import { PAYMENT_SERVICES, paymentUrl, displayHandle } from '/shared/payments.js';
@@ -141,6 +141,15 @@ export function initPanels(client) {
   document.getElementById('h-72-on').addEventListener('change', (e) => {
     document.getElementById('h-72').disabled = !e.target.checked;
   });
+  // The formats a mix can draw on. Built from the same helper the server
+  // sanitizes against, so the two can never disagree about what is rotatable.
+  document.getElementById('h-rotate-list').innerHTML = rotatableVariants()
+    .map((k) => `<label class="toggle"><input type="checkbox" data-rotate="${k}">`
+      + `<span>${escapeHtml(VARIANTS[k].label)}</span></label>`)
+    .join('');
+  document.getElementById('h-rotate').addEventListener('change', (e) => {
+    document.getElementById('h-rotate-row').classList.toggle('hidden', !e.target.checked);
+  });
   // Picking 747 opens its two settings right there in the host pop-up, so the
   // ante and the penalty cap are set at the moment you switch to it.
   document.getElementById('h-variant').addEventListener('change', sync747Fields);
@@ -166,6 +175,11 @@ export function initPanels(client) {
       straddle: document.getElementById('h-straddle').checked,
       rabbitHunt: document.getElementById('h-rabbit').checked,
       runItTwice: document.getElementById('h-rit').checked,
+      rotateVariants: document.getElementById('h-rotate').checked,
+      rotateEvery: Math.max(1, parseInt(document.getElementById('h-rotate-every').value, 10) || 1),
+      rotateList: [...document.querySelectorAll('#h-rotate-list input[data-rotate]')]
+        .filter((el) => el.checked)
+        .map((el) => el.dataset.rotate),
       levelMinutes: parseInt(document.getElementById('h-level').value, 10) || 15,
       rebuyMinutes: Math.max(0, parseInt(document.getElementById('h-rebuy').value, 10) || 0),
       ante747: parseInt(document.getElementById('h-747-ante').value, 10) || 0,
@@ -796,6 +810,16 @@ function openHostModal(client) {
   document.getElementById('h-straddle').checked = !!s.straddle;
   document.getElementById('h-rabbit').checked = !!s.rabbitHunt;
   document.getElementById('h-rit').checked = !!s.runItTwice;
+  const mixed = !!s.rotateVariants;
+  document.getElementById('h-rotate').checked = mixed;
+  document.getElementById('h-rotate-row').classList.toggle('hidden', !mixed);
+  document.getElementById('h-rotate-every').value = String(s.rotateEvery ?? 8);
+  // An empty stored list means "all of them", which is what the table will
+  // actually play — so show it ticked rather than blank.
+  const inMix = new Set((s.rotateList || []).length ? s.rotateList : rotatableVariants());
+  for (const el of document.querySelectorAll('#h-rotate-list input[data-rotate]')) {
+    el.checked = inMix.has(el.dataset.rotate);
+  }
   refreshHostModal(client, true);
   document.getElementById('host-modal').classList.remove('hidden');
 }

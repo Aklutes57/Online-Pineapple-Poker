@@ -356,6 +356,25 @@
         <label class="toggle"><input type="checkbox" id="h-rabbit"><span>Rabbit hunt</span></label>
         <label class="toggle"><input type="checkbox" id="h-rit"><span>Run it twice</span></label>
         <label class="toggle"><input type="checkbox" id="h-72-on"><span>7-2 bounty</span></label>
+        <label class="toggle"><input type="checkbox" id="h-rotate"><span>Mixed game</span></label>
+      </div>
+      <div class="hidden" id="h-rotate-row">
+        <div class="row">
+          <div class="field">
+            <label for="h-rotate-every">Change game every (hands)</label>
+            <input id="h-rotate-every" type="number" min="1" max="100" step="1">
+          </div>
+        </div>
+        <div class="field">
+          <label>Formats in the mix</label>
+          <div class="option-toggles" id="h-rotate-list"></div>
+        </div>
+        <p class="hint">
+          Tick at least two — fewer and the table plays every format in turn. The
+          game changes between hands and is announced in the log, so a hand always
+          finishes under the rules it was dealt with. 747 is never in a mix: it runs
+          a different engine, with a pot that rides between hands.
+        </p>
       </div>
       <p class="hint">All table changes apply from the next hand. "No limit" on the timer makes the table untimed.</p>
       <div class="actions" style="justify-content: flex-start">

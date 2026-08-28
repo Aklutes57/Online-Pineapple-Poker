@@ -5,6 +5,7 @@
 import {
   GAME_STATUS, DEFAULT_SETTINGS, SEAT_COUNT, TIMINGS, SETTINGS_LIMITS, PHASES, VARIANTS,
   MAX_CHIPS, NAME_FONTS, DEFAULT_NAME_FONT, blindsForLevel, BOMB_POT_ODDS, BOMB_POT_VARIANT,
+  rotatableVariants,
 } from '../shared/constants.js';
 import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
@@ -705,6 +706,7 @@ export class Game {
     for (const key of ['timeBank', 'straddle', 'rabbitHunt', 'runItTwice', 'bombPotEvery',
       'bombPotFrequency', 'bombPotAnte',
       'sevenDeuceBounty', 'ante747', 'penaltyCap747',
+      'rotateVariants', 'rotateEvery', 'rotateList',
       'tournament', 'levelMinutes', 'rebuyMinutes']) {
       if (patch[key] !== undefined) next[key] = patch[key];
     }
@@ -866,11 +868,45 @@ export class Game {
     this.emitChanged();
   }
 
+  // Which formats this table walks through, in order. The host's picks win;
+  // anything unusable has already been stripped by sanitizeSettings, and a
+  // list with fewer than two live entries falls back to every rotatable
+  // format rather than silently pinning the table to one game.
+  rotationList() {
+    const allowed = rotatableVariants();
+    const picked = (this.settings.rotateList || []).filter((k) => allowed.includes(k));
+    return picked.length >= 2 ? picked : allowed;
+  }
+
+  // Advance the table's game if a mixed session asked for it. Called from
+  // startHand, so it can only ever fire between hands — a hand always
+  // finishes under the rules it was dealt with.
+  maybeRotateVariant() {
+    const s = this.settings;
+    if (!s.rotateVariants) return;
+    // 747 is never rotated into or out of. It is a different engine with a
+    // pot that rides between hands, so switching away mid-session would
+    // strand that pot; a host who wants 747 has chosen it deliberately.
+    if (VARIANTS[s.variant]?.engine === '747') return;
+    const list = this.rotationList();
+    if (list.length < 2) return;
+    this.handsThisVariant = (this.handsThisVariant || 0) + 1;
+    if (this.handsThisVariant < Math.max(1, s.rotateEvery)) return;
+    this.handsThisVariant = 0;
+    // An unknown current variant (the host just switched to something outside
+    // the list) starts the walk at the top rather than jumping to index 1.
+    const at = list.indexOf(s.variant);
+    const next = list[at === -1 ? 0 : (at + 1) % list.length];
+    if (next === s.variant) return;
+    this.settings = sanitizeSettings({ ...s, variant: next });
+    this.addLog(`Mixed game — this hand is ${VARIANTS[next].label}`);
+  }
+
   startHand() {
     if (this.status !== GAME_STATUS.RUNNING || this.closed) return;
     if (this.currentHand && !this.currentHand.finished) return;
     this.advanceTournamentClock();
-    const s = this.settings;
+    let s = this.settings;
     const is747 = VARIANTS[s.variant]?.engine === '747';
 
     let players = this.eligiblePlayers();
@@ -902,6 +938,11 @@ export class Game {
       this.emitChanged();
       return;
     }
+    // A mixed table changes format here — between hands, once we know one is
+    // actually being dealt, and never while a hand is live. Re-read the
+    // settings afterwards so the rest of this deal runs under the new game.
+    this.maybeRotateVariant();
+    s = this.settings;
     this.buttonSeat = this.nextButtonSeat();
     this.handNo++;
     for (const p of players) {
@@ -1377,6 +1418,14 @@ export function sanitizeSettings(s) {
       : DEFAULT_SETTINGS.bombPotFrequency,
     bombPotAnte: bounded(s.bombPotAnte, 0, MAX_CHIPS, 0),
     sevenDeuceBounty: bounded(s.sevenDeuceBounty, 0, MAX_CHIPS, 0),
+    rotateVariants: !!s.rotateVariants,
+    rotateEvery: bounded(s.rotateEvery, 1, 100, DEFAULT_SETTINGS.rotateEvery),
+    // Only formats that can actually be rotated survive the trip, de-duped and
+    // kept in the host's chosen order. An unusable list is stored as empty,
+    // which the game reads as "all of them" rather than as "none".
+    rotateList: Array.isArray(s.rotateList)
+      ? [...new Set(s.rotateList)].filter((k) => rotatableVariants().includes(k))
+      : [],
     ante747: bounded(s.ante747, 0, MAX_CHIPS, DEFAULT_SETTINGS.ante747),
     penaltyCap747: bounded(s.penaltyCap747, 0, MAX_CHIPS, DEFAULT_SETTINGS.penaltyCap747),
     tournament: !!s.tournament,
