@@ -26,7 +26,7 @@ TIMINGS.REVEAL_747_STEP = 5;
 const HANDS_PER_VARIANT = parseInt(process.argv[2], 10) || 60;
 // Six seats play every one of these. Five Card Draw caps its deal at five,
 // so this also exercises the overflow seat sitting a hand out.
-const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo', '747', 'fiveCardDraw'];
+const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo', '747', 'fiveCardDraw', 'sevenCardStud'];
 const BOTS = 5; // plus the host = 6 seats
 const BUY_IN = 200;
 

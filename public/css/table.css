@@ -736,6 +736,43 @@ body.disconnected::after {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 
+/* The pods were laid out against hold'em's two cards. Every other game deals
+   more — three in Pineapple, five in Draw, seven in Stud — and flat in a row
+   they run off the felt and into the seat next door. From the third card on
+   they overlap the way a hand held in one hand does: each tucked behind the
+   one before it, still readable because a card's rank and suit live in its
+   top-left corner, and already separated by the shadow they each carry.
+
+   This is what a ten-handed Pineapple table needed all along; it was never
+   caught because the layout test only ever dealt hold'em. */
+.cards-fan[data-count="3"],
+.cards-fan[data-count="4"],
+.cards-fan[data-count="5"],
+.cards-fan[data-count="6"],
+.cards-fan[data-count="7"] {
+  gap: 0;
+}
+
+.cards-fan[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.14); }
+.cards-fan[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.24); }
+.cards-fan[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.32); }
+.cards-fan[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.40); }
+.cards-fan[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.46); }
+
+/* Your own hand is drawn larger, so it has to tuck further to fit the same
+   space. Picking a card up to throw it lifts it clear of its neighbours,
+   which is what keeps the overlap safe to click through. */
+.cards-fan.mine[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.18); }
+.cards-fan.mine[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.30); }
+.cards-fan.mine[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.38); }
+.cards-fan.mine[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.46); }
+.cards-fan.mine[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.54); }
+
+.cards-fan .card.picked,
+.cards-fan .card.discardable:hover {
+  z-index: 2;
+}
+
 /* Your own hand is the main pair on the table — with the controls folded away
    behind the caret, the height the bar gave back goes to these. */
 .cards-fan.mine .card {

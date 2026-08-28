@@ -58,6 +58,17 @@ export function nextActorSeat(hand, fromSeat) {
   return null;
 }
 
+// The first player to act starting AT `seat` rather than after it. Stud needs
+// this: from fourth street on, the best hand showing speaks first, and that
+// player is the one who acts — not the one to their left.
+export function actorFromSeat(hand, seat) {
+  const p = hand.bySeat.get(seat);
+  if (p && !p.folded && !p.allIn && (!p.hasActed || p.betThisRound < hand.currentBet)) {
+    return seat;
+  }
+  return nextActorSeat(hand, seat);
+}
+
 export function firstToActSeat(hand, isPreflop) {
   // Preflop action starts left of the last forced bet — the straddle when
   // there is one, otherwise the big blind. A bomb pot has neither, so it

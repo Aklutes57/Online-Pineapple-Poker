@@ -10,6 +10,7 @@ const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
 const { EVENTS, BET_COORDS, BET_COORDS_PORTRAIT } = await import('../shared/constants.js');
 const SHOT = process.env.PP_SHOT_DIR || '/tmp';
+const VARIANT_LABEL = process.env.PP_VARIANT || 'holdem';
 
 const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
@@ -18,7 +19,12 @@ const base = `http://localhost:${httpServer.address().port}`;
 const { io: ioc } = await import('socket.io-client');
 const created = await fetch(`${base}/api/games`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ nickname: 'Host', settings: {} }),
+  // Which game to lay out. Stud is the worst case for the pods: seven cards in
+  // front of every player, where the geometry was designed around two.
+  body: JSON.stringify({
+    nickname: 'Host',
+    settings: process.env.PP_VARIANT ? { variant: process.env.PP_VARIANT } : {},
+  }),
 }).then((r) => r.json());
 function sock(token, nick, seat) {
   return new Promise((res) => {
@@ -38,6 +44,43 @@ for (const o of others) host.s.emit(EVENTS.HOST_APPROVE_SEAT, { playerId: o.r.pl
 await new Promise((r) => setTimeout(r, 300));
 host.s.emit(EVENTS.HOST_START_GAME, {});
 await new Promise((r) => setTimeout(r, 500));
+
+// Stud is only interesting to lay out once the cards are actually there:
+// third street is three, and the fan that has to hold seven is the thing that
+// changed. Drive everyone to check or call until the live players are holding
+// six or seven cards, then stop, so the layout is still while it is measured.
+if (VARIANT_LABEL === 'sevenCardStud') {
+  const all = [host, ...others];
+  for (const o of all) {
+    o.s.on(EVENTS.STATE, (state) => {
+      if (o.parked) return;
+      const av = state.you?.availableActions;
+      if (!av) return;
+      const hand = state.hand;
+      o.s.emit(EVENTS.ACTION, {
+        handId: hand.handId,
+        action: av.canCheck ? 'check' : 'call',
+      });
+    });
+  }
+  // Read the hand straight off the server rather than round-tripping a
+  // broadcast: this process is the server, and the socket nudge it used to
+  // rely on was being dropped, so the loop just timed out at third street.
+  const { getGame } = await import('../server/gameManager.js');
+  const game = getGame(created.gameId);
+  const deadline = Date.now() + 30000;
+  let reached = 0;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 150));
+    const live = (game.currentHand?.players || []).filter((p) => !p.folded);
+    reached = Math.max(0, ...live.map((p) => p.holeCards.length));
+    if (reached >= 7) break;
+    // A hand that ends before seventh street just deals another one; keep going.
+  }
+  for (const o of all) o.parked = true;
+  await new Promise((r) => setTimeout(r, 400));
+  console.log(`  (stud driven to ${reached} cards a player before measuring)`);
+}
 
 let browser;
 try { browser = await chromium.launch(); }
@@ -280,5 +323,7 @@ for (const [name, w, h, wantUpright] of views) {
 await browser.close();
 host.s.close(); others.forEach((o) => o.s.close());
 await new Promise((r) => httpServer.close(r));
-console.log(bad === 0 ? 'ORIENTATION: all good' : `ORIENTATION: ${bad} problem(s)`);
+console.log(bad === 0
+  ? `ORIENTATION (${VARIANT_LABEL}): all good`
+  : `ORIENTATION (${VARIANT_LABEL}): ${bad} problem(s)`);
 process.exit(bad === 0 ? 0 : 1);

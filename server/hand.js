@@ -33,7 +33,56 @@ const STREET_PLAN = {
     board: {},
     exchangeBefore: 'postdraw',
   },
+  // Stud deals to the players, not to the middle. `deal` says how many cards
+  // each street gives and how many of them land face up: two down and one up
+  // to start, three more up, and the last one back down.
+  stud: {
+    first: 'third',
+    next: { third: 'fourth', fourth: 'fifth', fifth: 'sixth', sixth: 'seventh', seventh: 'showdown' },
+    board: {},
+    exchangeBefore: null,
+    deal: {
+      third: { count: 3, up: 1 },
+      fourth: { count: 1, up: 1 },
+      fifth: { count: 1, up: 1 },
+      sixth: { count: 1, up: 1 },
+      seventh: { count: 1, up: 0 },
+    },
+  },
 };
+
+const RANK_ORDER = '23456789TJQKA';
+// Clubs, diamonds, hearts, spades — the order used to break a tie for the
+// bring-in, which is the one place in poker suits are ranked.
+const SUIT_ORDER = 'cdhs';
+
+// How low a single up-card is, for picking the bring-in on third street.
+function bringInKey(card) {
+  return RANK_ORDER.indexOf(card[0]) * 4 + SUIT_ORDER.indexOf(card[1]);
+}
+
+// How strong a player's EXPOSED cards look, for deciding who speaks first on
+// every later street. Four cards or fewer, so only pairs and better exist —
+// no straights or flushes — which is exactly how a live stud game reads the
+// board. Returns an array compared element by element, biggest wins.
+function exposedKey(cards) {
+  const counts = new Map();
+  for (const c of cards) {
+    const v = RANK_ORDER.indexOf(c[0]);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0] - a[0])
+    .flatMap(([v, n]) => [n, v]);
+}
+
+function compareKeys(a, b) {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? -1) - (b[i] ?? -1);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
 
 function planFor(variant) {
   return STREET_PLAN[variant.engine] || STREET_PLAN.community;
@@ -141,6 +190,10 @@ export class Hand {
   start() {
     for (const p of this.players) {
       p.holeCards = [];
+      // Stud: the subset of this player's cards that the whole table can see.
+      // holeCards stays the complete hand and stays private; upCards is the
+      // only part that is ever published to anyone else.
+      p.upCards = [];
       p.folded = false;
       p.allIn = false;
       p.betThisRound = 0;
@@ -180,6 +233,13 @@ export class Hand {
     // Bomb pot: no blinds, everyone antes, straight to the flop.
     if (this.bombPot && this.ante > 0) {
       this.startBombPot();
+      return;
+    }
+
+    // Stud has no blinds at all: everyone antes, everyone gets two down and
+    // one up, and the lowest card showing is made to open the betting.
+    if (this.variant.engine === 'stud') {
+      this.startStud();
       return;
     }
 
@@ -291,6 +351,100 @@ export class Hand {
   // Everyone antes and the flop comes straight out. The antes go through
   // betting.pay so they land in totalCommitted and therefore in the pot —
   // moving chips any other way would break chip conservation.
+  // ---- seven card stud ----
+  //
+  // No blinds. Everyone antes, and after two down cards and one up card the
+  // LOWEST card showing is made to open the betting — the bring-in. From
+  // fourth street on, the best hand showing speaks first instead, which is the
+  // one place in this codebase where position is decided by cards rather than
+  // by the button.
+  //
+  // Structure, in terms of the table's own numbers so there is nothing new to
+  // set: the ante is the small blind and the bring-in is the big blind, which
+  // is also the minimum bet.
+  studAnte() {
+    return this.smallBlind;
+  }
+
+  startStud() {
+    for (const p of this.players) {
+      const paid = betting.payDead(p, this.studAnte());
+      this.pushEvent({ type: 'post', seat: p.seatIndex, kind: 'ante', amount: paid });
+    }
+    // payDead, not pay: an ante is dead money. Nobody owes a call for it, so
+    // it must not land in betThisRound and become part of the current bet.
+    this.street = 'third';
+    this.dealStudStreet('third');
+
+    // Lowest card showing brings it in. Suits break the tie, which is the one
+    // place in poker they are ranked.
+    let bringIn = null;
+    for (const p of this.seatsFromButton()) {
+      if (!p.upCards.length) continue;
+      if (bringIn === null || bringInKey(p.upCards[0]) < bringInKey(bringIn.upCards[0])) {
+        bringIn = p;
+      }
+    }
+    const amount = betting.pay(bringIn, this.bigBlind);
+    this.currentBet = bringIn.betThisRound;
+    this.lastFullRaiseSize = this.bigBlind;
+    // The bring-in is a forced bet like a big blind, so the round opens to its
+    // left and it keeps the option when the action comes back round. Parking
+    // it in bbSeat is what tells firstToActSeat both of those things.
+    this.sbSeat = null;
+    this.bbSeat = bringIn.seatIndex;
+    this.bringInSeat = bringIn.seatIndex;
+
+    this.pushEvent({ type: 'post', seat: bringIn.seatIndex, kind: 'bringIn', amount });
+    this.ctx.log(
+      `Hand #${this.handNo} (${this.variant.label}) — everyone antes ${this.studAnte()}, ` +
+      `${bringIn.nickname} brings it in for ${amount} with ${bringIn.upCards[0]}`
+    );
+    this.enterStreet('third', true);
+  }
+
+  // One card at a time round the table, the way a live dealer serves, so the
+  // deck is consumed in the order the fairness proof expects. The face-up
+  // cards of a street are the last ones dealt: third street is down, down, up.
+  dealStudStreet(street) {
+    const spec = this.plan.deal?.[street];
+    if (!spec) return;
+    for (let i = 0; i < spec.count; i++) {
+      const faceUp = i >= spec.count - spec.up;
+      for (const p of this.seatsFromButton()) {
+        if (p.folded) continue;
+        const [card] = this.draw(1);
+        p.holeCards.push(card);
+        if (faceUp) p.upCards.push(card);
+      }
+    }
+  }
+
+  // Who speaks first. Third street is the bring-in's left, handled by the
+  // ordinary blind machinery; from fourth street on it is the best hand
+  // showing, and a tie goes to whoever comes first from the button.
+  bestExposedSeat() {
+    let bestSeat = null;
+    let bestKey = null;
+    for (const p of this.seatsFromButton()) {
+      if (p.folded || p.allIn || !p.upCards?.length) continue;
+      const key = exposedKey(p.upCards);
+      if (bestKey === null || compareKeys(key, bestKey) > 0) {
+        bestKey = key;
+        bestSeat = p.seatIndex;
+      }
+    }
+    return bestSeat;
+  }
+
+  firstActorSeat() {
+    if (this.plan.deal && !this.isFirstStreet()) {
+      const seat = this.bestExposedSeat();
+      if (seat !== null) return betting.actorFromSeat(this, seat);
+    }
+    return betting.firstToActSeat(this, this.isFirstStreet());
+  }
+
   startBombPot() {
     for (const p of this.players) betting.pay(p, this.ante);
     this.sbSeat = null;
@@ -363,6 +517,20 @@ export class Hand {
     this.phase = PHASES[street.toUpperCase()];
     if (!isFirst) betting.resetStreet(this);
 
+    // Stud deals to the players rather than to the middle. Third street was
+    // dealt in startStud, because the up-card there decides the bring-in.
+    if (this.plan.deal && !isFirst) {
+      this.dealStudStreet(street);
+      this.pushEvent({
+        type: 'studCards',
+        street,
+        up: Object.fromEntries(this.livePlayers().map((p) => [p.seatIndex, [...p.upCards]])),
+      });
+      this.ctx.log(`${cap(street)} street: ${this.livePlayers()
+        .map((p) => `${p.nickname} ${p.upCards.join(' ')}`)
+        .join(', ')}`);
+    }
+
     const dealt = this.plan.board[street];
     if (dealt) {
       this.board.push(...this.draw(dealt));
@@ -419,7 +587,7 @@ export class Hand {
   // Opens the betting round for whatever street we're on.
   beginBetting() {
     this.phase = PHASES[this.street.toUpperCase()];
-    this.toActSeat = betting.firstToActSeat(this, this.isFirstStreet());
+    this.toActSeat = this.firstActorSeat();
     if (this.toActSeat === null) {
       this.afterStreetComplete();
     } else if (this.armOrAutoAct()) {
@@ -664,6 +832,10 @@ export class Hand {
       // Snapshot the odds at the moment the chips went in — that is what
       // makes a later loss a bad beat rather than just a loss.
       try {
+        // Same reason as refreshEquity: a boardless game has no run-out for
+        // this to enumerate, so the cooler detector gets nothing rather than a
+        // number computed against a board that does not exist.
+        if (this.variant.noBoard) throw new Error('no board to run out');
         this.allInEquity = equity(
           live.map((p) => ({ seat: p.seatIndex, holeCards: p.holeCards })),
           this.board,
@@ -794,6 +966,12 @@ export class Hand {
     this.equityNow = null;
     if (!this.runOut || !this.revealed || this.finished) return;
     if (this.variant.engine === '747') return; // no community board to run out
+    // Draw and stud have no board either. The enumerator's whole model is "what
+    // fifth street lands in the middle", which does not describe a game where
+    // the hands are already final (draw) or where every player is drawing their
+    // own separate cards (stud) — so there is no honest number to show, and
+    // pretending otherwise burnt fifteen hundred samples to arrive at nothing.
+    if (this.variant.noBoard) return;
     const live = this.livePlayers();
     if (live.length < 2) return;
     if (this.doubleBoard && this.board2) {

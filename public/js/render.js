@@ -548,11 +548,22 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
         fan.appendChild(card);
       }
     } else {
-      for (let ci = 0; ci < seat.cardCount; ci++) {
+      // Stud shows part of everyone's hand. The down cards are dealt first, so
+      // they sit first in the fan and the face-up ones follow, which is how the
+      // hand is laid out in front of a player at a real table.
+      const ups = seat.upCards || [];
+      const downs = Math.max(0, seat.cardCount - ups.length);
+      for (let ci = 0; ci < downs; ci++) {
         fan.appendChild(makeCardBack(cardOpts(ci)));
+      }
+      for (let ci = 0; ci < ups.length; ci++) {
+        fan.appendChild(makeCardEl(ups[ci], cardOpts(downs + ci)));
       }
     }
   }
+  // How many cards are actually in front of this player, so the stylesheet can
+  // tighten the fan for the games that deal five, six or seven.
+  fan.dataset.count = String(fan.children.length);
   pod.dataset.showAt = JSON.stringify(showAt.slice(0, fan.children.length));
 
   // Four- and five-card games (PLO, 747) deal fans wide enough to reach into

@@ -90,6 +90,13 @@ export function buildViews(game) {
       betThisRound: inHand ? p.betThisRound : 0,
       cardCount: inHand && !p.folded ? p.holeCards.length : 0,
       cards: showCards ? [...p.holeCards] : null,
+      // Stud deals part of every hand face up, and those cards are public by
+      // the rules — reading the other boards IS the game. The invariant this
+      // file exists to hold is unchanged for everything else: holeCards is the
+      // complete hand and still only ever reaches its owner, or the whole
+      // table at a showdown through `cards` above. A folded player's cards are
+      // dead, so they go back face down with the rest of their hand.
+      upCards: inHand && !p.folded ? [...(p.upCards || [])] : [],
       isDealer: !!hand && hand.buttonSeat === i,
       isSB: !!hand && hand.sbSeat === i,
       isBB: !!hand && hand.bbSeat === i,
