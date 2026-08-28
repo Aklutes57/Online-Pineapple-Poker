@@ -193,6 +193,13 @@ export function describePartial(cards) {
 
 // cards7: array of 7 cards. Returns { score, bestFive }.
 export function best7(cards7) {
+  // Exactly seven, or the fixed index table below reads past the end and
+  // rank5 scores the empty slots as if they were cards — which invents pairs
+  // and trips out of nothing rather than failing. Callers with a hand of
+  // unknown length want bestAny, which dispatches on the length it is given.
+  if (!Array.isArray(cards7) || cards7.length !== 7) {
+    throw new Error(`best7 needs exactly 7 cards, got ${cards7?.length}`);
+  }
   let best = -1;
   let bestFive = null;
   for (const combo of COMBOS_7C5) {

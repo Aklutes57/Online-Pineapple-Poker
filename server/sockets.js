@@ -354,6 +354,18 @@ export function attachSockets(io) {
       result(game, game.setStraddle(player, !!payload?.on, !!payload?.deep));
     }));
 
+    socket.on(EVENTS.DRAW_CARDS, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || hand.finished) {
+        sendError(socket, ERRORS.BAD_REQUEST, 'no hand to draw in');
+        return;
+      }
+      const indices = Array.isArray(payload?.indices) ? payload.indices : null;
+      const r = hand.handleDraw(player, indices);
+      if (!r.ok) sendError(socket, ERRORS.BAD_REQUEST, r.error);
+      else broadcast(game);
+    }));
+
     socket.on(EVENTS.TIP_PLAYER, withGame((game, player, payload) => {
       result(game, game.tipPlayer(player, payload?.playerId, toInt(payload?.amount)));
     }));

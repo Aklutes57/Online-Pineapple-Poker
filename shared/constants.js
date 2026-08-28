@@ -10,6 +10,9 @@ export const EVENTS = {
   CANCEL_SEAT_REQUEST: 'cancelSeatRequest',
   ACTION: 'action',
   DISCARD: 'discard',
+  // Draw games: the whole exchange in one message. An empty list is standing
+  // pat, which is a choice and has to be sent like any other.
+  DRAW_CARDS: 'drawCards',
   SHOW_CARDS: 'showCards',
   SIT_OUT: 'sitOut',
   SIT_IN: 'sitIn',
@@ -79,6 +82,17 @@ export const PHASES = {
   RIVER: 'river',
   SHOWDOWN: 'showdown',
   COMPLETE: 'complete',
+  // Draw engine: bet with five, exchange what you don't want, bet again.
+  PREDRAW: 'predraw',
+  DRAW: 'draw',
+  POSTDRAW: 'postdraw',
+  // Stud engine. Named for the card you are receiving, the way the game is
+  // called at a table: third street is the first three cards, seventh the last.
+  THIRD: 'third',
+  FOURTH: 'fourth',
+  FIFTH: 'fifth',
+  SIXTH: 'sixth',
+  SEVENTH: 'seventh',
   // 747 engine phases
   DECISION_747: 'decision747',
   COUNTDOWN_747: 'countdown747',
@@ -143,6 +157,41 @@ export const VARIANTS = {
     omaha: true,
     doubleBoard: true,
     hidden: true,
+  },
+  fiveCardDraw: {
+    key: 'fiveCardDraw',
+    label: 'Five Card Draw',
+    engine: 'draw',
+    holeCards: 5,
+    discardBefore: null,
+    potLimit: false,
+    // No board at all: your five cards ARE your hand, and the best five of
+    // five is simply the five you are holding.
+    noBoard: true,
+    // Five players, because the deck has to cover the worst case: five cards
+    // each and then five more each if everybody draws their whole hand, which
+    // is fifty of fifty-two. A live game reshuffles the discards to get round
+    // that; we cannot, because the deck was committed to before the deal and
+    // that commitment is what makes the shuffle provable.
+    maxPlayers: 5,
+  },
+  sevenCardStud: {
+    key: 'sevenCardStud',
+    label: 'Seven Card Stud',
+    engine: 'stud',
+    // Dealt over five streets rather than all at once, so this is the total
+    // each player ends up holding, not an opening deal.
+    holeCards: 7,
+    discardBefore: null,
+    potLimit: false,
+    noBoard: true,
+    // No blinds. Everyone antes, and the lowest card showing on third street
+    // is made to open the betting.
+    ante: true,
+    bringIn: true,
+    // Seven cards each out of fifty-two: seven players is the real limit, and
+    // it is the limit a live stud game plays to for exactly this reason.
+    maxPlayers: 7,
   },
   '747': {
     key: '747',

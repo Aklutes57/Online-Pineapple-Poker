@@ -1120,6 +1120,30 @@ export class Game {
       p.timeBank = s.timeBank > 0 ? s.timeBank * 1000 : 0;
     }
 
+    // Some games cannot seat a full table: the deck has to cover every card
+    // they will deal, and it was committed to before the hand, so it cannot be
+    // reshuffled the way a live dealer would. The overflow seats sit this hand
+    // out and are picked up as the button moves — the same thing 747's
+    // nine-player deal does, for the same reason.
+    const dealCap = VARIANTS[s.variant]?.maxPlayers ?? null;
+    if (dealCap && !is747 && players.length > dealCap) {
+      const ordered = [];
+      let seat = this.buttonSeat;
+      for (let i = 0; i < SEAT_COUNT && ordered.length < dealCap; i++) {
+        seat = (seat + 1) % SEAT_COUNT;
+        const p = players.find((x) => x.seatIndex === seat);
+        if (p) ordered.push(p);
+      }
+      for (const p of players) {
+        if (!ordered.includes(p)) {
+          this.addLog(
+            `${p.nickname} sits this hand out — ${VARIANTS[s.variant].label} deals ${dealCap}`
+          );
+        }
+      }
+      players = ordered;
+    }
+
     if (is747) {
       if (players.length > 9) {
         players.sort((a, b) => a.seatIndex - b.seatIndex);

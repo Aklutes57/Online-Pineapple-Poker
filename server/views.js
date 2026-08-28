@@ -268,6 +268,10 @@ export function buildViews(game) {
       handNow: inHand && !p.folded && !hand.finished ? handNowFor(hand, p) : null,
       hasDiscarded: inHand ? p.hasDiscarded : false,
       canDiscard: inHand && isDiscardPhase && !p.folded && !p.hasDiscarded && p.holeCards.length === 3,
+      // The draw. An all-in player still draws — they have no chips left, but
+      // their cards still have to win the pot.
+      canDraw: inHand && hand.phase === PHASES.DRAW && !p.folded && !p.hasDrawn,
+      hasDrawn: inHand ? !!p.hasDrawn : false,
       canDecide747:
         inHand && hand.phase === PHASES.DECISION_747 && !p.folded && p.decision747 === null,
       decided747: inHand && hand.variant.engine === '747' && p.decision747 != null,

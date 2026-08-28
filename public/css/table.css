@@ -1161,6 +1161,21 @@ body.disconnected::after {
   outline-color: var(--red);
 }
 
+/* A card you have picked to throw in a draw game. Nothing has been sent yet —
+   this is you thinking — so it reads as "on its way out" rather than as gone:
+   dropped below the rest of the fan and ringed in red. Tapping it again takes
+   it back. */
+.card.picked {
+  transform: translateY(10px);
+  outline: 2px solid var(--red);
+  outline-offset: -2px;
+  filter: brightness(0.75) saturate(0.7);
+}
+
+.card.picked:hover {
+  transform: translateY(6px);
+}
+
 /* ---- the table's music ---- */
 
 /* The player is a real YouTube <iframe> and has to stay in the layout for the

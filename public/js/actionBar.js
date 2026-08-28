@@ -2,6 +2,7 @@
 // `you.availableActions` — the server computes all legality and bounds.
 
 import { EVENTS, GAME_STATUS, PHASES } from '/shared/constants.js';
+import { drawPickList, resetDrawPicks } from '/js/render.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 
 const bar = () => document.getElementById('action-bar');
@@ -288,6 +289,18 @@ export function renderActionBar(client) {
       reveal747dealer: "The dealer's card…",
     }[hand.timerName];
     html = `<span class="ab-note ab-highlight">${beat || 'Revealing…'}</span>`;
+  } else if (you.canDraw) {
+    const picks = drawPickList().length;
+    html = `
+      <span class="ab-note ab-highlight">${picks === 0
+        ? 'Tap the cards you want to throw — or stand pat.'
+        : `Throwing ${picks} — tap a card again to keep it.`}</span>
+      <div class="ab-actions">
+        <button class="btn btn-green ab-btn" data-act="draw-confirm">${
+          picks === 0 ? 'Stand pat' : `Draw ${picks}`}</button>
+      </div>`;
+  } else if (you.hasDrawn && hand && hand.phase === PHASES.DRAW) {
+    html = '<span class="ab-note">Drawn — waiting for the others…</span>';
   } else if (you.canDiscard) {
     html = `<span class="ab-note ab-highlight">Tap one of your cards to throw it away</span>`;
   } else if (you.hasDiscarded && hand && (hand.phase === PHASES.DISCARD_PREFLOP || hand.phase === PHASES.DISCARD_POSTFLOP)) {
@@ -635,6 +648,13 @@ function handleAct(client, act, av, arg = null) {
       const raw = prompt(`Re-buy how many chips? (at least ${minBuyIn} — no cap)`);
       const amount = parseInt(raw, 10);
       if (Number.isInteger(amount)) client.send(EVENTS.REBUY, { amount });
+      break;
+    }
+    case 'draw-confirm': {
+      // An empty list is standing pat, and has to be sent like any other
+      // answer — the table is waiting on it.
+      client.send(EVENTS.DRAW_CARDS, { indices: drawPickList() });
+      resetDrawPicks();
       break;
     }
     case 'post-pot': {

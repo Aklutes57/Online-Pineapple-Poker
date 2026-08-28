@@ -24,7 +24,9 @@ TIMINGS.REVEAL_747_GAP = 10;
 TIMINGS.REVEAL_747_STEP = 5;
 
 const HANDS_PER_VARIANT = parseInt(process.argv[2], 10) || 60;
-const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo', '747'];
+// Six seats play every one of these. Five Card Draw caps its deal at five,
+// so this also exercises the overflow seat sitting a hand out.
+const VARIANT_KEYS = ['holdem', 'pineapple', 'crazyPineapple', 'plo', '747', 'fiveCardDraw'];
 const BOTS = 5; // plus the host = 6 seats
 const BUY_IN = 200;
 
@@ -147,6 +149,24 @@ class Bot {
           setTimeout(() => this.socket.emit(EVENTS.SHOW_CARDS, { handId: hand.handId }), randInt(0, 10));
         }
       }
+    }
+
+    if (you.canDraw) {
+      const key = `draw:${hand.handId}`;
+      if (this.actedKeys.has(key)) return;
+      this.actedKeys.add(key);
+      // Anything from standing pat to throwing the whole hand, so the deck is
+      // pushed to the worst case a five-handed draw table can reach.
+      const want = randInt(0, you.holeCards.length);
+      const indices = [];
+      while (indices.length < want) {
+        const i = randInt(0, you.holeCards.length - 1);
+        if (!indices.includes(i)) indices.push(i);
+      }
+      setTimeout(
+        () => this.socket.emit(EVENTS.DRAW_CARDS, { handId: hand.handId, indices }),
+        randInt(0, 10)
+      );
     }
 
     if (you.canDiscard) {

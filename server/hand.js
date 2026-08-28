@@ -15,8 +15,29 @@ import { shuffledDeck } from './deck.js';
 import { equity } from './equity.js';
 import { detectCooler } from './cooler.js';
 
-const NEXT_STREET = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' };
-const BOARD_CARDS = { flop: 3, turn: 1, river: 1 };
+// How each engine walks its streets, and what each street puts on the board.
+// The community engine is the familiar one. Draw plays two betting rounds
+// around a card exchange and never deals a board at all — your five cards are
+// your hand. `exchangeBefore` names the street the draw happens in front of,
+// exactly the way a variant's discardBefore does.
+const STREET_PLAN = {
+  community: {
+    first: 'preflop',
+    next: { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' },
+    board: { flop: 3, turn: 1, river: 1 },
+    exchangeBefore: null,
+  },
+  draw: {
+    first: 'predraw',
+    next: { predraw: 'postdraw', postdraw: 'showdown' },
+    board: {},
+    exchangeBefore: 'postdraw',
+  },
+};
+
+function planFor(variant) {
+  return STREET_PLAN[variant.engine] || STREET_PLAN.community;
+}
 const VERBS = { fold: 'folds', check: 'checks', call: 'calls', bet: 'bets', raise: 'raises' };
 
 // 1st, 2nd, 3rd… for the straddle chain in the log.
@@ -34,6 +55,9 @@ export class Hand {
     this.variant = VARIANTS[variantKey];
     if (!this.variant) throw new Error(`unknown variant ${variantKey}`);
     this.potLimit = !!this.variant.potLimit;
+    // Which streets this hand walks, and what each deals. Snapshotted with the
+    // variant so a hand always finishes under the shape it was dealt with.
+    this.plan = planFor(this.variant);
     this.smallBlind = smallBlind;
     this.bigBlind = bigBlind;
     this.actionTime = actionTime;
@@ -123,6 +147,11 @@ export class Hand {
       p.totalCommitted = 0;
       p.hasActed = false;
       p.hasDiscarded = false;
+      // Draw games: which cards this player asked to swap, and whether they
+      // have answered yet. The cards themselves are not replaced until every
+      // player has chosen — see finishExchange.
+      p.hasDrawn = false;
+      p.drawChoice = null;
       p.showedCards = false;
       p.handResult = null;
       p.preAction = null;
@@ -168,7 +197,7 @@ export class Hand {
     betting.pay(bb, this.bigBlind);
     this.currentBet = this.bigBlind;
     this.lastFullRaiseSize = this.bigBlind;
-    this.street = 'preflop';
+    this.street = this.plan.first;
     this.pushEvent({ type: 'post', seat: this.sbSeat, kind: 'sb', amount: sb.betThisRound });
     this.pushEvent({ type: 'post', seat: this.bbSeat, kind: 'bb', amount: bb.betThisRound });
     this.ctx.log(
@@ -179,7 +208,7 @@ export class Hand {
     this.postStraddles();
 
     this.dealHoleCards();
-    this.enterStreet('preflop', true);
+    this.enterStreet(this.plan.first, true);
   }
 
   // Straddles: a chain of blind raises posted before the deal, each one twice
@@ -295,6 +324,19 @@ export class Hand {
     return this.seatOrder[(i + 1) % this.seatOrder.length];
   }
 
+  // Everyone in the hand, starting left of the button. The order a live dealer
+  // serves in, and the one the draw uses so the deck is consumed the same way
+  // whatever order the players answer in.
+  seatsFromButton() {
+    const out = [];
+    let seat = this.seatAfter(this.buttonSeat);
+    for (let i = 0; i < this.players.length; i++) {
+      out.push(this.bySeat.get(seat));
+      seat = this.seatAfter(seat);
+    }
+    return out;
+  }
+
   draw(n) {
     const cards = this.deck.slice(this.deckIndex, this.deckIndex + n);
     this.deckIndex += n;
@@ -306,6 +348,14 @@ export class Hand {
     return this.players.filter((p) => !p.folded);
   }
 
+  // The opening betting round — 'preflop' in a community game, 'predraw' in a
+  // draw game. It is the round the blinds were posted into, so it is the one
+  // where action starts left of the big blind (or the last straddle) and where
+  // VPIP and PFR are measured.
+  isFirstStreet() {
+    return this.street === this.plan.first;
+  }
+
   // ---- streets ----
 
   enterStreet(street, isFirst = false) {
@@ -313,7 +363,7 @@ export class Hand {
     this.phase = PHASES[street.toUpperCase()];
     if (!isFirst) betting.resetStreet(this);
 
-    const dealt = BOARD_CARDS[street];
+    const dealt = this.plan.board[street];
     if (dealt) {
       this.board.push(...this.draw(dealt));
       // The second board's cards for this street are drawn now, at the deck
@@ -350,6 +400,14 @@ export class Hand {
       return;
     }
 
+    // The draw. Same idea as a pineapple discard — it happens in front of a
+    // street's betting — but everyone may swap up to their whole hand, and an
+    // all-in player still draws, because their cards decide the pot.
+    if (this.plan.exchangeBefore === street && !this.exchangeDone) {
+      this.enterExchange();
+      return;
+    }
+
     if (this.runOut) {
       this.afterStreetComplete();
       return;
@@ -361,7 +419,7 @@ export class Hand {
   // Opens the betting round for whatever street we're on.
   beginBetting() {
     this.phase = PHASES[this.street.toUpperCase()];
-    this.toActSeat = betting.firstToActSeat(this, this.street === 'preflop');
+    this.toActSeat = betting.firstToActSeat(this, this.isFirstStreet());
     if (this.toActSeat === null) {
       this.afterStreetComplete();
     } else if (this.armOrAutoAct()) {
@@ -383,7 +441,7 @@ export class Hand {
     }
     this.noteActionStats(player, choice);
     betting.applyAction(this, player, choice, null);
-    if (this.street === 'preflop' && (choice === 'bet' || choice === 'raise')) this.preflopRaises++;
+    if (this.isFirstStreet() && (choice === 'bet' || choice === 'raise')) this.preflopRaises++;
     this.lastAction = { seat: player.seatIndex, action: choice, amount: player.betThisRound };
     this.pushEvent({
       type: 'action', seat: player.seatIndex, action: choice,
@@ -517,7 +575,7 @@ export class Hand {
     this.noteActionStats(player, action);
     const result = betting.applyAction(this, player, action, amount);
     if (!result.ok) return result;
-    if (this.street === 'preflop' && (action === 'bet' || action === 'raise')) {
+    if (this.isFirstStreet() && (action === 'bet' || action === 'raise')) {
       this.preflopRaises++;
     }
 
@@ -544,7 +602,7 @@ export class Hand {
   noteActionStats(player, action) {
     const s = player.handStats;
     if (!s) return;
-    const isPreflop = this.street === 'preflop';
+    const isPreflop = this.isFirstStreet();
     const raising = action === 'bet' || action === 'raise';
 
     if (raising) s.aggressive++;
@@ -585,7 +643,12 @@ export class Hand {
   }
 
   isBettingPhase() {
-    return [PHASES.PREFLOP, PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(this.phase);
+    // The streets THIS engine bets on, not a fixed list of the community ones.
+    // A betting street's phase and its name are the same string, so the plan's
+    // own transition table is the authority: predraw and postdraw are betting
+    // phases in a draw game, while the draw itself, a discard, a run-it-twice
+    // vote and the showdown are all absent from it and so are not.
+    return this.plan.next[this.phase] !== undefined;
   }
 
   afterStreetComplete() {
@@ -615,7 +678,7 @@ export class Hand {
       }
       // Running it twice is never automatic: everyone still in the hand has to
       // agree, every time. Ask them, and carry on once the answers are in.
-      if (this.runItTwiceEnabled && NEXT_STREET[this.street] !== 'showdown') {
+      if (this.runItTwiceEnabled && this.plan.next[this.street] !== 'showdown') {
         this.enterRitVote();
         return;
       }
@@ -808,7 +871,7 @@ export class Hand {
       this.refreshEquity();
     }
 
-    const next = NEXT_STREET[this.street];
+    const next = this.plan.next[this.street];
     if (next === 'showdown') {
       if (this.runOut) {
         this.ctx.changed();
@@ -901,6 +964,103 @@ export class Hand {
     }
     this.ctx.setTimer('discard', TIMINGS.DISCARD_NO_CLOCK, () => this.discardTimeout());
     this.ctx.changed();
+  }
+
+  // ---- the draw ----
+  //
+  // Everyone still in the hand chooses which cards to throw at the same time,
+  // then the replacements are dealt. Standing pat is a choice like any other,
+  // so it goes through the same call with an empty list.
+  //
+  // The cards are NOT replaced as each player answers. They are all dealt in
+  // finishExchange, walking the seats in one fixed order, because the order
+  // the deck is consumed in is part of the fairness proof: if the swap you
+  // asked for first got served first, the same committed deck would produce
+  // different hands depending on who happened to click quickest.
+  enterExchange() {
+    const pending = this.exchangePending();
+    if (pending.length === 0) {
+      this.finishExchange();
+      return;
+    }
+    this.phase = PHASES.DRAW;
+    this.toActSeat = null;
+    const ms = this.actionTime > 0 ? TIMINGS.DISCARD_TIME : TIMINGS.DISCARD_NO_CLOCK;
+    this.ctx.log('Draw: throw away what you don\'t want');
+    this.ctx.setTimer('draw', ms, () => this.exchangeTimeout());
+    this.ctx.changed();
+  }
+
+  // All-in players draw too: they have no chips left, but their cards still
+  // have to win the pot.
+  exchangePending() {
+    return this.livePlayers().filter((p) => !p.hasDrawn);
+  }
+
+  handleDraw(player, indices) {
+    if (this.phase !== PHASES.DRAW) return { ok: false, error: 'not the draw' };
+    if (player.folded || player.hasDrawn) return { ok: false, error: 'you have already drawn' };
+    if (!Array.isArray(indices)) return { ok: false, error: 'bad draw' };
+    const wanted = [...new Set(indices)];
+    if (wanted.length !== indices.length) return { ok: false, error: 'bad draw' };
+    if (wanted.length > player.holeCards.length) return { ok: false, error: 'bad draw' };
+    for (const i of wanted) {
+      if (!Number.isInteger(i) || i < 0 || i >= player.holeCards.length) {
+        return { ok: false, error: 'bad card' };
+      }
+    }
+    // Highest first, so splicing them out later cannot shift an index that has
+    // not been removed yet.
+    player.drawChoice = wanted.sort((a, b) => b - a);
+    player.hasDrawn = true;
+    this.pushEvent({ type: 'draw', seat: player.seatIndex, count: wanted.length });
+    this.ctx.log(wanted.length === 0
+      ? `${player.nickname} stands pat`
+      : `${player.nickname} draws ${wanted.length}`);
+    if (this.exchangePending().length === 0) {
+      this.ctx.clearTimer();
+      this.finishExchange();
+    } else {
+      this.ctx.changed();
+    }
+    return { ok: true };
+  }
+
+  exchangeTimeout() {
+    // An untimed table only draws for people who are not there; everyone else
+    // keeps thinking and the fallback re-arms, exactly as the discard does.
+    const targets = this.actionTime > 0
+      ? this.exchangePending()
+      : this.exchangePending().filter((p) => !p.connected || p.sittingOut);
+    for (const p of targets) {
+      // Nobody's hand is thrown away for them: not answering is standing pat.
+      p.drawChoice = [];
+      p.hasDrawn = true;
+      this.ctx.log(`${p.nickname} stands pat`);
+    }
+    if (this.exchangePending().length === 0) {
+      this.finishExchange();
+    } else {
+      this.ctx.setTimer('draw', TIMINGS.DISCARD_NO_CLOCK, () => this.exchangeTimeout());
+      this.ctx.changed();
+    }
+  }
+
+  finishExchange() {
+    this.exchangeDone = true;
+    // One fixed order, from the button, whatever order the answers arrived in.
+    for (const p of this.seatsFromButton()) {
+      if (p.folded || !p.drawChoice?.length) continue;
+      const n = p.drawChoice.length;
+      for (const i of p.drawChoice) p.holeCards.splice(i, 1);
+      p.holeCards.push(...this.draw(n));
+    }
+    this.pushEvent({ type: 'drawDone' });
+    if (this.runOut) {
+      this.proceedFromStreet();
+      return;
+    }
+    this.beginBetting();
   }
 
   finishDiscard() {
@@ -1042,9 +1202,11 @@ export class Hand {
     for (let b = 0; b < boards.length; b++) {
       const scores = new Map();
       for (const p of live) {
+        // bestAny, not best7: a draw hand is five cards and a stud hand is
+        // seven, and only bestAny dispatches on the length it is handed.
         const { score } = this.variant.omaha
           ? bestOmaha(p.holeCards, boards[b])
-          : best7([...p.holeCards, ...boards[b]]);
+          : bestAny([...p.holeCards, ...boards[b]]);
         scores.set(p.seatIndex, score);
       }
       if (b === 0) firstBoardScores = scores;

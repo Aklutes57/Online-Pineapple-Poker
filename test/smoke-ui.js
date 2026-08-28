@@ -12,6 +12,11 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-smoke-'))
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
+const { VARIANTS } = await import('../shared/constants.js');
+
+// Every game a host can actually pick. Derived rather than counted by hand, so
+// adding a variant does not fail this for the wrong reason.
+const PICKABLE_VARIANTS = Object.values(VARIANTS).filter((v) => !v.hidden).length;
 
 const SCREENSHOT_DIR = process.env.PP_SHOT_DIR || '.';
 
@@ -859,8 +864,8 @@ try {
   await openMenu(anna);
   await anna.click('#host-menu-btn');
   await anna.waitForSelector('#host-modal:not(.hidden)');
-  await check('host modal offers a game selector',
-    (await anna.locator('#h-variant option').count()) === 5);
+  await check('host modal offers every pickable game',
+    (await anna.locator('#h-variant option').count()) === PICKABLE_VARIANTS);
   await anna.selectOption('#h-variant', 'plo');
   await anna.click('#h-save');
   await anna.click('#h-done');

@@ -31,6 +31,7 @@ export function renderAll(client) {
   fitTableStage();
   renderTheme(client);
   renderHeader(client);
+  syncDrawPicks(state.hand, you);
   renderSeats(client);
   renderBets(client);
   renderBoard(client);
@@ -210,6 +211,36 @@ function relayout() {
   if (portrait !== was && lastClient?.state) {
     placeSeats(lastClient);
     renderBets(lastClient);
+  }
+}
+
+// ---- the draw ----
+//
+// Which of your own cards you have picked to throw. Kept here rather than on
+// the server: until you confirm, nobody else has any business knowing what you
+// are thinking about. Keyed to the hand so it cannot leak across deals.
+let drawPicks = new Set();
+let drawPicksHand = '';
+
+export function drawPickList() {
+  return [...drawPicks];
+}
+
+export function toggleDrawPick(index) {
+  if (drawPicks.has(index)) drawPicks.delete(index);
+  else drawPicks.add(index);
+}
+
+export function resetDrawPicks() {
+  drawPicks = new Set();
+}
+
+function syncDrawPicks(hand, you) {
+  // A new hand, or a draw that is no longer yours to make, starts clean.
+  const key = hand && you?.canDraw ? `${hand.handId}` : '';
+  if (key !== drawPicksHand) {
+    drawPicksHand = key;
+    drawPicks = new Set();
   }
 }
 
@@ -499,9 +530,20 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
   } else if (seat.inHand && !seat.folded) {
     if (shownCards) {
       for (let ci = 0; ci < shownCards.length; ci++) {
-        const card = makeCardEl(shownCards[ci], cardOpts(ci, { discardable: isMe && you.canDiscard }));
+        const picking = isMe && you.canDraw;
+        const card = makeCardEl(shownCards[ci], cardOpts(ci, {
+          discardable: (isMe && you.canDiscard) || picking,
+        }));
         if (isMe && you.canDiscard) {
           card.onclick = () => client.send(EVENTS.DISCARD, { handId: hand.handId, cardIndex: ci });
+        } else if (picking) {
+          // Picking is a toggle, and nothing is sent until you confirm — a
+          // mis-tap in a draw game must not cost you a card.
+          card.classList.toggle('picked', drawPicks.has(ci));
+          card.onclick = () => {
+            toggleDrawPick(ci);
+            renderAll(client);
+          };
         }
         fan.appendChild(card);
       }
