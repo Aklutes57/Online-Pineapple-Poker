@@ -8,7 +8,9 @@ import { play as playSound, setCustomClips } from '/js/sounds.js';
 import {
   pushSupported, savedPushEndpoint, currentPushSubscription, enablePush, disablePush,
 } from '/js/pwa.js';
-import { renderAll, startTimerLoop, fitTableStage, clearChipsOfPods } from '/js/render.js';
+import {
+  renderAll, startTimerLoop, fitTableStage, clearChipsOfPods, notifyChipMoves,
+} from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
 import { initMusic, onMusicState } from '/js/music.js';
 import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger, openFair } from '/js/panels.js';
@@ -105,6 +107,9 @@ function applyState(state) {
   // 747's stay/fold decision counts as "your turn" for the chime.
   const wasMyTurn = !!client.you?.availableActions || !!client.you?.canDecide747;
   const previousStack = client.you?.stack;
+  // Kept for the chip flights: what moved is worked out by comparing this
+  // state with the one before it, so it has to be read before the overwrite.
+  const prevState = client.state;
   client.state = state;
   client.you = state.you;
   // When this state landed on THIS machine. The music clock is published as a
@@ -121,6 +126,7 @@ function applyState(state) {
   // against a pod that was missing the tallest thing in it — which is exactly
   // how a bet ended up drawn over somebody's face.
   clearChipsOfPods();
+  notifyChipMoves(prevState, state, client);
   renderAvControls();
   onMusicState();
   // A signed-in player's ledger name comes back from their account; show it in

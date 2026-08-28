@@ -1352,6 +1352,69 @@ body.disconnected::after {
   transform: scale(1.15);
 }
 
+/* ---- chips in flight ---- */
+
+/* Same geometry as the bets layer, so a seat's chip coordinates mean the same
+   thing in both. Above the felt and the pods but below reactions: an emoji
+   someone threw should still land on top. */
+#fx-layer {
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 40;
+}
+
+.fx-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--plate-b);
+  border: 1.5px solid var(--accent);
+  color: var(--chip-ink);
+  border-radius: 14px;
+  padding: 2px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+  /* Position is animated rather than a transform so the chip stays correct if
+     the felt is re-fitted mid-flight — the coordinates are percentages of a
+     layer that resizes with the table. */
+  transition: left 520ms cubic-bezier(0.33, 0, 0.2, 1),
+              top 520ms cubic-bezier(0.33, 0, 0.2, 1),
+              opacity 220ms ease;
+}
+
+.fx-chip::before {
+  content: '●';
+  color: var(--accent);
+  margin-right: 5px;
+  font-size: 10px;
+}
+
+/* Chips coming back OUT of the pot are the good news, so they are the ones
+   that get the colour. */
+.fx-chip.win {
+  border-color: var(--money, #fff);
+  color: var(--money, #fff);
+}
+
+.fx-chip.win::before {
+  color: var(--money, #fff);
+}
+
+.fx-chip.landing {
+  opacity: 0;
+}
+
+/* Somebody who has asked not to be moved gets none of this: the chips are a
+   flourish, and every number they describe is already on the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .fx-chip {
+    display: none;
+  }
+}
+
 #reactions-layer {
   position: absolute;
   inset: -40px;

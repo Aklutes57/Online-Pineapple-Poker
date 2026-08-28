@@ -190,6 +190,9 @@
         </div>
         <div id="bets-layer"></div>
         <div id="seats-layer"></div>
+        <!-- Chips in flight. Its own layer because renderBets empties the bets
+             layer on every change, which would delete an animation mid-air. -->
+        <div id="fx-layer" aria-hidden="true"></div>
         <div id="reactions-layer"></div>
       </div>
       <div id="cooler-banner" class="hidden"></div>

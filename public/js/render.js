@@ -10,6 +10,7 @@ import {
 import { makeCardEl, makeCardBack } from '/js/cards.js';
 import { escapeHtml } from '/js/ui.js';
 import { renderActionBar, openJoinModal } from '/js/actionBar.js';
+import { flyChip, pointOfElement, clearChipFlights, reducedMotion } from '/js/chipfx.js';
 import { isMuted, toggleMutePlayer, syncSeats as syncAvSeats } from '/js/webrtc.js';
 
 const seatsLayer = () => document.getElementById('seats-layer');
@@ -241,6 +242,83 @@ function syncDrawPicks(hand, you) {
   if (key !== drawPicksHand) {
     drawPicksHand = key;
     drawPicks = new Set();
+  }
+}
+
+// ---- chips you can watch move ----
+//
+// Driven by comparing the state that just arrived with the one before it,
+// rather than by the server sending "play an animation": the moves are already
+// implied by what changed, and a client that misses a broadcast simply misses
+// a flourish instead of desynchronising from the table.
+
+// Where a seat's bet chip sits, in the fx layer's coordinates — the same
+// anchor renderBets uses, so a chip flies from exactly where it was drawn.
+function seatChipPoint(seatIndex, client) {
+  const coord = betCoord(displaySlot(seatIndex, client));
+  return coord ? { left: coord.left, top: coord.top } : null;
+}
+
+// The middle of the table, measured rather than assumed: #table-center is
+// positioned against the felt, and the fx layer is bigger than the felt.
+function potPoint() {
+  return pointOfElement(document.getElementById('table-center'));
+}
+
+export function notifyChipMoves(prev, next, client) {
+  if (reducedMotion()) return;
+  const before = prev?.hand;
+  const after = next?.hand;
+  if (!after) return;
+  // A new deal must never inherit the last hand's chips still in the air.
+  if (before && before.handId !== after.handId) clearChipFlights();
+  const pot = potPoint();
+  if (!pot) return;
+
+  const sameHand = before && before.handId === after.handId;
+  const streetEnded = sameHand && before.street !== after.street;
+  const justFinished = sameHand && !before.finished && after.finished;
+
+  // 1. Bets going in. At the end of a street, and again when the hand ends
+  //    with money still sitting in front of people (a fold-win takes the last
+  //    bets with it), every live bet chip travels to the middle.
+  let launched = 0;
+  if (streetEnded || justFinished) {
+    for (let i = 0; i < SEAT_COUNT; i++) {
+      const amount = prev.seats?.[i]?.betThisRound || 0;
+      if (amount <= 0) continue;
+      const from = seatChipPoint(i, client);
+      if (from) flyChip(from, pot, { label: amount, delay: launched++ * 45 });
+    }
+  }
+
+  if (!justFinished) return;
+
+  // 2. …and the pot coming back out to whoever won it. Held until the last
+  //    bet has landed, so the two directions read as two events rather than
+  //    as chips passing each other in mid-air.
+  const potLanded = launched > 0 ? 260 : 0;
+  const winners = after.winners || [];
+  winners.forEach((w, i) => {
+    const to = seatChipPoint(w.seat, client);
+    if (to && w.amount > 0) {
+      flyChip(pot, to, { label: w.amount, kind: 'win', delay: potLanded + i * 90 });
+    }
+  });
+
+  // 3. The 7-2 bounty is the one payout that really is stack to stack: it
+  //    never touches the pot, so it is drawn as what it is — everybody at the
+  //    table paying the winner directly.
+  const bounty = after.bounty;
+  if (bounty?.transfers?.length) {
+    const to = seatChipPoint(bounty.winnerSeat, client);
+    const after0 = potLanded + winners.length * 90 + 320;
+    bounty.transfers.forEach((t, i) => {
+      const from = seatChipPoint(t.seat, client);
+      if (from && to) {
+        flyChip(from, to, { label: Math.abs(t.amount), kind: 'win', delay: after0 + i * 70 });
+      }
+    });
   }
 }
 
