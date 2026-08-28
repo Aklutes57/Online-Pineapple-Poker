@@ -251,7 +251,7 @@ function check(name, cond) {
   const actor = hand.bySeat.get(hand.toActSeat);
   actor.connected = false;
   game.nudgeCurrentTurn(actor); // what the disconnect handler does
-  check('an offline actor lands on the short disconnect clock',
+  check('an offline actor lands on the disconnect clock',
     game.timer?.name === 'action'
     && game.timer.deadline - Date.now() <= TIMINGS.DISCONNECT_GRACE + 500);
   game.clearTimer?.();

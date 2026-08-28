@@ -262,7 +262,11 @@ export const TIMINGS = {
   // seconds before the turn is the part people are actually watching.
   RUNOUT_STREET_DELAY: 4000,
   AWAY_GRACE: 1000, // ms before auto-acting for a sitting-out player
-  DISCONNECT_GRACE: 10000, // ms an offline player gets before their hand is folded for them
+  // How long a player who has dropped off gets before the table acts for
+  // them. Long enough to walk back from a dead lift or a flaky phone and
+  // still have your hand, short enough that nine people aren't held up by
+  // somebody who has actually left.
+  DISCONNECT_GRACE: 30000,
   HOST_TRANSFER_AFTER: 120000, // ms of host disconnect before host passes
 };
 

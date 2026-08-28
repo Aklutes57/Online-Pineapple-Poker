@@ -419,9 +419,9 @@ export class Hand {
     if (!player) return;
     let ms = null;
     if (player.sittingOut) ms = TIMINGS.AWAY_GRACE;
-    // An offline player folds (or checks) on the short disconnect clock no
-    // matter what the table's action timer is — the table never waits a full
-    // turn clock for somebody who is gone.
+    // An offline player folds (or checks) on the disconnect clock rather than
+    // the table's own action timer — which on an untimed table is the only
+    // thing that stops a dropped connection stalling the game forever.
     else if (!player.connected) ms = TIMINGS.DISCONNECT_GRACE;
     else if (this.actionTime > 0) ms = this.actionTime * 1000;
     if (ms !== null) {

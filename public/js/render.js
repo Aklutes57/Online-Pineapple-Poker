@@ -32,11 +32,6 @@ export function renderAll(client) {
   renderTheme(client);
   renderHeader(client);
   renderSeats(client);
-  // Whose turn it is should read from across the room, so the live seat is
-  // lit and every other one steps back. Only while somebody actually owes a
-  // decision — between hands and during a run-out nothing dims.
-  const someoneActing = !!(state.hand && !state.hand.finished && state.hand.toActSeat !== null);
-  seatsLayer()?.classList.toggle('someone-acting', someoneActing);
   renderBets(client);
   renderBoard(client);
   renderCenter(client);

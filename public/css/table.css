@@ -839,14 +839,10 @@ body.disconnected::after {
   box-shadow: 0 0 0 3px rgba(53, 196, 111, 0.8), 0 0 22px rgba(53, 196, 111, 0.65);
 }
 
-/* …and everybody else steps back while they decide. Your OWN seat never
-   dims: whatever else is going on, you can always read your own cards.
-   Gated on a class the renderer only sets while somebody owes a decision,
-   so nothing fades between hands or during a run-out. */
-#seats-layer.someone-acting .seat.occupied:not(.to-act):not(.me) {
-  opacity: 0.72;
-  transition: opacity 0.25s ease;
-}
+/* Nothing dims a player who is still in the hand. The acting seat is found by
+   what it gains — the halo, the pulse and the green ring above — never by
+   fading everyone who is still live, which used to leave a table mid-hand
+   looking uniformly washed out. Only folding takes the light off you. */
 
 @keyframes pulse {
   50% { box-shadow: 0 0 0 3px rgba(var(--pulse), 0.35), 0 0 12px rgba(var(--pulse), 0.2); }
@@ -856,9 +852,22 @@ body.disconnected::after {
   50% { box-shadow: 0 0 18px 3px rgba(var(--pulse), 0.14); }
 }
 
-.seat.folded .cards-fan,
-.seat.folded .nameplate {
-  opacity: 0.45;
+/* Who is still in the hand has to read from across the room, so the split is
+   carried by the seats themselves: live seats sit at full strength and folded
+   seats go dark and desaturated. The whole pod dims — picture, plate, chips
+   and all — because a half-dimmed pod reads as a rendering glitch rather than
+   as "out of the hand". */
+.seat.folded {
+  opacity: 0.38;
+  filter: saturate(0.5);
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+/* Your own folded seat is the one exception: it stays legible enough to read
+   the hand you let go, which is the whole reason it is left on the table. */
+.seat.folded.me {
+  opacity: 0.62;
+  filter: saturate(0.75);
 }
 
 /* Your own folded hand, kept on the table so you can see what you let go.
@@ -1136,10 +1145,14 @@ body.disconnected::after {
   }
 }
 
+/* The marker on a card you may throw sits just INSIDE the card edge and is a
+   hairline rather than a band — it is a hint about a card, not a second
+   rectangle drawn around one. A positive offset here used to push it clear of
+   the card, which read as a box floating behind the hand. */
 .card.discardable {
   cursor: pointer;
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
   transition: transform 0.12s;
 }
 
