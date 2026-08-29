@@ -2,19 +2,12 @@
 // landscape ones, fits with no cutoff either way, and fills the space far
 // better than a letterboxed landscape table would. Temp tool.
 //
-// PP_VARIANT picks the game to lay out; the gate runs the ones that pass.
-// THREE DO NOT, all portrait-only and all pre-existing:
-//
-//   PP_VARIANT=pineapple     podClash 4  (3 portrait viewports)
-//   PP_VARIANT=747           podClash 4  (3 portrait viewports)
-//   PP_VARIANT=sevenCardStud podClash 4  (3 portrait viewports)
-//
-// Nameplates collide with their neighbours on a ten-handed upright ring. The
-// status row was half of it and is fixed (it is out of flow now, so it costs
-// the pod no height); what is left is ring geometry — these games deal more
-// cards, taller pods make fitTableStage refit to a different felt, and the
-// seats end up close enough for the plates to touch. Reproduce with the lines
-// above before changing any of it.
+// PP_VARIANT picks the game to lay out. Every variant passes; the gate runs
+// three of them — Hold'em, Pineapple and Seven Card Stud — because between
+// them they cover the shapes that have actually broken this: two cards with a
+// board, three cards with a status phase, and seven cards with no board at
+// all. The others (Crazy Pineapple, PLO, Five Card Draw, 747) pass too and are
+// worth a run by hand after any change to seat coordinates or plate size.
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';

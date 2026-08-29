@@ -399,9 +399,16 @@ export const SEAT_COORDS_PORTRAIT = [
   { left: 21, top: 87 },
   { left: 14, top: 62 },
   { left: 14, top: 30 },
-  { left: 32, top: 8 },
+  // The top three sit closest together of any seats on the ring, and a
+  // nameplate here is about 56px wide against a 254px felt — so at 32/50/68
+  // (18% apart, ~46px) they overlapped horizontally by design, and only the
+  // vertical stagger kept them apart. Any game whose plates run a few pixels
+  // taller closed that gap and they collided: Pineapple, 747 and Stud all did,
+  // on every portrait screen. Spread to 24% apart, which clears a plate's own
+  // width and stops depending on the height staying small.
+  { left: 26, top: 8 },
   { left: 50, top: 3 },
-  { left: 68, top: 8 },
+  { left: 74, top: 8 },
   { left: 86, top: 30 },
   { left: 86, top: 62 },
   { left: 79, top: 87 },

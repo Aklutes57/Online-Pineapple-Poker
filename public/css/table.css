@@ -502,6 +502,13 @@ body.disconnected::after {
   margin-bottom: 10px;
 }
 
+/* A game with no community cards gives the space back rather than holding a
+   card's height open in the middle of an empty felt. */
+#board.no-board {
+  min-height: 0;
+  margin-bottom: 0;
+}
+
 .board-row {
   display: flex;
   justify-content: center;

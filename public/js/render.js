@@ -923,6 +923,11 @@ function renderBoard(client) {
     return;
   }
   board.classList.remove('dealer-area');
+  // Draw and Stud have no community cards at all, so the board row must not
+  // hold a card's height open in the middle of the felt. Empty, it was still
+  // 61px tall — dead space that a seven-card game's taller pods reached far
+  // enough to overlap.
+  board.classList.toggle('no-board', !!VARIANTS[hand?.variant]?.noBoard);
 
   const cards = hand ? hand.board : [];
   const second = hand?.board2 || null;
