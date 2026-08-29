@@ -71,12 +71,26 @@ window.onYouTubeIframeAPIReady = () => {
   createPlayer();
 };
 
+// Nothing here is fetched until the table actually plays something. Loading
+// the API at boot meant every table page reached youtube.com for every player
+// — including guests who never open the music tab and tables where nobody ever
+// queues a thing. It also hung this project's own browser harnesses whenever
+// that host was slow or blocked, which is how it was noticed.
 function loadApi() {
   if (document.getElementById('yt-api')) return;
   const tag = document.createElement('script');
   tag.id = 'yt-api';
   tag.src = 'https://www.youtube.com/iframe_api';
   document.head.appendChild(tag);
+}
+
+// Called the moment there is something to play, and not before. Both halves
+// are idempotent: the script tag is added once, and createPlayer does nothing
+// until the API has finished loading and calls it back.
+function ensurePlayer() {
+  if (player) return;
+  loadApi();
+  createPlayer();
 }
 
 function createPlayer() {
@@ -136,9 +150,12 @@ function tableOffset() {
 }
 
 export function sync() {
-  if (!playerReady) return;
   const m = client?.state?.music;
   const track = nowPlaying();
+  // The first track is what pulls YouTube in. Until then this returns without
+  // touching the network at all.
+  if (track) ensurePlayer();
+  if (!playerReady) return;
   if (!track) {
     try { player.stopVideo(); } catch { /* already gone */ }
     loadedKey = '';
@@ -228,13 +245,13 @@ function render() {
 
 export function initMusic(c) {
   client = c;
-  loadApi();
 
+  // The mount is a bare div and costs nothing; the player that goes in it is
+  // built on demand by ensurePlayer.
   const mount = document.createElement('div');
   mount.id = 'music-player';
   mount.className = 'music-player-mount';
   document.body.appendChild(mount);
-  createPlayer();
 
   document.getElementById('music-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
