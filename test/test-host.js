@@ -417,6 +417,81 @@ function check(name, cond) {
   void host;
 }
 
+// ---- buy-ins have a floor and no ceiling ----
+{
+  // The table's maxBuyIn is a suggestion for the join box, not a gate.
+  const { game } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  const deep = game.addPlayer('Deep', null);
+  deep.connected = true;
+  check('you can sit down far above the table maximum',
+    game.requestSeat(deep, 250_000, 1).ok === true);
+  check('and the chips are really there', deep.pendingBuyIn === 250_000 || deep.stack === 250_000);
+
+  const shallow = game.addPlayer('Shallow', null);
+  shallow.connected = true;
+  check('but the minimum is still a floor',
+    game.requestSeat(shallow, 39, 2).ok === false);
+  check('a fractional buy-in is still refused',
+    game.requestSeat(shallow, 100.5, 2).ok === false);
+  check('an absurd buy-in past the integer bound is refused',
+    game.requestSeat(shallow, Number.MAX_SAFE_INTEGER, 2).ok === false);
+}
+{
+  // Re-buys used to stop at a hundred million, while the comment above the
+  // check — and the prompt in the client — both promised no cap.
+  const { game, host } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  check('a re-buy past the old hundred-million ceiling is allowed',
+    game.rebuy(host, 500_000_000).ok === true);
+  check('the chips landed', host.stack === 200 + 500_000_000);
+  check('a re-buy under the minimum is still refused',
+    game.rebuy(host, 10).ok === false);
+}
+{
+  // The queue used to drop anyone whose buy-in was outside the range — with no
+  // message at all. They simply vanished from the line when a seat opened.
+  const { game, host } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  // Fill every remaining seat.
+  for (let seat = 1; seat < 10; seat++) {
+    const p = game.addPlayer(`P${seat}`, null);
+    p.connected = true;
+    game.requestSeat(p, 200, seat);
+    if (p.status === 'requesting') game.approveSeat(p.id, true);
+  }
+  check('the table is full', game.seats.every((id) => id !== null));
+
+  const deep = game.addPlayer('Deep', null);
+  deep.connected = true;
+  const queued = game.requestSeat(deep, 250_000, null);
+  check('a deep buy-in joins the queue rather than being turned away',
+    queued.ok === true && deep.status === 'waitlisted');
+
+  // Approve them and free a seat.
+  const entry = game.waitlist.find((e) => e.playerId === deep.id);
+  if (entry) entry.approved = true;
+  const leaver = game.players.get(game.seats[9]);
+  game.removeFromSeat(leaver, 'leave');
+  game.seatFromWaitlist();
+
+  check('a deep buy-in is promoted out of the queue rather than dropped',
+    deep.status === 'seated');
+  check('and they sit down with the stack they asked for', deep.stack === 250_000);
+  check('the queue is empty afterwards',
+    !game.waitlist.some((e) => e.playerId === deep.id));
+}
+
 // ---- tipping another player ----
 function tableOfThree(settings = {}) {
   const { game, host } = createGame({ actionTime: 0, ...settings }, 'Host', null);

@@ -115,10 +115,13 @@ export function openJoinModal(client, seatIndex = null) {
   })();
   document.getElementById('j-nickname').value =
     saved.nickname || client.you?.nickname?.replace(/^Guest-\d+$/, '') || '';
+  // A floor and no ceiling. The box suggests the table's usual stack and stops
+  // you going under the minimum, but sitting down deep is between you and the
+  // host — so there is deliberately no `max` here for the browser to enforce.
   document.getElementById('j-buyin').value = s.defaultBuyIn;
   document.getElementById('j-buyin').min = s.minBuyIn;
-  document.getElementById('j-buyin').max = s.maxBuyIn;
-  document.getElementById('j-buyin-range').textContent = `(${s.minBuyIn}–${s.maxBuyIn})`;
+  document.getElementById('j-buyin').removeAttribute('max');
+  document.getElementById('j-buyin-range').textContent = `(${s.minBuyIn} or more)`;
   document.getElementById('join-modal').classList.remove('hidden');
   document.getElementById('j-nickname').focus();
 }

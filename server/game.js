@@ -254,9 +254,14 @@ export class Game {
 
   requestSeat(player, buyIn, seatIndex = null) {
     if (player.status === 'seated') return { ok: false, error: 'already seated' };
-    const { minBuyIn, maxBuyIn } = this.settings;
-    if (!Number.isInteger(buyIn) || buyIn < minBuyIn || buyIn > maxBuyIn) {
-      return { ok: false, error: `buy-in must be ${minBuyIn}-${maxBuyIn}` };
+    // A buy-in has a floor and no ceiling. How deep somebody sits down is
+    // their business and the host's, not the software's — the table's
+    // maxBuyIn survives only as the amount the join box suggests. MAX_CHIPS is
+    // not a house rule either: it is the bound that keeps a full table's pot
+    // summing in exact integers.
+    const { minBuyIn } = this.settings;
+    if (!Number.isInteger(buyIn) || buyIn < minBuyIn || buyIn > MAX_CHIPS) {
+      return { ok: false, error: `buy-in must be at least ${minBuyIn}` };
     }
     if (seatIndex !== null) {
       if (!Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex >= SEAT_COUNT) {
@@ -489,11 +494,13 @@ export class Game {
     if (!this.rebuysOpen()) {
       return { ok: false, error: 'the re-buy period is over — this one plays out' };
     }
-    // Re-buys have a floor but no ceiling — a home game tops up however deep
-    // it likes. (The sanity cap only guards integer arithmetic.)
+    // Re-buys have a floor but no ceiling — a home game tops up however deep it
+    // likes. This used to stop at a hundred million, which the comment above it
+    // already denied: the only real bound is the one that keeps chip sums in
+    // exact integers.
     const { minBuyIn } = this.settings;
     const want = Number.isInteger(amount) ? amount : this.settings.defaultBuyIn;
-    if (!Number.isInteger(want) || want < minBuyIn || want > 100_000_000) {
+    if (!Number.isInteger(want) || want < minBuyIn || want > MAX_CHIPS) {
       return { ok: false, error: `re-buy must be at least ${minBuyIn}` };
     }
     if (this.playerInLiveHand(player)) {
@@ -1400,11 +1407,12 @@ export class Game {
   // ---- waitlist ----
 
   joinWaitlist(player, buyIn, seatIndex) {
-    const { minBuyIn, maxBuyIn } = this.settings;
+    const { minBuyIn } = this.settings;
     // Validated here as well as in requestSeat: skipping it would let an
-    // invalid buy-in in through the queue when a seat later frees up.
-    if (!Number.isInteger(buyIn) || buyIn < minBuyIn || buyIn > maxBuyIn) {
-      return { ok: false, error: `buy-in must be ${minBuyIn}-${maxBuyIn}` };
+    // invalid buy-in in through the queue when a seat later frees up. Same
+    // rule as the seat — a floor, and no ceiling.
+    if (!Number.isInteger(buyIn) || buyIn < minBuyIn || buyIn > MAX_CHIPS) {
+      return { ok: false, error: `buy-in must be at least ${minBuyIn}` };
     }
     if (this.waitlist.some((e) => e.playerId === player.id)) {
       return { ok: false, error: 'you are already in the queue' };
@@ -1457,7 +1465,7 @@ export class Game {
       }
       return;
     }
-    const { minBuyIn, maxBuyIn } = this.settings;
+    const { minBuyIn } = this.settings;
     for (let i = 0; i < this.waitlist.length && this.seats.includes(null); ) {
       const entry = this.waitlist[i];
       const player = this.players.get(entry.playerId);
@@ -1469,7 +1477,11 @@ export class Game {
         i++;
         continue;
       }
-      if (entry.buyIn < minBuyIn || entry.buyIn > maxBuyIn) {
+      // Only a buy-in that has fallen UNDER the floor drops out of the queue —
+      // the blinds can go up while somebody waits. There is no ceiling to fall
+      // foul of, and dropping someone for sitting down deep was silent: they
+      // simply vanished from the line when a seat opened.
+      if (entry.buyIn < minBuyIn) {
         this.waitlist.splice(i, 1);
         continue;
       }
