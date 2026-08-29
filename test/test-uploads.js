@@ -173,6 +173,43 @@ uploads.deleteSoundClip(acct.id, 'cooler');
 check('slot cleared', uploads.listSoundClips(acct.id).cooler === undefined);
 
 closeDb();
+// ---- MP3, in the shapes a real one actually arrives in ----
+{
+  // An .mp3 either opens with an ID3 tag or straight into an MPEG frame sync,
+  // and the sync byte varies by MPEG version and layer. All of them are the
+  // same file type to anyone who double-clicks it.
+  const id3 = Buffer.concat([Buffer.from('ID3'), Buffer.from([3, 0, 0, 0, 0, 0, 0]), Buffer.alloc(64)]);
+  const shapes = [
+    ['ID3-tagged', id3],
+    ['bare frame sync (MPEG-1 Layer III)', Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x00]), Buffer.alloc(64)])],
+    ['bare frame sync (MPEG-2 Layer III)', Buffer.concat([Buffer.from([0xff, 0xf3, 0x48, 0xc4]), Buffer.alloc(64)])],
+    ['bare frame sync (alt)', Buffer.concat([Buffer.from([0xff, 0xfa, 0x92, 0x40]), Buffer.alloc(64)])],
+  ];
+  for (const [name, buf] of shapes) {
+    const sig = uploads.sniff(buf);
+    check(`${name} is recognised as an MP3`,
+      sig !== null && sig.mime === 'audio/mpeg' && sig.ext === '.mp3' && sig.kind === 'audio');
+  }
+
+  // A real clip has to fit. Two megabytes was under a minute of a 320kbps file.
+  check('the audio limit holds a real clip', uploads.LIMITS.audio >= 8 * 1024 * 1024);
+
+  // Over the limit is refused for being too big, NOT for being the wrong type —
+  // the two read very differently to somebody trying to work out what is wrong.
+  const tooBig = Buffer.concat([id3, Buffer.alloc(uploads.LIMITS.audio + 1)]);
+  const big = uploads.storeUpload({
+    buffer: tooBig, accountId: acct.id, wantKind: 'audio', originalName: 'long.mp3',
+  });
+  check('an oversized MP3 is refused for its size', big.ok === false && /under/i.test(big.error));
+  check('and is not mistaken for an unsupported format', !/type is not supported/i.test(big.error));
+
+  // Widening the file picker must not have widened what the server accepts.
+  const wrong = uploads.storeUpload({
+    buffer: PNG, accountId: acct.id, wantKind: 'audio', originalName: 'notasound.png',
+  });
+  check('a PNG is still refused for a sound slot', wrong.ok === false);
+}
+
 rmSync(dir, { recursive: true, force: true });
 
 console.log(`uploads: ${passes} passed, ${failures} failed`);

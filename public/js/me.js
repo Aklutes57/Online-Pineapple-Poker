@@ -454,7 +454,7 @@ function renderSoundSlots(clips) {
       <div class="sound-actions">
         <label class="btn btn-ghost sound-upload">
           ${clips[slot.key] ? 'Replace' : 'Upload'}
-          <input type="file" accept="audio/mpeg,audio/ogg,audio/wav" data-slot="${slot.key}" hidden>
+          <input type="file" accept=".mp3,.ogg,.wav,audio/mpeg,audio/ogg,audio/wav" data-slot="${slot.key}" hidden>
         </label>
         ${clips[slot.key] ? `<button class="btn btn-ghost sound-clear" data-clear="${slot.key}">Remove</button>` : ''}
       </div>

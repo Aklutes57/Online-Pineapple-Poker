@@ -24,7 +24,13 @@ export const UPLOAD_DIR = process.env.PP_UPLOAD_DIR || path.join(root, 'data', '
 
 export const LIMITS = {
   image: 4 * 1024 * 1024,
-  audio: 2 * 1024 * 1024,
+  // Two megabytes is about fifty seconds of a 320kbps MP3, which is shorter
+  // than plenty of the clips people actually want on a soundboard — and the
+  // rejection reads as "that file type is wrong" to anyone not looking closely.
+  // Eight leaves room for a real clip while staying small enough that the
+  // uploads directory, which is content-addressed and never pruned, does not
+  // run away with the volume.
+  audio: 8 * 1024 * 1024,
 };
 
 // Every accepted format, keyed by what its bytes actually say.
