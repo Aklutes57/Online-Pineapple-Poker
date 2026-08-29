@@ -4,7 +4,9 @@ import { EVENTS, NAME_FONTS, DEFAULT_NAME_FONT, SKINS, DEFAULT_SKIN } from '/sha
 import { showToast, escapeHtml } from '/js/ui.js';
 import { getAccountToken, loadAccount, currentAccount, authHeaders } from '/js/auth.js';
 import { initReactions, showReaction } from '/js/reactions.js';
-import { play as playSound, setCustomClips } from '/js/sounds.js';
+import {
+  play as playSound, setCustomClips, armAudioUnlock, audioState,
+} from '/js/sounds.js';
 import {
   pushSupported, savedPushEndpoint, currentPushSubscription, enablePush, disablePush,
 } from '/js/pwa.js';
@@ -12,7 +14,7 @@ import {
   renderAll, startTimerLoop, fitTableStage, clearChipsOfPods, notifyChipMoves,
 } from '/js/render.js';
 import { initActionBar } from '/js/actionBar.js';
-import { initMusic, onMusicState } from '/js/music.js';
+import { initMusic, onMusicState, duckMusic } from '/js/music.js';
 import { initPanels, onChatMessage, notifyStateForPanels, openPanel, openLedger, openFair } from '/js/panels.js';
 import {
   initWebrtc, joinAV, leaveAV, toggleCamera, toggleMic, toggleDeafen,
@@ -149,6 +151,8 @@ function applyState(state) {
 
   if (!wasMyTurn && (client.you?.availableActions || client.you?.canDecide747)) {
     playSound('yourTurn', { enabled: client.soundOn });
+    // …and get the music out of the way so it can be heard.
+    if (client.soundOn) duckMusic();
   }
 
   const hand = state.hand;
@@ -232,6 +236,10 @@ document.getElementById('sound-toggle').addEventListener('click', (e) => {
   client.soundOn = !client.soundOn;
   localStorage.setItem('pp:sound', client.soundOn ? 'on' : 'off');
   e.currentTarget.textContent = client.soundOn ? 'Sound on' : 'Sound off';
+  // Turning it on plays the cue you turned it on for. It is a click, so it is
+  // also the gesture that opens the audio context — and hearing something is
+  // the only way to know the setting did anything.
+  if (client.soundOn) playSound('yourTurn', { enabled: true });
 });
 document.getElementById('sound-toggle').textContent = client.soundOn ? 'Sound on' : 'Sound off';
 
@@ -280,6 +288,11 @@ document.getElementById('copy-link').addEventListener('click', async () => {
 initActionBar(client);
 initPanels(client);
 initMusic(client);
+// Open the audio context on the first tap or key. Nothing here can play a
+// sound before that, because the browser will not allow it.
+armAudioUnlock();
+// Exposed for the sound gate only; nothing in the app reads it.
+window.__audioState = audioState;
 initReactions(client);
 startTimerLoop(client);
 

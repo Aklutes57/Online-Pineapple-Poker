@@ -18,6 +18,35 @@ function audio() {
   return ctx;
 }
 
+// Browsers will not start audio until the page has been interacted with, and a
+// context created outside a gesture is born suspended. Every cue here is
+// triggered by a websocket update — never by a click — so resume() was always
+// being called from the wrong place, always rejected, and the rejection was
+// swallowed. The result was a table that made no sound at all, silently.
+//
+// So the context is opened on the first real gesture instead, which is the one
+// moment a browser accepts it. Once running it stays running for the life of
+// the page, and every later cue works because the unlocking already happened.
+export function unlockAudio() {
+  const ac = audio();
+  if (!ac) return;
+  if (ac.state === 'suspended') ac.resume().catch(() => {});
+}
+
+// Diagnostic: what the audio context is actually doing. Exported so the sound
+// gate can assert on it — the failure this guards against is silent by nature,
+// so the only way to test it is to look at the context itself.
+export function audioState() {
+  return ctx ? ctx.state : 'none';
+}
+
+export function armAudioUnlock() {
+  const kick = () => unlockAudio();
+  for (const evt of ['pointerdown', 'keydown', 'touchstart']) {
+    document.addEventListener(evt, kick, { once: true, capture: true });
+  }
+}
+
 export function setCustomClips(clips) {
   customClips = clips || {};
 }
@@ -61,7 +90,13 @@ function noise(ac, { start, duration, gain = 0.08, freq = 900 }) {
 
 const PATCHES = {
   // Your turn: a clean, unobtrusive chime.
-  yourTurn: (ac) => tone(ac, { freq: 880, start: 0, duration: 0.22, gain: 0.07 }),
+  // Two notes rather than one, and louder than the rest: this is the only cue
+  // that is asking you to do something, and since the music queue landed it has
+  // to carry over whatever is playing.
+  yourTurn: (ac) => {
+    tone(ac, { freq: 880, start: 0, duration: 0.16, gain: 0.16 });
+    tone(ac, { freq: 1320, start: 0.13, duration: 0.22, gain: 0.14 });
+  },
 
   // Cooler: two descending notes — the "oh no" shape.
   cooler: (ac) => {

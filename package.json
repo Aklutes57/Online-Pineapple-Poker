@@ -13,7 +13,8 @@
     "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=crazyPineapple node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=fiveCardDraw node --disable-warning=ExperimentalWarning test/orient.mjs",
     "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs",
     "bar": "node --disable-warning=ExperimentalWarning test/bar.mjs",
-    "chips": "node --disable-warning=ExperimentalWarning test/chips.mjs"
+    "chips": "node --disable-warning=ExperimentalWarning test/chips.mjs",
+    "sound": "node --disable-warning=ExperimentalWarning test/sound.mjs"
   },
   "license": "MIT",
   "dependencies": {

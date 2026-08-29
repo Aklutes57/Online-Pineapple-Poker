@@ -265,6 +265,24 @@ export function initMusic(c) {
   document.querySelector('.tab[data-tab="music"]')?.addEventListener('click', render);
 }
 
+// Drop the music for a moment so something more important can be heard over
+// it. Used by the "it's your turn" cue, which is the one sound at this table
+// that is asking you to do something — and which the queue would otherwise
+// bury. Restores whatever the listener had set, not a hardcoded level.
+let duckTimer = null;
+export function duckMusic(ms = 900) {
+  if (!playerReady || isMuted()) return;
+  try {
+    player.setVolume(Math.round(storedVolume() * 0.25));
+    clearTimeout(duckTimer);
+    duckTimer = setTimeout(() => {
+      // Re-read on the way back up: the listener may have moved the slider
+      // while the music was ducked, and their setting wins over ours.
+      try { applyOutput(); } catch { /* the iframe may be mid-teardown */ }
+    }, ms);
+  } catch { /* ducking is a courtesy, never a failure */ }
+}
+
 export function onMusicState() {
   sync();
   render();
