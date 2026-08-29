@@ -10,7 +10,7 @@
     "soak": "node --disable-warning=ExperimentalWarning test/bots.js",
     "smoke": "node --disable-warning=ExperimentalWarning test/smoke-ui.js",
     "media": "node --disable-warning=ExperimentalWarning test/media.mjs",
-    "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=sevenCardStud node --disable-warning=ExperimentalWarning test/orient.mjs",
+    "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=crazyPineapple node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=fiveCardDraw node --disable-warning=ExperimentalWarning test/orient.mjs",
     "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs",
     "bar": "node --disable-warning=ExperimentalWarning test/bar.mjs",
     "chips": "node --disable-warning=ExperimentalWarning test/chips.mjs"

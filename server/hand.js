@@ -205,6 +205,10 @@ export class Hand {
       // player has chosen — see finishExchange.
       p.hasDrawn = false;
       p.drawChoice = null;
+      // Money pushed into the pot outside the betting. Tracked separately
+      // because it lands only in totalCommitted, which is not published per
+      // seat — without this the table has no way to see a post happen.
+      p.postedThisHand = 0;
       p.showedCards = false;
       p.handResult = null;
       p.preAction = null;
@@ -1506,6 +1510,7 @@ export class Hand {
     }
     const paid = betting.payDead(player, amount);
     if (paid <= 0) return { ok: false, error: 'nothing to post' };
+    player.postedThisHand = (player.postedThisHand || 0) + paid;
     this.pushEvent({ type: 'post', seat: player.seatIndex, amount: paid });
     this.ctx.log(`${player.nickname} posts ${paid} into the pot`);
     this.ctx.changed();

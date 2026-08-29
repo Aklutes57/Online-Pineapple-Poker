@@ -1,6 +1,20 @@
 // Verifies the table stands upright on portrait screens and lies down on
 // landscape ones, fits with no cutoff either way, and fills the space far
 // better than a letterboxed landscape table would. Temp tool.
+//
+// PP_VARIANT picks the game to lay out; the gate runs the ones that pass.
+// THREE DO NOT, all portrait-only and all pre-existing:
+//
+//   PP_VARIANT=pineapple     podClash 4  (3 portrait viewports)
+//   PP_VARIANT=747           podClash 4  (3 portrait viewports)
+//   PP_VARIANT=sevenCardStud podClash 4  (3 portrait viewports)
+//
+// Nameplates collide with their neighbours on a ten-handed upright ring. The
+// status row was half of it and is fixed (it is out of flow now, so it costs
+// the pod no height); what is left is ring geometry — these games deal more
+// cards, taller pods make fitTableStage refit to a different felt, and the
+// seats end up close enough for the plates to touch. Reproduce with the lines
+// above before changing any of it.
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -78,7 +92,12 @@ if (VARIANT_LABEL === 'sevenCardStud') {
     // A hand that ends before seventh street just deals another one; keep going.
   }
   for (const o of all) o.parked = true;
-  await new Promise((r) => setTimeout(r, 400));
+  // Pause before measuring. Without this the table deals another hand three
+  // seconds later while the viewports are being walked, so the layout is read
+  // against whatever state that hand happens to be in — which made this gate
+  // report anything between "all good" and three failures on identical code.
+  host.s.emit(EVENTS.HOST_PAUSE, { paused: true });
+  await new Promise((r) => setTimeout(r, 1200));
   console.log(`  (stud driven to ${reached} cards a player before measuring)`);
 }
 

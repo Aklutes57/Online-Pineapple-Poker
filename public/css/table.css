@@ -992,16 +992,36 @@ body.disconnected::after {
   font-weight: 700;
 }
 
+/* The status line ("all-in", "away", "deciding…", "discarding…") hangs BELOW
+   the plate rather than sitting inside it. In flow it added a row to the
+   nameplate, and because the games that use it push a status onto every
+   occupied plate at once — Pineapple's discard, 747's decision, an all-in
+   street in Stud — all ten plates grew together and collided with their
+   neighbours on a tight ten-handed ring, worst in portrait. Out of flow it
+   costs the pod no height, which is the same reason .np-bubble and .np-mute
+   are positioned. It needs its own background now that it no longer sits on
+   the plate's. */
 .np-status {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -15px;
   font-size: 11px;
+  line-height: 1.15;
   color: var(--text-dim);
+  background: var(--bg-raised);
+  border-radius: 8px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
 }
 
 .np-bubble {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: -24px;
+  bottom: -34px;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1350,6 +1370,27 @@ body.disconnected::after {
 .react-option:hover {
   background: var(--bg-raised);
   transform: scale(1.15);
+}
+
+/* Dead money a player has pushed into the pot, shown on their plate for the
+   rest of the hand. Absolutely positioned for the same reason the mute button
+   is: it must cost the pod no height, or ten plates growing at once push each
+   other into their neighbours on a tight ring. Sits opposite Mute so the two
+   never collide. */
+.np-posted {
+  position: absolute;
+  top: -11px;
+  left: -8px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--chip-ink);
+  background: var(--plate-b);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ---- chips in flight ---- */

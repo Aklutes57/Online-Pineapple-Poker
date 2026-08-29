@@ -904,6 +904,8 @@ function totalChips(players, hand) {
     availableActionsFor(hand, hand.bySeat.get(2)).callAmount === owedBefore);
   check('a post leaves the street bet alone',
     hand.bySeat.get(2).betThisRound === streetBefore);
+  check('a post is counted where the table can see it',
+    hand.bySeat.get(2).postedThisHand === 50);
   check('a post comes out of the stack', players[2].stack === stackBefore - 50);
 }
 {
@@ -955,6 +957,19 @@ function totalChips(players, hand) {
   hand.postDead(hand.bySeat.get(2), players[2].stack);
   check('posting your whole stack puts you all in',
     players[2].stack === 0 && players[2].allIn === true);
+}
+{
+  // Two posts in one hand accumulate rather than replacing each other.
+  const players = [makePlayer(0, 200, 'a'), makePlayer(1, 200, 'b'), makePlayer(2, 200, 'c')];
+  const deck = ['Ah','Ad','Kh','Kd','7c','2s','3s','4d','Jh','8c','5s'];
+  const { hand } = makeHand({ players, deck });
+  hand.start();
+  act(hand, 0, 'raise', 20);
+  hand.postDead(hand.bySeat.get(2), 10);
+  hand.postDead(hand.bySeat.get(2), 15);
+  check('posts add up over a hand', hand.bySeat.get(2).postedThisHand === 25);
+  check('and all of it is in the pot',
+    hand.bySeat.get(2).totalCommitted >= 25);
 }
 
 // --- Run it twice ---

@@ -616,5 +616,39 @@ function tableOfThree(settings = {}) {
     game.settings.rotateList.join(',') === 'plo');
 }
 
+// ---- a post is visible to the whole table ----
+{
+  // The point of the field: dead money lands in totalCommitted, which is NOT
+  // published per seat, so without `posted` a post is invisible to everyone
+  // except the player who made it.
+  const { buildViews } = await import('../server/views.js');
+  const { game, host, pia, quinn } = tableOfThree({ actionTime: 30 });
+  game.startHand();
+  const hand = game.currentHand;
+
+  // Pick somebody the action is NOT on — posting on your own turn is refused.
+  const poster = [host, pia, quinn].find((p) => p.seatIndex !== hand.toActSeat);
+  const seat = poster.seatIndex;
+  const before = buildViews(game).pub.seats[seat];
+  check('nothing is posted before anyone posts', (before.posted || 0) === 0);
+
+  const posted = game.postToPot(poster, 40);
+  check('the post is accepted', posted.ok === true);
+
+  const view = buildViews(game).pub.seats[seat];
+  check('the table can see that a post happened', view.posted === 40);
+  check('and it is not mistaken for a bet', view.betThisRound !== 40);
+
+  // A second post adds to the first rather than replacing it, which is what
+  // the plate marker reads.
+  game.postToPot(poster, 10);
+  check('further posts accumulate in the view',
+    buildViews(game).pub.seats[seat].posted === 50);
+
+  // It really is in the pot, not just annotated on the seat.
+  check('the posted chips reached the pot',
+    buildViews(game).pub.hand.potTotal >= 50);
+}
+
 console.log(`host: ${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

@@ -83,6 +83,31 @@ const still = await watcher({ reducedMotion: 'reduce' });
 check('the flight layer exists on the felt',
   await page.evaluate(() => !!document.getElementById('fx-layer')));
 
+// Track the latest state per socket so the post below can pick somebody the
+// action is NOT on — posting on your own turn is refused by design.
+const latest = new Map();
+for (const o of [host, ...others]) o.s.on(EVENTS.STATE, (state) => latest.set(o, state));
+
+host.s.emit(EVENTS.HOST_START_GAME, {});
+await new Promise((r) => setTimeout(r, 600));
+
+// A post never appears as a bet chip — it does not touch betThisRound — so the
+// flight is the only thing that shows it happening.
+{
+  const beforePost = await page.evaluate(() => window.__fx.total);
+  const idle = [host, ...others].find((o) => {
+    const st = latest.get(o);
+    return st?.hand && !st.you?.availableActions && st.you?.canPost;
+  });
+  check('somebody at the table can post', !!idle);
+  if (idle) {
+    idle.s.emit(EVENTS.POST_TO_POT, { amount: 25 });
+    await new Promise((r) => setTimeout(r, 700));
+    const afterPost = await page.evaluate(() => window.__fx.total);
+    check('posting money flies a chip to the pot', afterPost === beforePost + 1);
+  }
+}
+
 // Everyone folds to one player: blinds get collected and a pot is paid out.
 for (const o of [host, ...others]) {
   o.s.on(EVENTS.STATE, (state) => {
@@ -92,16 +117,27 @@ for (const o of [host, ...others]) {
     const action = state.you.seatIndex === 0 ? (av.canCheck ? 'check' : 'call') : 'fold';
     o.s.emit(EVENTS.ACTION, { handId: state.hand.handId, action });
   });
+  // Nudge each one with the state it already has, since the hand is running.
+  const st = latest.get(o);
+  if (st?.you?.availableActions && st.hand) {
+    o.s.emit(EVENTS.ACTION, {
+      handId: st.hand.handId,
+      action: st.you.seatIndex === 0
+        ? (st.you.availableActions.canCheck ? 'check' : 'call') : 'fold',
+    });
+  }
 }
-host.s.emit(EVENTS.HOST_START_GAME, {});
 await new Promise((r) => setTimeout(r, 2500));
 
 const fx = await page.evaluate(() => window.__fx);
 check(`chips were flown (${fx.total} in total, ${fx.peak} at once)`, fx.total > 0);
 check('more than one chip moved — bets in AND the pot out', fx.total > 1);
 
-// …and the felt is left clean.
-await new Promise((r) => setTimeout(r, 1600));
+// …and the felt is left clean. Pause first: the table deals another hand three
+// seconds after one ends, and measuring into the next hand's flights would fail
+// this for the wrong reason.
+host.s.emit(EVENTS.HOST_PAUSE, { paused: true });
+await new Promise((r) => setTimeout(r, 2600));
 const leftover = await page.evaluate(() => document.getElementById('fx-layer').children.length);
 check('every chip cleans itself up', leftover === 0);
 

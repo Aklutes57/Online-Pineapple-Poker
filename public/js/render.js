@@ -279,7 +279,21 @@ export function notifyChipMoves(prev, next, client) {
   const streetEnded = sameHand && before.street !== after.street;
   const justFinished = sameHand && !before.finished && after.finished;
 
-  // 1. Bets going in. At the end of a street, and again when the hand ends
+  // 1. Somebody pushing dead money in. This one fires the moment it happens
+  //    rather than at the end of a street, because it IS the whole event —
+  //    a post never appears as a bet chip in front of the player (it is not a
+  //    bet, so it never touches betThisRound), and without this the only sign
+  //    of it is the pot number jumping.
+  if (sameHand) {
+    for (let i = 0; i < SEAT_COUNT; i++) {
+      const added = (next.seats?.[i]?.posted || 0) - (prev.seats?.[i]?.posted || 0);
+      if (added <= 0) continue;
+      const from = seatChipPoint(i, client);
+      if (from) flyChip(from, pot, { label: added });
+    }
+  }
+
+  // 2. Bets going in. At the end of a street, and again when the hand ends
   //    with money still sitting in front of people (a fold-win takes the last
   //    bets with it), every live bet chip travels to the middle.
   let launched = 0;
@@ -294,7 +308,7 @@ export function notifyChipMoves(prev, next, client) {
 
   if (!justFinished) return;
 
-  // 2. …and the pot coming back out to whoever won it. Held until the last
+  // 3. …and the pot coming back out to whoever won it. Held until the last
   //    bet has landed, so the two directions read as two events rather than
   //    as chips passing each other in mid-air.
   const potLanded = launched > 0 ? 260 : 0;
@@ -306,7 +320,7 @@ export function notifyChipMoves(prev, next, client) {
     }
   });
 
-  // 3. The 7-2 bounty is the one payout that really is stack to stack: it
+  // 4. The 7-2 bounty is the one payout that really is stack to stack: it
   //    never touches the pot, so it is drawn as what it is — everybody at the
   //    table paying the winner directly.
   const bounty = after.bounty;
@@ -526,6 +540,7 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
     seat.inHand, seat.folded, seat.allIn, seat.cardCount, shownCards,
     isMe && seat.folded ? (myCards || []).join(',') : null,
     seat.isDealer, seat.isStraddle, seat.straddleLevel, toAct, waitingDiscard, seat.handResult,
+    seat.posted,
     isMe, you?.canDiscard, you?.hasDiscarded,
     seat.mediaOn, seat.camFrame, seat.avatarUrl, isMuted(seat.playerId), seat.nameFont,
     decisionPhase ? seat.decided : null, myHandNow,
@@ -685,6 +700,14 @@ function renderPlayerSeat(pod, seat, seatIndex, client) {
            title="${isMuted(seat.playerId) ? 'Unmute' : 'Mute'} ${escapeHtml(seat.nickname)} (just for you)"
            >${isMuted(seat.playerId) ? 'Muted' : 'Mute'}</button>`
       : ''}
+    ${seat.posted > 0
+      // Dead money this player has pushed in. It stays for the rest of the
+      // hand — knowing WHO has money in the pot beyond their bets is exactly
+      // what a post is for. Absolutely positioned like the mute button, so it
+      // costs the pod no height and cannot push plates into one another.
+      ? `<span class="np-posted" title="Put in outside the betting — no call owed">`
+        + `+${seat.posted}</span>`
+      : ''}
     <div class="timer-bar hidden"><div class="timer-fill"></div></div>
   `;
 
@@ -809,7 +832,7 @@ export function clearChipsOfPods() {
   const obstacles = [
     ...document.querySelectorAll(
       '#seats-layer .nameplate, #seats-layer .card, #seats-layer .seat-avatar,'
-      + ' #seats-layer .np-bubble, #seats-layer video.seat-cam'
+      + ' #seats-layer .np-bubble, #seats-layer .np-posted, #seats-layer video.seat-cam'
     ),
   ].map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
   // The middle of the felt is not somewhere to hide either — the board and the

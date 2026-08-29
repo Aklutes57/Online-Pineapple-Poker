@@ -88,6 +88,11 @@ export function buildViews(game) {
       folded: inHand ? p.folded : false,
       allIn: inHand ? p.allIn : false,
       betThisRound: inHand ? p.betThisRound : 0,
+      // Dead money this player has pushed in. Deliberately NOT part of
+      // betThisRound — nobody owes a call for it — which is exactly why it
+      // needs its own field: totalCommitted, where it actually lands, is not
+      // published per seat, so without this a post is invisible to the table.
+      posted: inHand ? (p.postedThisHand || 0) : 0,
       cardCount: inHand && !p.folded ? p.holeCards.length : 0,
       cards: showCards ? [...p.holeCards] : null,
       // Stud deals part of every hand face up, and those cards are public by
