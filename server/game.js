@@ -52,6 +52,10 @@ export class Game {
     this.buttonSeat = null;
     // 747: when the dealer beats everyone, the pot rides here between hands.
     this.carryPot = 0;
+    // Stacks carried over from the host's last table, by account id. Each is
+    // spent once, when that player sits down, and becomes their buy-in for
+    // this session so the books open balanced.
+    this.carryStacks = new Map();
     // The table's music. The server holds the queue and a clock — what is
     // playing and when it started — and nothing else: every browser runs its
     // own YouTube player and seeks to that offset. No audio passes through
@@ -252,8 +256,39 @@ export class Game {
 
   // ---- seating ----
 
+  // Seed the carry-over from a previous session's final stacks. Accounts only:
+  // a per-game player id never matches across nights, and matching a guest by
+  // the name they typed could hand somebody else's stack to the wrong person.
+  setCarryStacks(rows) {
+    this.carryStacks = new Map();
+    for (const r of rows || []) {
+      if (!r?.accountId) continue;
+      const amount = Math.min(Math.max(0, r.stack | 0), BUY_IN_CAP);
+      // Below the table's own floor it is not a carry-over, it is a short
+      // buy-in; that player just buys in normally like everybody else.
+      if (amount >= this.settings.minBuyIn) this.carryStacks.set(r.accountId, amount);
+    }
+    return this.carryStacks.size;
+  }
+
+  // What this player is actually sitting down with. A carried stack overrides
+  // whatever the join box asked for — it is the whole point — and is spent the
+  // first time they sit, so standing up and returning later does not mint it
+  // a second time.
+  takeCarryStack(player) {
+    if (!player.accountId || !this.carryStacks.has(player.accountId)) return null;
+    const amount = this.carryStacks.get(player.accountId);
+    this.carryStacks.delete(player.accountId);
+    return amount;
+  }
+
   requestSeat(player, buyIn, seatIndex = null) {
     if (player.status === 'seated') return { ok: false, error: 'already seated' };
+    const carried = this.takeCarryStack(player);
+    if (carried !== null) {
+      buyIn = carried;
+      this.addLog(`${player.nickname} carries over ${carried} from the last table`);
+    }
     // A buy-in has a floor and a ceiling, and the ceiling is deliberately not
     // the table's maxBuyIn — that survives only as the amount the join box
     // suggests, so how deep somebody sits is still between them and the host.

@@ -180,6 +180,101 @@ check('summary carries stats', summary.stats.handsDealt === 3);
 check('summary lists the session row', summary.sessions[0].variant === 'holdem');
 
 closeDb();
+// ---- carrying stacks over to the next table ----
+{
+  const { createGame } = await import('../server/gameManager.js');
+  const { BUY_IN_CAP } = await import('../shared/constants.js');
+
+  const acct = accounts.createAccount({
+    email: 'carry@example.com', password: 'password123', displayName: 'Carrie',
+  });
+  check('an account was made for the carry test', acct.ok === true);
+  const accountId = acct.account.id;
+
+  // A night that finishes: one signed-in player up, one guest also up.
+  const first = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Carrie', accountId
+  );
+  const game = first.game;
+  game.hostAccountId = accountId;
+  const host = first.host;
+  host.accountId = accountId;
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const guest = game.addPlayer('Gary', null);
+  guest.connected = true;
+  game.requestSeat(guest, 200, 1);
+  if (guest.status === 'requesting') game.approveSeat(guest.id, true);
+
+  // Play out: the host finished ahead, the guest behind. syncSessionResults is
+  // what a finished hand calls, and it is what creates the session row — so a
+  // table that never dealt a hand has nothing to carry over from.
+  host.stack = 640;
+  guest.stack = 90;
+  game.handNo = 12;
+  stats.syncSessionResults(game);
+  game.close('done');
+
+  const last = stats.lastTableStacks(accountId);
+  check('the last table is found', !!last && last.players.length === 1);
+  check('the signed-in player carries their finishing stack',
+    last.players[0].accountId === accountId && last.players[0].stack === 640);
+  check('a guest is not carried over — nothing matches them between tables',
+    !last.players.some((p) => p.nickname === 'Gary'));
+
+  // The next night.
+  const second = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Carrie', accountId
+  );
+  const g2 = second.game;
+  const carried = g2.setCarryStacks(last.players);
+  check('one player is set to carry over', carried === 1);
+
+  const host2 = second.host;
+  host2.accountId = accountId;
+  host2.connected = true;
+  g2.requestSeat(host2, 200, 0); // asks for 200; should sit with 640
+  check('they sit down with what they finished with, not what the box asked for',
+    host2.stack === 640);
+
+  // The books must open balanced: a carried stack IS this session's buy-in.
+  const row = g2.ledger.get(host2.id);
+  check('the carried stack is credited as the buy-in', row.buyIns === 640);
+  check('so the new session opens balanced',
+    host2.stack + row.cashOuts - row.buyIns === 0);
+
+  // Spent once: standing up and coming back must not mint it again.
+  g2.removeFromSeat(host2, 'leave');
+  g2.requestSeat(host2, 200, 0);
+  check('the carry-over is spent once, not every time they sit', host2.stack === 200);
+
+  // A guest at the new table is unaffected.
+  const guest2 = g2.addPlayer('Gary', null);
+  guest2.connected = true;
+  g2.requestSeat(guest2, 150, 2);
+  if (guest2.status === 'requesting') g2.approveSeat(guest2.id, true);
+  check('a guest buys in for what they asked for', guest2.stack === 150);
+}
+{
+  // A stack below the table's floor is not a carry-over — it is a short
+  // buy-in, and that player just buys in normally.
+  const { createGame } = await import('../server/gameManager.js');
+  const { game } = createGame({ minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 }, 'H', null);
+  check('a stack under the minimum is not carried',
+    game.setCarryStacks([{ accountId: 7, stack: 12 }]) === 0);
+}
+{
+  // …and one above the cap is clamped rather than let in through the side door.
+  const { createGame } = await import('../server/gameManager.js');
+  const { BUY_IN_CAP } = await import('../shared/constants.js');
+  const { game } = createGame({ minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 }, 'H', null);
+  game.setCarryStacks([{ accountId: 9, stack: BUY_IN_CAP * 10 }]);
+  check('a carried stack cannot exceed the buy-in cap',
+    game.carryStacks.get(9) === BUY_IN_CAP);
+}
+
 rmSync(dir, { recursive: true, force: true });
 
 console.log(`stats: ${passes} passed, ${failures} failed`);

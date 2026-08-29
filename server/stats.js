@@ -10,6 +10,7 @@
 //    have been played.
 
 import { run, get, all, now } from './db.js';
+import { BUY_IN_CAP } from '../shared/constants.js';
 import { settleUp, payeeLabeller } from '../shared/settle.js';
 import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '../shared/xlsx.js';
 
@@ -244,6 +245,49 @@ function ensureStatsRow(accountId) {
     accountId,
     now()
   );
+}
+
+// What people finished the host's last closed table with, so a new table can
+// pick up where that one left off.
+//
+// Accounts only, by decision and by necessity: player_id is generated per game
+// and never matches across nights, so a guest could only be matched by the
+// name they happened to type — and handing somebody else's stack to the wrong
+// person is not a mistake worth risking to save them a buy-in. Guests buy in
+// normally, and the UI says so before anyone sits down.
+export function lastTableStacks(hostAccountId) {
+  if (!hostAccountId) return null;
+  const session = get(
+    `SELECT id, game_id, variant, small_blind, big_blind, ended_at
+       FROM table_sessions
+      WHERE host_account_id = ? AND ended_at IS NOT NULL
+      ORDER BY ended_at DESC, id DESC
+      LIMIT 1`,
+    hostAccountId
+  );
+  if (!session) return null;
+  const players = all(
+    `SELECT account_id, nickname, real_name, final_stack
+       FROM session_results
+      WHERE table_session_id = ? AND account_id IS NOT NULL AND final_stack > 0
+      ORDER BY final_stack DESC`,
+    session.id
+  ).map((r) => ({
+    accountId: r.account_id,
+    nickname: r.nickname,
+    realName: r.real_name,
+    // Clamped like every other way money enters a table. A stack that grew
+    // past the cap by winning pots does not get to re-enter above it.
+    stack: Math.min(r.final_stack, BUY_IN_CAP),
+  }));
+  return {
+    tableSessionId: session.id,
+    gameId: session.game_id,
+    endedAt: session.ended_at,
+    variant: session.variant,
+    blinds: `${session.small_blind}/${session.big_blind}`,
+    players,
+  };
 }
 
 export function accountSummary(accountId) {

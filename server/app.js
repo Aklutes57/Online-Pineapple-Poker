@@ -14,7 +14,9 @@ import {
   createAccount, login, logout, accountForRequest, tokenFromRequest,
   updateDisplayName, updatePrefs, setPayments, setAvatar, purgeExpiredSessions,
 } from './accounts.js';
-import { accountSummary, ledgerCsvForGame, ledgerXlsxForGame } from './stats.js';
+import {
+  accountSummary, ledgerCsvForGame, ledgerXlsxForGame, lastTableStacks,
+} from './stats.js';
 import {
   storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
   saveSoundClip, listSoundClips, deleteSoundClip, defaultTheme, LIMITS as UPLOAD_LIMITS,
@@ -579,6 +581,18 @@ export function buildServer() {
     );
   });
 
+  // The stacks the host's last table finished with, so the create form can
+  // offer to pick up where it left off. Signed-in only, because that is the
+  // only identity that survives between tables.
+  app.get('/api/me/last-table', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json({ lastTable: lastTableStacks(account.id) });
+  });
+
   app.get('/api/me/summary', (req, res) => {
     const account = accountForRequest(req);
     if (!account) {
@@ -653,6 +667,15 @@ export function buildServer() {
     if (!created) {
       res.status(503).json({ error: 'server is full — try again later' });
       return;
+    }
+    // Continue from the host's last table. Read here rather than trusted from
+    // the client: the browser says whether to carry over, never how much.
+    if (account && (req.body || {}).carryStacks === true) {
+      const last = lastTableStacks(account.id);
+      const n = last ? created.game.setCarryStacks(last.players) : 0;
+      if (n > 0) {
+        created.game.addLog(`Carrying stacks over from the last table for ${n} player${n === 1 ? '' : 's'}`);
+      }
     }
     // Fire the host's saved invite list. Deliberately not awaited: a slow
     // mail server must never delay handing back the table link.

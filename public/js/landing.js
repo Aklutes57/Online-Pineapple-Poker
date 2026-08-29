@@ -52,8 +52,36 @@ renderRecentTables();
 const modal = document.getElementById('create-modal');
 const toast = document.getElementById('toast');
 
+// Offer to pick up where the host's last table left off. Only shown when there
+// IS one, and it says plainly who it covers — in a guest-heavy home game most
+// of the table will not carry over, and finding that out at the seat would
+// look like a bug rather than a rule.
+async function offerCarryOver() {
+  const row = document.getElementById('c-carry-row');
+  const note = document.getElementById('c-carry-note');
+  const label = document.getElementById('c-carry-label');
+  if (!row || !currentAccount()) return;
+  let last = null;
+  try {
+    const res = await fetch('/api/me/last-table', { headers: authHeaders() });
+    if (res.ok) ({ lastTable: last } = await res.json());
+  } catch {
+    last = null; // offline, or not signed in any more — just don't offer it
+  }
+  if (!last || !last.players.length) return;
+  const when = last.endedAt ? new Date(last.endedAt).toLocaleDateString() : 'last time';
+  const n = last.players.length;
+  label.textContent = `Continue from your table on ${when}`;
+  note.textContent =
+    `${n} signed-in player${n === 1 ? '' : 's'} would sit down with the stack they `
+    + 'finished with. Everyone else — including guests — buys in normally, because a '
+    + 'guest has no account to match them by between tables.';
+  row.classList.remove('hidden');
+}
+
 document.getElementById('start-btn').addEventListener('click', () => {
   modal.classList.remove('hidden');
+  offerCarryOver();
   const nickInput = document.getElementById('c-nickname');
   const account = currentAccount();
   if (account && !nickInput.value) nickInput.value = account.displayName;
@@ -186,7 +214,11 @@ async function createGame() {
     const res = await fetch('/api/games', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ nickname, settings }),
+      body: JSON.stringify({
+        nickname,
+        settings,
+        carryStacks: document.getElementById('c-carry')?.checked === true,
+      }),
     });
     if (!res.ok) throw new Error('create failed');
     const { gameId, token } = await res.json();
