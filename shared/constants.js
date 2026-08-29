@@ -288,6 +288,18 @@ export function blindsForLevel(startingBigBlind, level) {
 // past that, conservation checks would rot from float rounding.
 export const MAX_CHIPS = 100_000_000_000_000;
 
+// How much money may enter the table in one go — a house rule, unlike
+// MAX_CHIPS above, which is only there to keep arithmetic exact.
+//
+// It exists because nothing bounds the ledger's running totals: creditLedger
+// just adds to buyIns, hand after hand. With re-buys allowed all the way to
+// MAX_CHIPS, ninety of them push a player's total past
+// Number.MAX_SAFE_INTEGER, and past that point adding 1 to a number does
+// nothing — the books-balance check would then print "✓ Books balance" over
+// books that do not. At a hundred million the same overflow needs ninety
+// MILLION re-buys, which is the headroom this number is chosen for.
+export const BUY_IN_CAP = 100_000_000;
+
 export const SETTINGS_LIMITS = {
   nickname: { min: 1, max: 20 },
   // Optional, and longer than a nickname because it is a person's actual name.

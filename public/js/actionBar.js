@@ -1,7 +1,7 @@
 // Bottom action bar: seat lifecycle + betting controls. Renders purely from
 // `you.availableActions` — the server computes all legality and bounds.
 
-import { EVENTS, GAME_STATUS, PHASES } from '/shared/constants.js';
+import { EVENTS, GAME_STATUS, PHASES, BUY_IN_CAP } from '/shared/constants.js';
 import { drawPickList, resetDrawPicks } from '/js/render.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 
@@ -115,12 +115,13 @@ export function openJoinModal(client, seatIndex = null) {
   })();
   document.getElementById('j-nickname').value =
     saved.nickname || client.you?.nickname?.replace(/^Guest-\d+$/, '') || '';
-  // A floor and no ceiling. The box suggests the table's usual stack and stops
-  // you going under the minimum, but sitting down deep is between you and the
-  // host — so there is deliberately no `max` here for the browser to enforce.
+  // The box suggests the table's usual stack. The floor is the table's; the
+  // ceiling is the house one, well above any real buy-in — it is there so the
+  // ledger's totals stay in exact-integer range, not to tell anyone how deep
+  // to sit.
   document.getElementById('j-buyin').value = s.defaultBuyIn;
   document.getElementById('j-buyin').min = s.minBuyIn;
-  document.getElementById('j-buyin').removeAttribute('max');
+  document.getElementById('j-buyin').max = BUY_IN_CAP;
   document.getElementById('j-buyin-range').textContent = `(${s.minBuyIn} or more)`;
   document.getElementById('join-modal').classList.remove('hidden');
   document.getElementById('j-nickname').focus();
@@ -648,7 +649,9 @@ function handleAct(client, act, av, arg = null) {
       break;
     case 'rebuy-other': {
       const { minBuyIn } = client.state.settings;
-      const raw = prompt(`Re-buy how many chips? (at least ${minBuyIn} — no cap)`);
+      const raw = prompt(
+        `Re-buy how many chips? (at least ${minBuyIn}, up to ${BUY_IN_CAP.toLocaleString()})`
+      );
       const amount = parseInt(raw, 10);
       if (Number.isInteger(amount)) client.send(EVENTS.REBUY, { amount });
       break;

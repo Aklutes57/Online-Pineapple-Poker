@@ -67,7 +67,9 @@ Data lives in a SQLite file at `data/pineapple.db` (override with
   callout (glory only, no chips)
 - Once a hand is over anyone can show their cards: fold-winners flashing
   the bluff, folders showing what they let go
-- No caps on blinds or buy-ins — table stakes are entirely the host's call
+- No caps on blinds, and table stakes are the host's call. Buy-ins and
+  re-buys have one ceiling, far above any real game, so the ledger's running
+  totals stay in exact-integer range
 - A waitlist that auto-seats people between hands when the table is full
 - Cooler and bad-beat callouts, judged by real all-in equity
 - Hand replayer with shareable links at `/hands/:id`

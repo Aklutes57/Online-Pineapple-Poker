@@ -13,7 +13,7 @@ const { io: ioc } = await import('socket.io-client');
 const { Game } = await import('../server/game.js');
 const { createGame } = await import('../server/gameManager.js');
 const { buildServer } = await import('../server/app.js');
-const { EVENTS, TIMINGS, rotatableVariants } = await import('../shared/constants.js');
+const { EVENTS, TIMINGS, rotatableVariants, BUY_IN_CAP } = await import('../shared/constants.js');
 
 let failures = 0;
 let passes = 0;
@@ -438,6 +438,10 @@ function check(name, cond) {
     game.requestSeat(shallow, 100.5, 2).ok === false);
   check('an absurd buy-in past the integer bound is refused',
     game.requestSeat(shallow, Number.MAX_SAFE_INTEGER, 2).ok === false);
+  check('a buy-in over the cap is refused',
+    game.requestSeat(shallow, BUY_IN_CAP + 1, 2).ok === false);
+  check('a buy-in at exactly the cap is allowed',
+    game.requestSeat(shallow, BUY_IN_CAP, 2).ok === true);
 }
 {
   // Re-buys used to stop at a hundred million, while the comment above the
@@ -448,9 +452,11 @@ function check(name, cond) {
   );
   host.connected = true;
   game.requestSeat(host, 200, 0);
-  check('a re-buy past the old hundred-million ceiling is allowed',
-    game.rebuy(host, 500_000_000).ok === true);
-  check('the chips landed', host.stack === 200 + 500_000_000);
+  check('a re-buy over the cap is refused',
+    game.rebuy(host, BUY_IN_CAP + 1).ok === false);
+  check('a re-buy at exactly the cap is allowed',
+    game.rebuy(host, BUY_IN_CAP).ok === true);
+  check('the chips landed', host.stack === 200 + BUY_IN_CAP);
   check('a re-buy under the minimum is still refused',
     game.rebuy(host, 10).ok === false);
 }
@@ -474,6 +480,8 @@ function check(name, cond) {
 
   const deep = game.addPlayer('Deep', null);
   deep.connected = true;
+  check('the queue refuses what the seat would refuse',
+    game.requestSeat(deep, BUY_IN_CAP + 1, null).ok === false);
   const queued = game.requestSeat(deep, 250_000, null);
   check('a deep buy-in joins the queue rather than being turned away',
     queued.ok === true && deep.status === 'waitlisted');
@@ -614,6 +622,45 @@ function tableOfThree(settings = {}) {
   );
   check('unknown, hidden and 747 entries are stripped',
     game.settings.rotateList.join(',') === 'plo');
+}
+
+// ---- the ledger stays in exact-integer range ----
+{
+  // The reason the cap exists. creditLedger just adds to buyIns, hand after
+  // hand, with nothing bounding the running total — so the ceiling on what can
+  // go in is the only thing keeping that total countable.
+  const { MAX_CHIPS } = await import('../shared/constants.js');
+  // Stated as the threshold itself rather than a hand-computed multiple,
+  // because the multiple is easy to get off by one: ninety re-buys at the old
+  // ceiling still fit, and the ninety-FIRST is the one that stops counting.
+  const breaksAfter = (cap) => Math.floor(Number.MAX_SAFE_INTEGER / cap);
+  check('the old ceiling stopped counting after 90 re-buys',
+    breaksAfter(MAX_CHIPS) === 90
+    && (breaksAfter(MAX_CHIPS) + 1) * MAX_CHIPS > Number.MAX_SAFE_INTEGER);
+  check('the new one takes over ninety million',
+    breaksAfter(BUY_IN_CAP) > 90_000_000);
+
+  const { game, host } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Host', null
+  );
+  host.connected = true;
+  game.requestSeat(host, BUY_IN_CAP, 0);
+  for (let i = 0; i < 100; i++) game.rebuy(host, BUY_IN_CAP);
+
+  // The same hole through the host menu: a top-up credits the ledger exactly
+  // as a re-buy does, so it has to take the same ceiling.
+  check('a host top-up over the cap is refused',
+    game.adjustStack(host.id, BUY_IN_CAP + 1).ok === false);
+
+  const row = game.ledger.get(host.id);
+  check('a hundred re-buys at the cap still count exactly',
+    Number.isSafeInteger(row.buyIns) && row.buyIns === 101 * BUY_IN_CAP);
+  check('and the stack agrees with the ledger',
+    Number.isSafeInteger(host.stack) && host.stack === row.buyIns);
+  // The books check the ledger panel prints: stacks + cash-outs - buy-ins.
+  check('the books balance exactly, with no rounding',
+    host.stack + row.cashOuts - row.buyIns === 0);
 }
 
 // ---- a post is visible to the whole table ----
