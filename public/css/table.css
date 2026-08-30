@@ -752,28 +752,35 @@ body.disconnected::after {
 
    This is what a ten-handed Pineapple table needed all along; it was never
    caught because the layout test only ever dealt hold'em. */
+/* How hard the fan tucks, 0 to 1. Zero by default: on a laptop there is room
+   to lay a hand out flat and stacking the cards there just makes them harder
+   to read for no reason. It goes to 1 only where space is genuinely tight —
+   the upright ring at any size, and any small screen. */
+.cards-fan { --fan-tuck: 0; }
+#table.upright .cards-fan { --fan-tuck: 1; }
+
 .cards-fan[data-count="3"],
 .cards-fan[data-count="4"],
 .cards-fan[data-count="5"],
 .cards-fan[data-count="6"],
 .cards-fan[data-count="7"] {
-  gap: 0;
+  gap: calc(3px * (1 - var(--fan-tuck)));
 }
 
-.cards-fan[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.14); }
-.cards-fan[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.24); }
-.cards-fan[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.32); }
-.cards-fan[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.40); }
-.cards-fan[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.46); }
+.cards-fan[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.14 * var(--fan-tuck)); }
+.cards-fan[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.24 * var(--fan-tuck)); }
+.cards-fan[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.32 * var(--fan-tuck)); }
+.cards-fan[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.40 * var(--fan-tuck)); }
+.cards-fan[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.46 * var(--fan-tuck)); }
 
 /* Your own hand is drawn larger, so it has to tuck further to fit the same
    space. Picking a card up to throw it lifts it clear of its neighbours,
    which is what keeps the overlap safe to click through. */
-.cards-fan.mine[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.18); }
-.cards-fan.mine[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.30); }
-.cards-fan.mine[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.38); }
-.cards-fan.mine[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.46); }
-.cards-fan.mine[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.54); }
+.cards-fan.mine[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.18 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.30 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.38 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.46 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.54 * var(--fan-tuck)); }
 
 .cards-fan .card.picked,
 .cards-fan .card.discardable:hover {
@@ -2467,6 +2474,12 @@ td.dim { color: var(--text-dim); }
        spare — if the content ever outgrows this, it is drawn over the felt. */
     --bar-h: 58px;
   }
+
+  /* Tight by definition at this width, laid down or upright — and declared
+     here, after the default above, because an equal-specificity rule
+     earlier in the file loses the cascade no matter what media query it
+     sits in. */
+  .cards-fan { --fan-tuck: 1; }
 
   /* A phone has no width to spare for the ± steppers: the slider and the
      typed number do the same job, and dropping them keeps the tray to two

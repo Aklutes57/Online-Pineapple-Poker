@@ -248,6 +248,15 @@ for (const [name, w, h, wantUpright] of views) {
     // nameplate is as broken as a fan that covers the board. The board box
     // must intersect no nameplate at all, and no seat's plate or webcam tile
     // may sit on another seat's plate.
+    // Widest overlap between two neighbouring cards in any one hand.
+    let cardTuck = 0;
+    for (const fan of document.querySelectorAll('#seats-layer .cards-fan')) {
+      const cards = [...fan.querySelectorAll('.card')].map((c) => c.getBoundingClientRect());
+      for (let i = 1; i < cards.length; i++) {
+        cardTuck = Math.max(cardTuck, Math.round(cards[i - 1].right - cards[i].left));
+      }
+    }
+
     const boardBox = boardRow.getBoundingClientRect();
     const plates = [...document.querySelectorAll('#seats-layer .nameplate')]
       .map((n) => n.getBoundingClientRect()).filter((b) => b.width > 0);
@@ -287,20 +296,30 @@ for (const [name, w, h, wantUpright] of views) {
       boardCovered,
       boardHitsPlate,
       podClash,
+      // How far adjacent cards in a hand overlap. Tucking is right where the
+      // space is tight and wrong where it is not — a laptop has room to lay a
+      // hand out flat, and stacking it there only makes it harder to read.
+      cardTuck,
     };
   }, [landscapeCoords, portraitCoords]);
 
   const orientOk = m.upright === wantUpright;
   const tallerThanWide = m.th > m.tw;
   const shapeOk = wantUpright ? tallerThanWide : !tallerThanWide;
+  // A roomy landscape screen must lay hands out flat. Tucking is for the
+  // upright ring and for small screens, where it buys space that is genuinely
+  // scarce; on a laptop it just stacks cards nobody needed stacked. Regressed
+  // once already, which is why it is measured rather than assumed.
+  const roomy = !wantUpright && w > 720;
+  const tuckOk = roomy ? m.cardTuck <= 0 : true;
   const fits = m.overflowX <= 2 && m.seatsOut === 0 && m.collisions === 0
     && m.myCardsBlocked === 0 && m.boardCovered === 0
-    && m.boardHitsPlate === 0 && m.podClash === 0;
+    && m.boardHitsPlate === 0 && m.podClash === 0 && tuckOk;
   // How much of the screen the felt covers — the point of the whole change.
   const cover = ((m.tw * m.th) / (m.iw * m.ih) * 100).toFixed(0);
   const ok = orientOk && shapeOk && fits;
   if (!ok) bad++;
-  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked} boardCovered=${m.boardCovered} boardHitsPlate=${m.boardHitsPlate} podClash=${m.podClash}`);
+  console.log(`  ${ok ? '✓' : '✗'} ${name}: upright=${m.upright} felt=${m.tw}x${m.th} cover=${cover}% overflowX=${m.overflowX} seatsClipped=${m.seatsOut}/${m.seatCount} worstOverhang=${m.worst}px betOverlaps=${m.collisions}/${m.chips} myCardsBlocked=${m.myCardsBlocked} boardCovered=${m.boardCovered} boardHitsPlate=${m.boardHitsPlate} podClash=${m.podClash} cardTuck=${m.cardTuck}px`);
   await page.screenshot({ path: `${SHOT}/orient-${name}.png` });
   await ctx.close();
 }
