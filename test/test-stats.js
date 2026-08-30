@@ -275,6 +275,105 @@ closeDb();
     game.carryStacks.get(9) === BUY_IN_CAP);
 }
 
+// ---- the running total across nights ----
+{
+  const { createGame } = await import('../server/gameManager.js');
+
+  const a = accounts.createAccount({ email: 'run-a@example.com', password: 'password123', displayName: 'Ann' });
+  const b = accounts.createAccount({ email: 'run-b@example.com', password: 'password123', displayName: 'Bo' });
+  const hostId = a.account.id;
+
+  // Two nights at Ann's tables. Night one: Ann +300, Bo -300, a guest square.
+  function night(annStack, boStack, guestStack) {
+    const { game, host } = createGame(
+      { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+      'Ann', hostId
+    );
+    game.hostAccountId = hostId;
+    host.accountId = hostId;
+    host.connected = true;
+    game.requestSeat(host, 200, 0);
+    const bo = game.addPlayer('Bo', b.account.id);
+    bo.connected = true;
+    game.requestSeat(bo, 200, 1);
+    if (bo.status === 'requesting') game.approveSeat(bo.id, true);
+    const guest = game.addPlayer('Gus', null);
+    guest.connected = true;
+    game.requestSeat(guest, 200, 2);
+    if (guest.status === 'requesting') game.approveSeat(guest.id, true);
+    host.stack = annStack; bo.stack = boStack; guest.stack = guestStack;
+    game.handNo = 5;
+    stats.syncSessionResults(game);
+    game.close('done');
+    return game;
+  }
+
+  // Chip-conserving, like a real night: three players in for 200 each.
+  night(500, 100, 0);     // Ann +300, Bo -100, Gus -200
+  night(150, 250, 200);   // Ann  -50, Bo  +50, Gus    0
+
+  const run = stats.runningTotals(hostId);
+  check('the running total covers both nights', run.nights === 2);
+  check('only signed-in players appear', run.players.length === 2);
+
+  const ann = run.players.find((p) => p.accountId === hostId);
+  const bo = run.players.find((p) => p.accountId === b.account.id);
+  check('a player\'s running total is the sum of their nights',
+    ann.net === 250 && bo.net === -50);
+  check('and it counts the nights they played', ann.sessions === 2 && bo.sessions === 2);
+  check('the guest is absent — nothing follows them between nights',
+    !run.players.some((p) => p.nickname === 'Gus'));
+
+  check('the running settle-up squares the whole lot, not one night',
+    run.settle.length === 1 && run.settle[0].amount === 50
+    && run.settle[0].to === 'Ann' && run.settle[0].from === 'Bo');
+
+  // Worth pinning because it is a real limitation, not an accident: a guest's
+  // 200 is nowhere in this. Signed-in totals do NOT sum to zero once a guest
+  // has won or lost anything, because nothing follows a guest between nights.
+  // Inside a single night's ledger they still settle normally.
+  check('a guest\'s money is missing from the running total, so it does not balance',
+    run.players.reduce((t, p) => t + p.net, 0) === 200);
+}
+{
+  // Carrying a stack over must not double-count. A night you carried 640 into
+  // and left with 500 is -140 for that night; the +440 that produced the 640
+  // stays on the previous night's row, and the sum is the true position.
+  const { createGame } = await import('../server/gameManager.js');
+  const c = accounts.createAccount({ email: 'run-c@example.com', password: 'password123', displayName: 'Cass' });
+  const hostId = c.account.id;
+
+  const first = createGame({ minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 }, 'Cass', hostId);
+  first.game.hostAccountId = hostId;
+  first.host.accountId = hostId;
+  first.host.connected = true;
+  first.game.requestSeat(first.host, 200, 0);
+  first.host.stack = 640;                       // +440 on the night
+  first.game.handNo = 3;
+  stats.syncSessionResults(first.game);
+  first.game.close('done');
+
+  const carry = stats.lastTableStacks(hostId);
+  const second = createGame({ minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 }, 'Cass', hostId);
+  second.game.hostAccountId = hostId;
+  second.game.setCarryStacks(carry.players);
+  second.host.accountId = hostId;
+  second.host.connected = true;
+  second.game.requestSeat(second.host, 200, 0); // sits with the carried 640
+  check('the carried stack is what they sat down with', second.host.stack === 640);
+  second.host.stack = 500;                      // -140 on the night
+  second.game.handNo = 3;
+  stats.syncSessionResults(second.game);
+  second.game.close('done');
+
+  const run = stats.runningTotals(hostId);
+  const cass = run.players.find((p) => p.accountId === hostId);
+  check('carrying a stack over does not double-count the running total',
+    cass.net === 300);
+  check('which is exactly what they are up from their original buy-in',
+    500 - 200 === cass.net);
+}
+
 rmSync(dir, { recursive: true, force: true });
 
 console.log(`stats: ${passes} passed, ${failures} failed`);

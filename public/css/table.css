@@ -3019,3 +3019,20 @@ video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
   font-variant-numeric: tabular-nums;
 }
 .tourney-clock[data-rebuys='closed'] { border-color: var(--red); }
+
+/* The running tab, folded away under the session ledger. Closed by default:
+   tonight is what the ledger is for, and the tab across nights is the thing
+   you go looking for rather than the thing you need in front of you. */
+.running-block {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.running-block > summary {
+  cursor: pointer;
+}
+
+.running-block .sl-grid {
+  grid-template-columns: 1fr auto auto;
+}

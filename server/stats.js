@@ -290,6 +290,61 @@ export function lastTableStacks(hostAccountId) {
   };
 }
 
+// The running tab across every night this host has run: each player's net
+// summed over all their finished sessions at this host's tables, and the
+// settle-up that squares the whole lot rather than one evening of it.
+//
+// Accounts only, for the same reason carrying a stack over is: player_id is
+// generated per game, so a guest cannot be followed from one night to the
+// next. Guests still settle inside each session's own ledger; they just do not
+// appear in the running total, and the UI says so.
+//
+// Carrying stacks over does not distort this. A session's net is measured
+// against whatever that session was bought in for, so a night you carried 640
+// into and left with 500 is -140, and the +440 that produced the 640 is still
+// on the previous night's row. The sum is the true position either way.
+export function runningTotals(hostAccountId) {
+  if (!hostAccountId) return null;
+  // The bare nickname/real_name columns come from the row MAX(ended_at)
+  // selected — SQLite's documented behaviour for a min/max aggregate — so a
+  // player is named by whatever they were called most recently.
+  const rows = all(
+    `SELECT r.account_id, r.nickname, r.real_name,
+            SUM(r.net) AS net, COUNT(*) AS sessions, MAX(t.ended_at) AS last_played
+       FROM session_results r
+       JOIN table_sessions t ON t.id = r.table_session_id
+      WHERE t.host_account_id = ?
+        AND t.ended_at IS NOT NULL
+        AND r.account_id IS NOT NULL
+      GROUP BY r.account_id
+      ORDER BY net DESC`,
+    hostAccountId
+  ).map((r) => ({
+    // settleUp keys payments on playerId, so the account id travels as the id
+    // — names are free text and two people can share one.
+    playerId: `acct:${r.account_id}`,
+    accountId: r.account_id,
+    nickname: r.nickname,
+    realName: r.real_name,
+    net: r.net,
+    sessions: r.sessions,
+    lastPlayed: r.last_played,
+  }));
+
+  const nights = get(
+    `SELECT COUNT(*) AS n FROM table_sessions
+      WHERE host_account_id = ? AND ended_at IS NOT NULL`,
+    hostAccountId
+  );
+
+  return {
+    nights: nights?.n ?? 0,
+    players: rows,
+    // Same routine the per-session ledger uses, run over the totals instead.
+    settle: settleUp(rows),
+  };
+}
+
 export function accountSummary(accountId) {
   ensureStatsRow(accountId);
   const stats = get('SELECT * FROM player_stats WHERE account_id = ?', accountId) || {};

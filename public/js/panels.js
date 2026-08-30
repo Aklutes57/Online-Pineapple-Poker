@@ -331,6 +331,76 @@ export function closeFair() {
 
 export function openLedger() {
   document.getElementById('ledger-modal')?.classList.remove('hidden');
+  // Fetched on open rather than pushed with the table state: it spans other
+  // nights, changes only when one ends, and nobody needs it re-sent on every
+  // hand.
+  renderRunningTotal();
+}
+
+// The tab across every night this host has run — who is up and who is down
+// overall, and the settle-up for the lot rather than for one evening.
+async function renderRunningTotal() {
+  const host = document.getElementById('running-total');
+  if (!host || !clientRef) return;
+  host.innerHTML = '<p class="empty-note">Loading the running total…</p>';
+  let data = null;
+  let reason = null;
+  // The per-game player token lives in localStorage, not on the client object —
+  // same place game.js reads it from for the upload routes.
+  let token = '';
+  try {
+    token = JSON.parse(localStorage.getItem(`pp:${clientRef.gameId}`) || '{}').token || '';
+  } catch {
+    token = '';
+  }
+  try {
+    const res = await fetch(`/api/games/${encodeURIComponent(clientRef.gameId)}/running`, {
+      headers: { 'x-player-token': token },
+    });
+    if (res.ok) ({ running: data, reason } = await res.json());
+    else reason = 'Only players at this table can see the running total.';
+  } catch {
+    reason = 'Could not load the running total.';
+  }
+
+  if (!data || !data.players.length) {
+    host.innerHTML = `<p class="empty-note">${escapeHtml(
+      reason || 'Nothing yet — the running total starts once a night has finished.'
+    )}</p>`;
+    return;
+  }
+
+  const label = payeeLabeller(data.players);
+  const nights = `${data.nights} night${data.nights === 1 ? '' : 's'}`;
+  host.innerHTML = `
+    <p class="empty-note">Across ${nights} at this host's tables. Signed-in players
+      only — a guest has no account to follow from one night to the next, so they
+      settle inside each night's ledger instead. That also means these numbers do
+      not add up to zero if a guest has won or lost: their share simply is not
+      here to cancel against.</p>
+    <div class="sledger">
+      <div class="sl-grid sl-head"><span>Player</span><span>Nights</span><span>Running ↓</span></div>
+      ${data.players.map((p) => `
+        <div class="sl-row">
+          <div class="sl-grid">
+            <span class="sl-player"><span class="sl-who">
+              <span class="sl-name">${escapeHtml(p.realName || p.nickname)}</span>
+            </span></span>
+            <span class="sl-num">${p.sessions}</span>
+            <span class="sl-num sl-net ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${p.net}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="settle-block">
+      <h4>Settle up overall</h4>
+      ${data.settle.length
+        ? `<ul class="settle-list">${data.settle.map((p) => `<li>
+            <div class="settle-line"><strong>${escapeHtml(label(p.fromId, p.from))}</strong> pays
+              <strong>${escapeHtml(label(p.toId, p.to))}</strong>
+              <span class="settle-amt">${p.amount}</span></div>
+          </li>`).join('')}</ul>`
+        : '<p class="empty-note">Everyone is square across every night.</p>'}
+    </div>`;
 }
 
 export function closeLedger() {

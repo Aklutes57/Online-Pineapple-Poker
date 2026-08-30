@@ -15,7 +15,7 @@ import {
   updateDisplayName, updatePrefs, setPayments, setAvatar, purgeExpiredSessions,
 } from './accounts.js';
 import {
-  accountSummary, ledgerCsvForGame, ledgerXlsxForGame, lastTableStacks,
+  accountSummary, ledgerCsvForGame, ledgerXlsxForGame, lastTableStacks, runningTotals,
 } from './stats.js';
 import {
   storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
@@ -643,6 +643,23 @@ export function buildServer() {
       'Content-Disposition': `attachment; filename="${book.filename}"`,
     });
     res.send(Buffer.from(book.body));
+  });
+
+  // The running tab across every night this host has run. Gated on actually
+  // being at the table, unlike the single-session ledger: that one is the
+  // record of an evening you were present for, this one spans nights a
+  // stranger holding a link was never at.
+  app.get('/api/games/:id/running', (req, res) => {
+    const { game, player } = playerFromToken(req);
+    if (!game || !player) {
+      res.status(403).json({ error: 'Join the table first' });
+      return;
+    }
+    if (!game.hostAccountId) {
+      res.json({ running: null, reason: 'This table has no signed-in host, so there is nothing to carry between nights.' });
+      return;
+    }
+    res.json({ running: runningTotals(game.hostAccountId) });
   });
 
   app.post('/api/games', createGameLimiter, (req, res) => {
