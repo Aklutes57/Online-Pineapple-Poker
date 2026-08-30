@@ -286,12 +286,13 @@ function renderBoard(view) {
     for (const c of cards) el.appendChild(makeCardEl(c));
     return el;
   };
-  if (view.board2) {
-    board.appendChild(row(view.board));
-    board.appendChild(row(view.board2));
-  } else {
-    for (const c of view.board) board.appendChild(makeCardEl(c));
-  }
+  // Always a row, even when there is only one. #board stacks its children
+  // vertically — that is how it puts a second board under the first — so
+  // appending cards straight into it turned every ordinary replay's board into
+  // a column running down the middle of the felt. Only run-it-twice replays
+  // looked right, because those were the ones that wrapped their cards.
+  board.appendChild(row(view.board));
+  if (view.board2) board.appendChild(row(view.board2));
   document.getElementById('pot-line').textContent = `Pot: ${view.pot}`;
 
   const message = document.getElementById('center-message');

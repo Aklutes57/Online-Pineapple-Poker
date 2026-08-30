@@ -14,7 +14,8 @@
     "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs",
     "bar": "node --disable-warning=ExperimentalWarning test/bar.mjs",
     "chips": "node --disable-warning=ExperimentalWarning test/chips.mjs",
-    "sound": "node --disable-warning=ExperimentalWarning test/sound.mjs"
+    "sound": "node --disable-warning=ExperimentalWarning test/sound.mjs",
+    "replay": "node --disable-warning=ExperimentalWarning test/replay-ui.mjs"
   },
   "license": "MIT",
   "dependencies": {
