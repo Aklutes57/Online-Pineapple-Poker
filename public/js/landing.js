@@ -1,4 +1,5 @@
 import { loadAccount, currentAccount, signout, authHeaders } from '/js/auth.js';
+import { tableCodeFrom } from '/shared/invite.js';
 import { openAuthModal } from '/js/authModal.js';
 import { wireInstallButton } from '/js/pwa.js';
 import { VARIANTS } from '/shared/constants.js';
@@ -48,6 +49,20 @@ function renderRecentTables() {
   section.classList.remove('hidden');
 }
 renderRecentTables();
+
+document.getElementById('join-link-form')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const note = document.getElementById('join-link-note');
+  const code = tableCodeFrom(document.getElementById('join-link').value);
+  if (!code) {
+    note.textContent = "That doesn't look like a table link. Paste the whole link, or just the code from the end of it.";
+    return;
+  }
+  note.textContent = '';
+  // Same-origin by construction: only the code is taken from what was pasted,
+  // never the host — a link to somebody else's server cannot send you there.
+  window.location.href = `/games/${encodeURIComponent(code)}`;
+});
 
 const modal = document.getElementById('create-modal');
 const toast = document.getElementById('toast');

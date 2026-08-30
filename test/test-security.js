@@ -194,6 +194,40 @@ check('a socket with no Origin (native client) is allowed', (await tryConnect(un
   }
 }
 
+// ---- a pasted invite can only ever point at THIS server ----
+{
+  // Joining by pasted link exists because an installed app on iOS never
+  // captures one. That means arbitrary text becomes a navigation, so the rule
+  // is structural: only the code is taken out of what was pasted, never the
+  // host — a link to somebody else's server yields its code and nothing more.
+  const { tableCodeFrom } = await import('../shared/invite.js');
+
+  for (const [input, want] of [
+    ['https://pineapple-poker-now.fly.dev/games/abc123XY90', 'abc123XY90'],
+    ['pineapple-poker-now.fly.dev/games/abc123XY90', 'abc123XY90'],
+    ['https://host/games/abc123XY90/', 'abc123XY90'],
+    ['  abc123XY90  ', 'abc123XY90'],
+  ]) {
+    check(`invite parses ${String(input).trim().slice(0, 44)}`, tableCodeFrom(input) === want);
+  }
+
+  check('a link to another server gives up only its code, never its host',
+    tableCodeFrom('https://evil.test/games/abc123XY90') === 'abc123XY90');
+
+  for (const bad of [
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'https://host/games/',
+    'https://host/games/../../etc/passwd',
+    'https://host/not-a-game/abc123XY90',
+    'abc',            // too short to be a code
+    '../../secret',
+    '', '   ', null, undefined, 42, {},
+  ]) {
+    check(`invite refuses ${String(bad).slice(0, 40)}`, tableCodeFrom(bad) === null);
+  }
+}
+
 console.log(`security: ${passes} passed, ${failures} failed`);
 await new Promise((r) => httpServer.close(r));
 process.exit(failures ? 1 : 0);

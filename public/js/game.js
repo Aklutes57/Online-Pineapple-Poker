@@ -464,6 +464,9 @@ document.addEventListener('keydown', (e) => {
 // The bar's Ledger button opens the ledger pop-up; the menu's panel doors
 // open the side panel already turned to the right tab.
 document.getElementById('ledger-btn')?.addEventListener('click', openLedger);
+// Menu twins of the bar buttons, for the phone layout where the bar is just
+// the caret. Same handlers — two ways in, one behaviour.
+document.getElementById('menu-ledger')?.addEventListener('click', openLedger);
 document.getElementById('open-log')?.addEventListener('click', () => openPanel('log'));
 document.getElementById('open-fair')?.addEventListener('click', openFair);
 

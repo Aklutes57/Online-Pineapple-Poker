@@ -49,7 +49,9 @@ export function initPanels(client) {
   // toggle that landed on whatever tab was last open just reads as broken.)
   // Desktop, where the dock is always in view, it folds/unfolds the dock.
   const panel = document.getElementById('side-panel');
-  document.getElementById('panel-toggle').addEventListener('click', () => {
+  // One behaviour, two ways in: the bar button, and its twin in the settings
+  // sheet for the phone layout where the bar is only the caret.
+  const toggleChat = () => {
     const chatActive = document.querySelector('.tab[data-tab="chat"]')?.classList.contains('active');
     const desktop = window.matchMedia('(min-width: 1000px)').matches;
     const showing = desktop
@@ -61,7 +63,9 @@ export function initPanels(client) {
     } else {
       openPanel('chat');
     }
-  });
+  };
+  document.getElementById('panel-toggle').addEventListener('click', toggleChat);
+  document.getElementById('menu-chat')?.addEventListener('click', toggleChat);
 
   // The dock folds to its tab strip and back; picking any tab unfolds it.
   document.getElementById('dock-toggle')?.addEventListener('click', () => {
@@ -451,15 +455,27 @@ export function onChatMessage(msg) {
     !document.getElementById('tab-chat').classList.contains('hidden') && panelShown;
   if (!chatVisible && msg.from !== clientRef?.you?.nickname) {
     unread++;
-    const badge = document.getElementById('unread-badge');
-    badge.textContent = unread;
-    badge.classList.remove('hidden');
+    showUnread();
   }
+}
+
+// The count goes on the Chat button, on its twin in the settings sheet, and as
+// a dot on the caret itself — because on a phone the caret is the ONLY one of
+// the three on screen, and an unread message you cannot see is the same as no
+// chat at all.
+function showUnread() {
+  for (const id of ['unread-badge', 'menu-unread']) {
+    const badge = document.getElementById(id);
+    if (!badge) continue;
+    badge.textContent = unread;
+    badge.classList.toggle('hidden', unread === 0);
+  }
+  document.getElementById('menu-toggle')?.classList.toggle('has-unread', unread > 0);
 }
 
 function clearUnread() {
   unread = 0;
-  document.getElementById('unread-badge').classList.add('hidden');
+  showUnread();
 }
 
 function renderChat() {

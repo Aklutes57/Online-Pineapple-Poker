@@ -280,14 +280,27 @@ body.disconnected::after {
 
 .top-actions {
   display: flex;
-  flex-wrap: wrap;
+  /* One row that slides, never a stack. Wrapping put the controls on two or
+     three rows and every row it added came straight off the height of the
+     table — the one thing on this screen worth the space. If they do not fit,
+     they scroll sideways instead. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  /* Takes whatever is left between the two matched tracks and centres in it,
-     wrapping to another row rather than crowding them. */
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.top-actions::-webkit-scrollbar { display: none; }
+
+/* Buttons in a scroller must not be squeezed thin to fit — that is the same
+   crowding by another name. They keep their size and the row slides. */
+.top-actions > * {
+  flex: 0 0 auto;
 }
 
 .top-btn {
@@ -2519,6 +2532,34 @@ td.dim { color: var(--text-dim); }
   }
   .top-spacer { display: none; }
   .top-actions { max-width: none; }
+
+  /* Phones: the bar is the caret and nothing else. Every control still exists,
+     one tap away in the settings sheet, and the height they were taking goes
+     to the table — which is what people actually came to look at. */
+  #straddle-btn,
+  #restraddle-btn,
+  #panel-toggle,
+  #ledger-btn,
+  .react-wrap {
+    display: none;
+  }
+
+  /* …so the caret has to carry the one live signal the Chat button was
+     carrying: that somebody has said something. */
+  #menu-toggle.has-unread::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  #menu-toggle {
+    position: relative;
+  }
 
   .top-actions {
     /* Centring inside a nowrap scrolling bar splits the overflow to BOTH

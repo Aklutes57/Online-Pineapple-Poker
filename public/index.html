@@ -71,6 +71,16 @@
           <button class="btn btn-primary btn-xl" id="start-btn">Start a New Game</button>
           <button class="btn btn-ghost btn-install hidden" id="install-btn">Install the app</button>
         </div>
+        <!-- Joining from inside the installed app. An iPhone will not hand a
+             pasted link to a PWA — it opens Safari every time — so the app has
+             to be able to take the link itself. -->
+        <form class="join-link" id="join-link-form">
+          <label class="sr-only" for="join-link">Table link or code</label>
+          <input id="join-link" placeholder="Paste a table link or code" autocomplete="off"
+                 inputmode="text" spellcheck="false">
+          <button class="btn btn-ghost" type="submit">Join</button>
+        </form>
+        <p class="fine" id="join-link-note"></p>
         <p class="fine">Free play-money poker · works on iPhone, Android &amp; laptops</p>
       </div>
       <div class="hero-cards" aria-hidden="true">
