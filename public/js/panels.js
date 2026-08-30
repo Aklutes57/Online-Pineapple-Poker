@@ -385,6 +385,9 @@ async function renderRunningTotal() {
           <div class="sl-grid">
             <span class="sl-player"><span class="sl-who">
               <span class="sl-name">${escapeHtml(p.realName || p.nickname)}</span>
+              ${p.paid || p.received ? `<span class="sl-sub">${
+                p.paid ? `paid off ${p.paid}` : ''}${p.paid && p.received ? ' · ' : ''}${
+                p.received ? `paid back ${p.received}` : ''}</span>` : ''}
             </span></span>
             <span class="sl-num">${p.sessions}</span>
             <span class="sl-num sl-net ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${p.net}</span>
@@ -400,6 +403,11 @@ async function renderRunningTotal() {
               <span class="settle-amt">${p.amount}</span></div>
           </li>`).join('')}</ul>`
         : '<p class="empty-note">Everyone is square across every night.</p>'}
+      <p class="empty-note">${(data.payments || []).length
+        ? `${data.payments.length} payment${data.payments.length === 1 ? ' has' : 's have'} already been
+           marked off and taken out of these figures. `
+        : ''}Mark money off as it changes hands in your profile, under
+        <strong>Running total across nights</strong>.</p>
     </div>`;
 }
 

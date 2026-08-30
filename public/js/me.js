@@ -7,6 +7,7 @@ import { openAuthModal } from '/js/authModal.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { pushSupported, currentPushSubscription, enablePush, disablePush } from '/js/pwa.js';
 import { PAYMENT_SERVICES } from '/shared/payments.js';
+import { payeeLabeller } from '/shared/settle.js';
 
 // ---- notifications on this device ----
 
@@ -203,6 +204,261 @@ function renderSummary({ totals, sessions, stats }) {
       <strong>${stats.bestHandDesc ? escapeHtml(stats.bestHandDesc) : 'Nothing yet — go make one'}</strong>
       <span class="hint">Counts every hand you made, even the ones nobody got to see.</span>
     </div>`;
+}
+
+// ---- the running tab across nights ----
+//
+// A tab belongs to a host, not to a player: somebody who plays at two homes
+// has two of them and they never mix. So this asks whose tab first, then shows
+// that host's totals and lets money be marked off against them.
+
+let ledgerHosts = [];
+let ledgerHostId = null;
+let running = null;
+let myAccountId = null;
+
+async function loadLedgers() {
+  const block = document.getElementById('running-block');
+  const picker = document.getElementById('ledger-picker');
+  if (!block) return;
+  block.innerHTML = '<p class="empty-note">Loading…</p>';
+  try {
+    const res = await fetch('/api/me/ledgers', { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    ledgerHosts = data.ledgers || [];
+    myAccountId = data.accountId;
+  } catch {
+    block.innerHTML = '<p class="empty-note">Could not load your running totals.</p>';
+    return;
+  }
+
+  if (!ledgerHosts.length) {
+    picker?.classList.add('hidden');
+    block.innerHTML = `<p class="empty-note">Nothing yet — a running total starts once a
+      night has finished. It follows signed-in players from one night to the next.</p>`;
+    return;
+  }
+
+  // One tab needs no choosing; two do, and the choice has to say whose.
+  picker?.classList.toggle('hidden', ledgerHosts.length < 2);
+  const select = document.getElementById('ledger-host');
+  if (select) {
+    select.innerHTML = ledgerHosts
+      .map((l) => `<option value="${l.hostId}">${escapeHtml(
+        l.hosted ? 'Your tables' : `${l.hostName}'s tables`
+      )}</option>`)
+      .join('');
+    select.onchange = () => loadRunning(Number(select.value));
+  }
+  loadRunning(ledgerHosts[0].hostId);
+}
+
+async function loadRunning(hostId) {
+  const block = document.getElementById('running-block');
+  if (!block) return;
+  ledgerHostId = hostId;
+  block.innerHTML = '<p class="empty-note">Loading…</p>';
+  try {
+    const res = await fetch(`/api/me/ledgers/${hostId}/running`, { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    ({ running } = await res.json());
+  } catch {
+    block.innerHTML = '<p class="empty-note">Could not load that running total.</p>';
+    return;
+  }
+  renderRunning();
+}
+
+function renderRunning() {
+  const block = document.getElementById('running-block');
+  if (!block || !running) return;
+  const host = ledgerHosts.find((l) => l.hostId === ledgerHostId);
+  const amHost = !!host?.hosted;
+  const label = payeeLabeller(running.players);
+  const name = (id) => label(`acct:${id}`, 'Someone');
+  const signed = (n) => `${n >= 0 ? '+' : ''}${n}`;
+
+  if (!running.players.length) {
+    block.innerHTML = '<p class="empty-note">No finished nights on this tab yet.</p>';
+    return;
+  }
+
+  const nights = `${running.nights} night${running.nights === 1 ? '' : 's'}`;
+  const options = running.players
+    .map((p) => `<option value="${p.accountId}">${escapeHtml(name(p.accountId))}</option>`)
+    .join('');
+
+  block.innerHTML = `
+    <p class="section-note">Across ${nights}${amHost ? '' : ` at ${escapeHtml(host?.hostName || 'their')}'s tables`}.
+      Signed-in players only — nothing follows a guest from one night to the next, so
+      they settle inside each night's own ledger and these totals need not add up to zero.</p>
+    <div class="ledger-scroll"><table class="ledger">
+      <thead><tr><th>Player</th><th>Nights</th><th>Won / lost</th><th>Paid off</th><th>Outstanding</th></tr></thead>
+      <tbody>${running.players.map((p) => `<tr>
+        <td>${escapeHtml(name(p.accountId))}${p.accountId === myAccountId ? ' <span class="fine">(you)</span>' : ''}</td>
+        <td>${p.sessions}</td>
+        <td class="${p.net >= 0 ? 'pos' : 'neg'}">${signed(p.net)}</td>
+        <td>${p.paid || p.received ? escapeHtml(paidCell(p)) : '—'}</td>
+        <td class="${p.outstanding >= 0 ? 'pos' : 'neg'}">${signed(p.outstanding)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+
+    <div class="settle-block">
+      <h4>Still to settle</h4>
+      ${running.settle.length
+        ? `<ul class="settle-list">${running.settle.map((s) => `<li>
+            <span><strong>${escapeHtml(s.from)}</strong> pays
+              <strong>${escapeHtml(s.to)}</strong>
+              <span class="settle-amt">${s.amount}</span></span>
+            ${canRecord(idOf(s.fromId), idOf(s.toId), amHost)
+              ? `<button class="btn btn-ghost pay-mark" data-from="${idOf(s.fromId)}"
+                   data-to="${idOf(s.toId)}" data-amount="${s.amount}">Mark paid</button>`
+              : ''}
+          </li>`).join('')}</ul>`
+        : '<p class="empty-note">Everyone is square across every night.</p>'}
+    </div>
+
+    <div class="pay-record">
+      <h4>Mark a payment off</h4>
+      <div class="pay-row">
+        <div class="field"><label for="sp-from">Who paid</label>
+          <select id="sp-from">${options}</select></div>
+        <div class="field"><label for="sp-to">Who they paid</label>
+          <select id="sp-to">${options}</select></div>
+        <div class="field"><label for="sp-amount">Amount</label>
+          <input id="sp-amount" type="number" min="1" step="1" inputmode="numeric"></div>
+        <div class="field"><label for="sp-note">Note</label>
+          <input id="sp-note" maxlength="120" placeholder="Venmo, cash…"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="sp-save">Mark paid</button>
+      </div>
+      <p class="hint">${amHost
+        ? 'As the host you can mark off any payment on your tab.'
+        : 'You can mark off money you paid or were paid. Anything else is for the host or the other player to record.'}
+        Part payments are fine — mark off what actually changed hands.</p>
+    </div>
+
+    <div class="paid-block">
+      <h4>Already paid</h4>
+      ${running.payments.length
+        ? `<ul class="settle-list">${running.payments.map((p) => `<li>
+            <span><strong>${escapeHtml(name(p.fromAccountId))}</strong> paid
+              <strong>${escapeHtml(name(p.toAccountId))}</strong>
+              <span class="settle-amt">${p.amount}</span>
+              <span class="fine">${escapeHtml(new Date(p.createdAt).toLocaleDateString())}${
+                p.note ? ` · ${escapeHtml(p.note)}` : ''}</span></span>
+            ${canRecord(p.fromAccountId, p.toAccountId, amHost)
+              ? `<button class="btn btn-ghost pay-undo" data-id="${p.id}">Undo</button>`
+              : ''}
+          </li>`).join('')}</ul>`
+        : '<p class="empty-note">Nothing marked off yet.</p>'}
+    </div>`;
+
+  wireRunning(amHost);
+}
+
+// settleUp carries the account id as `acct:<id>`, so it can key on something
+// unique — two people can put the same name on a ledger.
+function idOf(playerId) {
+  return Number(String(playerId || '').replace('acct:', ''));
+}
+
+function paidCell(p) {
+  const parts = [];
+  if (p.paid) parts.push(`paid ${p.paid}`);
+  if (p.received) parts.push(`got ${p.received}`);
+  return parts.join(', ');
+}
+
+// The same rule the server enforces, applied here so nobody is told no only
+// after they have filled the form in.
+function canRecord(from, to, amHost) {
+  return amHost || from === myAccountId || to === myAccountId;
+}
+
+function wireRunning(amHost) {
+  const block = document.getElementById('running-block');
+  const from = document.getElementById('sp-from');
+  const to = document.getElementById('sp-to');
+  const amount = document.getElementById('sp-amount');
+  const note = document.getElementById('sp-note');
+
+  // Default to the payment this player is most likely recording: the one they
+  // owe, or failing that the one owed to them.
+  const mine = running.settle.find((s) => idOf(s.fromId) === myAccountId)
+    || running.settle.find((s) => idOf(s.toId) === myAccountId)
+    || running.settle[0];
+  if (mine && from && to) {
+    from.value = String(idOf(mine.fromId));
+    to.value = String(idOf(mine.toId));
+    amount.value = String(mine.amount);
+  }
+
+  for (const btn of block.querySelectorAll('.pay-mark')) {
+    btn.addEventListener('click', () => {
+      from.value = btn.dataset.from;
+      to.value = btn.dataset.to;
+      amount.value = btn.dataset.amount;
+      amount.focus();
+      amount.select();
+    });
+  }
+
+  for (const btn of block.querySelectorAll('.pay-undo')) {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/me/settle-payments/${btn.dataset.id}`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        running = data.running;
+        renderRunning();
+        showToast('Payment removed', { ok: true });
+      } catch (err) {
+        btn.disabled = false;
+        showToast(err.message || 'Could not remove that payment');
+      }
+    });
+  }
+
+  document.getElementById('sp-save')?.addEventListener('click', async () => {
+    const fromId = Number(from.value);
+    const toId = Number(to.value);
+    const value = Number(amount.value);
+    if (fromId === toId) {
+      showToast('A payment needs two different people');
+      return;
+    }
+    if (!Number.isInteger(value) || value <= 0) {
+      showToast('Enter an amount above zero');
+      return;
+    }
+    if (!canRecord(fromId, toId, amHost)) {
+      showToast('You can only mark off money you paid or were paid');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/me/ledgers/${ledgerHostId}/payments`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          fromAccountId: fromId, toAccountId: toId, amount: value, note: note.value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      running = data.running;
+      renderRunning();
+      showToast('Marked paid', { ok: true });
+    } catch (err) {
+      showToast(err.message || 'Could not mark that paid');
+    }
+  });
 }
 
 // ---- invite list and Discord ----
@@ -514,5 +770,6 @@ loadAccount().then(() => {
     loadSummary();
     loadTheme();
     loadNotify();
+    loadLedgers();
   }
 });

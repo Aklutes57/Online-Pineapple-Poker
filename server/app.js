@@ -16,6 +16,7 @@ import {
 } from './accounts.js';
 import {
   accountSummary, ledgerCsvForGame, ledgerXlsxForGame, lastTableStacks, runningTotals,
+  hostLedgersFor, canSeeLedger, recordSettlePayment, deleteSettlePayment,
 } from './stats.js';
 import {
   storeUpload, getUploadBySha, uploadPath, saveTheme, listThemes, deleteTheme,
@@ -591,6 +592,69 @@ export function buildServer() {
       return;
     }
     res.json({ lastTable: lastTableStacks(account.id) });
+  });
+
+  // The running tabs this account is part of. A tab belongs to a host, so the
+  // profile page lists them and asks which one before showing any numbers.
+  app.get('/api/me/ledgers', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    res.json({ ledgers: hostLedgersFor(account.id), accountId: account.id });
+  });
+
+  // One host's running tab, read from the profile rather than from a seat.
+  // Gated on having actually played there: this spans nights, so a table link
+  // is not standing to see it.
+  app.get('/api/me/ledgers/:hostId/running', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const hostId = Number(req.params.hostId);
+    if (!canSeeLedger(hostId, account.id)) {
+      res.status(403).json({ error: 'You have not played a finished night at those tables' });
+      return;
+    }
+    res.json({ running: runningTotals(hostId), accountId: account.id });
+  });
+
+  // Marking money off the tab. The server decides who is allowed to say a debt
+  // was paid — the payer, the payee, or the host who keeps the tab.
+  app.post('/api/me/ledgers/:hostId/payments', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const { fromAccountId, toAccountId, amount, note } = req.body || {};
+    const result = recordSettlePayment({
+      hostAccountId: Number(req.params.hostId),
+      fromAccountId, toAccountId, amount, note,
+      recordedBy: account.id,
+    });
+    if (!result.ok) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json({ ...result, running: runningTotals(Number(req.params.hostId)) });
+  });
+
+  app.delete('/api/me/settle-payments/:id', (req, res) => {
+    const account = accountForRequest(req);
+    if (!account) {
+      res.status(401).json({ error: 'not signed in' });
+      return;
+    }
+    const result = deleteSettlePayment(Number(req.params.id), account.id);
+    if (!result.ok) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json({ ...result, running: runningTotals(result.hostAccountId) });
   });
 
   app.get('/api/me/summary', (req, res) => {

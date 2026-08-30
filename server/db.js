@@ -220,6 +220,27 @@ const MIGRATIONS = [
   `
   ALTER TABLE session_results ADD COLUMN real_name TEXT;
   `,
+
+  // 7 — money actually handed over, against the running tab. The tab itself is
+  // derived (sum of session nets), so settling has to be recorded separately or
+  // paying somebody would silently un-record itself the next time they played.
+  //
+  // Amounts are positive and directional: `from` paid `to`. Part payments are
+  // ordinary rows, so "paid me 50 of the 250" is two rows and not a special
+  // case. Deleting a row undoes it, which is how a mistake gets fixed.
+  `
+  CREATE TABLE settle_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    host_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    from_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    to_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    note TEXT,
+    recorded_by INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_settle_host ON settle_payments(host_account_id);
+  `,
 ];
 
 export function initDb(dbPath = process.env.PP_DB_PATH || path.join(root, 'data', 'pineapple.db')) {

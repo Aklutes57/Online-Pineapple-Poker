@@ -329,6 +329,12 @@ export function runningTotals(hostAccountId) {
     net: r.net,
     sessions: r.sessions,
     lastPlayed: r.last_played,
+    // What has actually changed hands against this tab, kept apart from what
+    // the cards did. `net` stays the poker result for ever; `outstanding` is
+    // what is still owed once the money people handed over is taken off.
+    paid: 0,
+    received: 0,
+    outstanding: r.net,
   }));
 
   const nights = get(
@@ -337,12 +343,193 @@ export function runningTotals(hostAccountId) {
     hostAccountId
   );
 
+  // Money already handed over comes off the tab. Paying somebody moves the
+  // payer toward square from below and the payee toward square from above, so
+  // both sides of a settled debt land on nothing outstanding.
+  const payments = listSettlePayments(hostAccountId);
+  const byAccount = new Map(rows.map((r) => [r.accountId, r]));
+  for (const p of payments) {
+    const from = byAccount.get(p.fromAccountId);
+    const to = byAccount.get(p.toAccountId);
+    if (from) from.paid += p.amount;
+    if (to) to.received += p.amount;
+  }
+  for (const r of rows) r.outstanding = r.net + r.paid - r.received;
+
   return {
     nights: nights?.n ?? 0,
     players: rows,
-    // Same routine the per-session ledger uses, run over the totals instead.
-    settle: settleUp(rows),
+    payments,
+    // Same routine the per-session ledger uses, run over what is still owed
+    // rather than over the raw results — otherwise it would keep asking for
+    // money that has already been handed over.
+    settle: settleUp(rows.map((r) => ({ ...r, net: r.outstanding }))),
   };
+}
+
+// ---- settling the running tab ----
+
+export const SETTLE_LIMITS = {
+  note: 120,
+  // Far above any tab a home game will ever run up, and far below the point
+  // where these stop summing exactly. It is here so a slipped keyboard cannot
+  // poison a ledger that has no other way to be corrected.
+  amount: 1_000_000_000,
+};
+
+// Everyone who has a running total at this host's tables — the people whose
+// balances can be squared against each other. A payment to anybody else is
+// refused, not out of suspicion but because a name that is not on the tab
+// cannot be settled by paying it.
+function ledgerMembers(hostAccountId) {
+  return new Set(
+    all(
+      `SELECT DISTINCT r.account_id AS id
+         FROM session_results r
+         JOIN table_sessions t ON t.id = r.table_session_id
+        WHERE t.host_account_id = ?
+          AND t.ended_at IS NOT NULL
+          AND r.account_id IS NOT NULL`,
+      hostAccountId
+    ).map((r) => r.id)
+  );
+}
+
+// Who may read this host's running tab from their profile: the host, and
+// anybody who has finished a night at their tables. It spans evenings a
+// stranger with a table link was never at.
+export function canSeeLedger(hostAccountId, accountId) {
+  if (!hostAccountId || !accountId) return false;
+  if (hostAccountId === accountId) return true;
+  return ledgerMembers(hostAccountId).has(accountId);
+}
+
+// Every running tab this account belongs to. A tab belongs to a host, not to
+// a player: somebody who plays at two homes has two of them and they never
+// mix, so the profile page has to ask which one before it can show anything.
+export function hostLedgersFor(accountId) {
+  if (!accountId) return [];
+  const byHost = new Map();
+  const put = (id, patch) => {
+    byHost.set(id, { ...(byHost.get(id) || { hostId: id, hosted: false, nights: 0, net: 0, lastPlayed: 0 }), ...patch });
+  };
+
+  for (const r of all(
+    `SELECT t.host_account_id AS host_id, a.display_name AS host_name,
+            COUNT(*) AS nights, SUM(r.net) AS net, MAX(t.ended_at) AS last_played
+       FROM session_results r
+       JOIN table_sessions t ON t.id = r.table_session_id
+       JOIN accounts a ON a.id = t.host_account_id
+      WHERE r.account_id = ? AND t.ended_at IS NOT NULL AND t.host_account_id IS NOT NULL
+      GROUP BY t.host_account_id`,
+    accountId
+  )) {
+    put(r.host_id, {
+      hostName: r.host_name, hosted: r.host_id === accountId,
+      nights: r.nights, net: r.net, lastPlayed: r.last_played,
+    });
+  }
+
+  // A host who ran a night without sitting in it still keeps that tab, and
+  // still has to be able to open it.
+  for (const r of all(
+    `SELECT t.host_account_id AS host_id, a.display_name AS host_name,
+            MAX(t.ended_at) AS last_played
+       FROM table_sessions t
+       JOIN accounts a ON a.id = t.host_account_id
+      WHERE t.host_account_id = ? AND t.ended_at IS NOT NULL
+      GROUP BY t.host_account_id`,
+    accountId
+  )) {
+    const seen = byHost.get(r.host_id);
+    put(r.host_id, {
+      hostName: r.host_name,
+      hosted: true,
+      lastPlayed: Math.max(seen?.lastPlayed || 0, r.last_played || 0),
+    });
+  }
+
+  return [...byHost.values()].sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0));
+}
+
+// Money that actually changed hands, against the tab rather than at a table.
+// `from` handed `to` this much; part payments are ordinary rows, so "gave me
+// 50 of the 250" is one row and not a special case.
+export function recordSettlePayment({
+  hostAccountId, fromAccountId, toAccountId, amount, note = null, recordedBy = null,
+}) {
+  const host = Number(hostAccountId);
+  const from = Number(fromAccountId);
+  const to = Number(toAccountId);
+  const value = Number(amount);
+  const who = recordedBy == null ? null : Number(recordedBy);
+  if (!Number.isInteger(host) || !Number.isInteger(from) || !Number.isInteger(to)) {
+    return { ok: false, error: 'Pick who paid whom' };
+  }
+  if (from === to) return { ok: false, error: 'A payment needs two different people' };
+  if (!Number.isInteger(value) || value <= 0) return { ok: false, error: 'Enter an amount above zero' };
+  if (value > SETTLE_LIMITS.amount) return { ok: false, error: 'That amount is too large' };
+
+  const members = ledgerMembers(host);
+  if (!members.has(from) || !members.has(to)) {
+    return { ok: false, error: 'Both players need a finished night at this host\'s tables' };
+  }
+  // Only the two people the money moved between, or the host who keeps the
+  // tab, may mark it off. A third player at the table does not get to declare
+  // somebody else's debt settled.
+  if (who !== from && who !== to && who !== host) {
+    return { ok: false, error: 'Only the payer, the payee or the host can mark that paid' };
+  }
+
+  const text = typeof note === 'string'
+    ? note.replace(/\s+/g, ' ').trim().slice(0, SETTLE_LIMITS.note) || null
+    : null;
+  const result = run(
+    `INSERT INTO settle_payments
+       (host_account_id, from_account_id, to_account_id, amount, note, recorded_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    host, from, to, value, text, who, now()
+  );
+  return { ok: true, id: Number(result.lastInsertRowid) };
+}
+
+export function listSettlePayments(hostAccountId) {
+  if (!hostAccountId) return [];
+  return all(
+    `SELECT p.id, p.from_account_id, p.to_account_id, p.amount, p.note,
+            p.recorded_by, p.created_at,
+            f.display_name AS from_name, t.display_name AS to_name
+       FROM settle_payments p
+       JOIN accounts f ON f.id = p.from_account_id
+       JOIN accounts t ON t.id = p.to_account_id
+      WHERE p.host_account_id = ?
+      ORDER BY p.created_at DESC, p.id DESC`,
+    hostAccountId
+  ).map((r) => ({
+    id: r.id,
+    fromAccountId: r.from_account_id,
+    toAccountId: r.to_account_id,
+    fromName: r.from_name,
+    toName: r.to_name,
+    amount: r.amount,
+    note: r.note,
+    recordedBy: r.recorded_by,
+    createdAt: r.created_at,
+  }));
+}
+
+// Undoing a payment is how a mistake gets fixed — there is no editing a row,
+// because a wrong amount and a wrong direction are the same repair.
+export function deleteSettlePayment(id, byAccountId) {
+  const row = get('SELECT * FROM settle_payments WHERE id = ?', Number(id));
+  if (!row) return { ok: false, error: 'No such payment' };
+  const who = Number(byAccountId);
+  if (who !== row.from_account_id && who !== row.to_account_id
+      && who !== row.host_account_id && who !== row.recorded_by) {
+    return { ok: false, error: 'Only the payer, the payee or the host can undo that' };
+  }
+  run('DELETE FROM settle_payments WHERE id = ?', row.id);
+  return { ok: true, hostAccountId: row.host_account_id };
 }
 
 export function accountSummary(accountId) {

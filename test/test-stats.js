@@ -374,6 +374,175 @@ closeDb();
     500 - 200 === cass.net);
 }
 
+// ---- marking the running tab paid ----
+{
+  const { createGame } = await import('../server/gameManager.js');
+
+  const d = accounts.createAccount({ email: 'pay-d@example.com', password: 'password123', displayName: 'Dee' });
+  const e = accounts.createAccount({ email: 'pay-e@example.com', password: 'password123', displayName: 'Eli' });
+  const f = accounts.createAccount({ email: 'pay-f@example.com', password: 'password123', displayName: 'Fay' });
+  const hostId = d.account.id;
+  const eliId = e.account.id;
+  const fayId = f.account.id;
+
+  // One night, chip-conserving: Dee +250, Eli -250.
+  const { game, host } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Dee', hostId
+  );
+  game.hostAccountId = hostId;
+  host.accountId = hostId;
+  host.connected = true;
+  game.requestSeat(host, 300, 0);
+  const eli = game.addPlayer('Eli', eliId);
+  eli.connected = true;
+  game.requestSeat(eli, 300, 1);
+  if (eli.status === 'requesting') game.approveSeat(eli.id, true);
+  host.stack = 550;
+  eli.stack = 50;
+  game.handNo = 9;
+  stats.syncSessionResults(game);
+  game.close('done');
+
+  const before = stats.runningTotals(hostId);
+  check('the tab opens with the loser owing the winner',
+    before.settle.length === 1 && before.settle[0].amount === 250
+    && before.settle[0].from === 'Eli' && before.settle[0].to === 'Dee');
+  check('and nothing has been paid yet', before.payments.length === 0);
+
+  // A part payment: 100 of the 250.
+  const part = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId,
+    amount: 100, note: 'Venmo', recordedBy: eliId,
+  });
+  check('a player can mark off money they handed over', part.ok === true);
+
+  const mid = stats.runningTotals(hostId);
+  const eliRow = mid.players.find((p) => p.accountId === eliId);
+  const deeRow = mid.players.find((p) => p.accountId === hostId);
+  check('what the cards did is untouched by paying for it',
+    eliRow.net === -250 && deeRow.net === 250);
+  check('but only the rest is still outstanding',
+    eliRow.outstanding === -150 && deeRow.outstanding === 150);
+  check('the payment is shown against both sides',
+    eliRow.paid === 100 && deeRow.received === 100);
+  check('and the settle-up now asks for the remainder, not the whole debt',
+    mid.settle.length === 1 && mid.settle[0].amount === 150);
+  check('the payment is listed with who paid whom',
+    mid.payments.length === 1 && mid.payments[0].amount === 100
+    && mid.payments[0].fromAccountId === eliId && mid.payments[0].toAccountId === hostId);
+  check('and the note it was paid with survives', mid.payments[0].note === 'Venmo');
+
+  // The rest of it, recorded by the host this time.
+  const rest = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId,
+    amount: 150, recordedBy: hostId,
+  });
+  check('the host can mark off a payment made to them', rest.ok === true);
+  const square = stats.runningTotals(hostId);
+  check('two part payments square the debt as surely as one whole one',
+    square.settle.length === 0);
+  check('and both players read as nothing outstanding',
+    square.players.every((p) => p.outstanding === 0));
+
+  // Undo: the debt comes back exactly as it was.
+  const undo = stats.deleteSettlePayment(rest.id, eliId);
+  check('the payer can undo a payment that was recorded wrongly', undo.ok === true);
+  const after = stats.runningTotals(hostId);
+  check('undoing a payment puts the debt back',
+    after.settle.length === 1 && after.settle[0].amount === 150);
+
+  // Who is allowed to say a debt was paid.
+  const meddling = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId,
+    amount: 150, recordedBy: fayId,
+  });
+  check('a third player cannot declare somebody else\'s debt settled', meddling.ok === false);
+  const stranger = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: fayId,
+    amount: 10, recordedBy: eliId,
+  });
+  check('a payment to somebody who never played here is refused', stranger.ok === false);
+
+  check('a payment of nothing is refused', stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId, amount: 0, recordedBy: eliId,
+  }).ok === false);
+  check('a negative payment is refused — direction is the two ids, not the sign',
+    stats.recordSettlePayment({
+      hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId, amount: -50, recordedBy: eliId,
+    }).ok === false);
+  check('a fractional payment is refused', stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId, amount: 12.5, recordedBy: eliId,
+  }).ok === false);
+  check('an absurd payment is refused rather than left to poison the tab',
+    stats.recordSettlePayment({
+      hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId,
+      amount: stats.SETTLE_LIMITS.amount + 1, recordedBy: eliId,
+    }).ok === false);
+  check('paying yourself is refused', stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: eliId, amount: 10, recordedBy: eliId,
+  }).ok === false);
+
+  // Overpaying is allowed and flips the balance — that is a real thing that
+  // happens, and the tab has to be able to say so rather than swallow it.
+  const over = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId,
+    amount: 200, recordedBy: eliId,
+  });
+  check('overpaying is recorded rather than clamped', over.ok === true);
+  const flipped = stats.runningTotals(hostId);
+  check('and the tab now says the other one owes the difference',
+    flipped.settle.length === 1 && flipped.settle[0].amount === 50
+    && flipped.settle[0].from === 'Dee' && flipped.settle[0].to === 'Eli');
+  stats.deleteSettlePayment(over.id, eliId);
+
+  // Who may open which tab.
+  check('a player who has finished a night can read that host\'s tab',
+    stats.canSeeLedger(hostId, eliId) === true);
+  check('the host can read their own tab', stats.canSeeLedger(hostId, hostId) === true);
+  check('somebody who has never played there cannot',
+    stats.canSeeLedger(hostId, fayId) === false);
+
+  const ledgers = stats.hostLedgersFor(eliId);
+  check('a player\'s profile lists the tab they are on',
+    ledgers.length === 1 && ledgers[0].hostId === hostId && ledgers[0].hostName === 'Dee');
+  check('with their own position on it', ledgers[0].net === -250 && ledgers[0].nights === 1);
+  check('and it is not marked as theirs to host', ledgers[0].hosted === false);
+  const hostLedgers = stats.hostLedgersFor(hostId);
+  check('the host sees the tab as their own',
+    hostLedgers.length === 1 && hostLedgers[0].hosted === true);
+  check('somebody with no finished nights has no tabs at all',
+    stats.hostLedgersFor(fayId).length === 0);
+}
+{
+  // A host who runs a night without sitting in it still keeps that tab, and
+  // still has to be able to open it — they are the one everybody pays through.
+  const { createGame } = await import('../server/gameManager.js');
+  const g = accounts.createAccount({ email: 'pay-g@example.com', password: 'password123', displayName: 'Gil' });
+  const h = accounts.createAccount({ email: 'pay-h@example.com', password: 'password123', displayName: 'Hal' });
+  const hostId = g.account.id;
+
+  const { game } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Gil', hostId
+  );
+  game.hostAccountId = hostId;
+  const hal = game.addPlayer('Hal', h.account.id);
+  hal.connected = true;
+  game.requestSeat(hal, 200, 1);
+  if (hal.status === 'requesting') game.approveSeat(hal.id, true);
+  hal.stack = 200;
+  game.handNo = 4;
+  stats.syncSessionResults(game);
+  game.close('done');
+
+  const ledgers = stats.hostLedgersFor(hostId);
+  check('a host who never sat down still has the tab they ran',
+    ledgers.length === 1 && ledgers[0].hostId === hostId && ledgers[0].hosted === true);
+  check('with no position of their own on it', ledgers[0].nights === 0 && ledgers[0].net === 0);
+  check('and they can open it', stats.canSeeLedger(hostId, hostId) === true);
+}
+
 rmSync(dir, { recursive: true, force: true });
 
 console.log(`stats: ${passes} passed, ${failures} failed`);

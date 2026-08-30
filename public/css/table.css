@@ -1865,6 +1865,16 @@ td.dim { color: var(--text-dim); }
   text-overflow: ellipsis;
 }
 
+/* A dim second line under the name — what has been paid off against the
+   running tab, which is not what the cards did and must not read as it. */
+.sl-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sl-details {
   flex: none;
   padding: 3px 10px;
