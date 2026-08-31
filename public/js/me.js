@@ -330,7 +330,7 @@ function renderRunning() {
             <span><strong>${escapeHtml(s.from)}</strong> pays
               <strong>${escapeHtml(s.to)}</strong>
               <span class="settle-amt">${s.amount}</span></span>
-            ${canRecord(idOf(s.fromId), idOf(s.toId), amHost)
+            ${canRecord(idOf(s.fromId), idOf(s.toId))
               ? `<button class="btn btn-ghost pay-mark" data-from="${idOf(s.fromId)}"
                    data-to="${idOf(s.toId)}" data-amount="${s.amount}">Mark paid</button>`
               : ''}
@@ -353,9 +353,9 @@ function renderRunning() {
       <div class="form-actions">
         <button class="btn btn-primary" id="sp-save">Mark paid</button>
       </div>
-      <p class="hint">${amHost
-        ? 'As the host you can mark off any payment on your tab.'
-        : 'You can mark off money you paid or were paid. Anything else is for the host or the other player to record.'}
+      <p class="hint">You can mark off money you paid or were paid — the two people
+        in a payment are the ones who know it happened, so a debt between two other
+        players is theirs to record${amHost ? ', even on a tab you host' : ''}.
         Part payments are fine — mark off what actually changed hands.</p>
     </div>
 
@@ -368,14 +368,14 @@ function renderRunning() {
               <span class="settle-amt">${p.amount}</span>
               <span class="fine">${escapeHtml(new Date(p.createdAt).toLocaleDateString())}${
                 p.note ? ` · ${escapeHtml(p.note)}` : ''}</span></span>
-            ${canRecord(p.fromAccountId, p.toAccountId, amHost)
+            ${canRecord(p.fromAccountId, p.toAccountId)
               ? `<button class="btn btn-ghost pay-undo" data-id="${p.id}">Undo</button>`
               : ''}
           </li>`).join('')}</ul>`
         : '<p class="empty-note">Nothing marked off yet.</p>'}
     </div>`;
 
-  wireRunning(amHost);
+  wireRunning();
 }
 
 // settleUp carries the account id as `acct:<id>`, so it can key on something
@@ -392,12 +392,13 @@ function paidCell(p) {
 }
 
 // The same rule the server enforces, applied here so nobody is told no only
-// after they have filled the form in.
-function canRecord(from, to, amHost) {
-  return amHost || from === myAccountId || to === myAccountId;
+// after they have filled the form in. Hosting the tab is deliberately not
+// enough: the host is not a witness to a payment between two other players.
+function canRecord(from, to) {
+  return from === myAccountId || to === myAccountId;
 }
 
-function wireRunning(amHost) {
+function wireRunning() {
   const block = document.getElementById('running-block');
   const from = document.getElementById('sp-from');
   const to = document.getElementById('sp-to');
@@ -457,7 +458,7 @@ function wireRunning(amHost) {
       showToast('Enter an amount above zero');
       return;
     }
-    if (!canRecord(fromId, toId, amHost)) {
+    if (!canRecord(fromId, toId)) {
       showToast('You can only mark off money you paid or were paid');
       return;
     }

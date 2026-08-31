@@ -474,11 +474,13 @@ export function recordSettlePayment({
   if (!members.has(from) || !members.has(to)) {
     return { ok: false, error: 'Both players need a finished night at this host\'s tables' };
   }
-  // Only the two people the money moved between, or the host who keeps the
-  // tab, may mark it off. A third player at the table does not get to declare
-  // somebody else's debt settled.
-  if (who !== from && who !== to && who !== host) {
-    return { ok: false, error: 'Only the payer, the payee or the host can mark that paid' };
+  // Only the two people the money moved between may mark it off. They are the
+  // ones who know whether it happened — the host is not a witness to a payment
+  // between two other players, and hosting a table is not a licence to declare
+  // somebody else's debt settled. A host who is in the payment records it like
+  // anyone else, which in a home game is most of them.
+  if (who !== from && who !== to) {
+    return { ok: false, error: 'Only the payer or the payee can mark that paid' };
   }
 
   const text = typeof note === 'string'
@@ -524,9 +526,13 @@ export function deleteSettlePayment(id, byAccountId) {
   const row = get('SELECT * FROM settle_payments WHERE id = ?', Number(id));
   if (!row) return { ok: false, error: 'No such payment' };
   const who = Number(byAccountId);
+  // The same two people, plus whoever entered the row. Recording is now
+  // restricted to the two parties, so that last clause only ever matters for a
+  // row a host entered under the old rule — and being able to undo your own
+  // entry is the opposite of the power being taken away here.
   if (who !== row.from_account_id && who !== row.to_account_id
-      && who !== row.host_account_id && who !== row.recorded_by) {
-    return { ok: false, error: 'Only the payer, the payee or the host can undo that' };
+      && who !== row.recorded_by) {
+    return { ok: false, error: 'Only the payer or the payee can undo that' };
   }
   run('DELETE FROM settle_payments WHERE id = ?', row.id);
   return { ok: true, hostAccountId: row.host_account_id };

@@ -385,7 +385,10 @@ closeDb();
   const eliId = e.account.id;
   const fayId = f.account.id;
 
-  // One night, chip-conserving: Dee +250, Eli -250.
+  // One night, chip-conserving: Dee +250, Eli -250, and Ivy square. Ivy is
+  // here so the tab can hold a payment the host is not part of.
+  const i = accounts.createAccount({ email: 'pay-i@example.com', password: 'password123', displayName: 'Ivy' });
+  const ivyId = i.account.id;
   const { game, host } = createGame(
     { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
     'Dee', hostId
@@ -398,8 +401,13 @@ closeDb();
   eli.connected = true;
   game.requestSeat(eli, 300, 1);
   if (eli.status === 'requesting') game.approveSeat(eli.id, true);
+  const ivy = game.addPlayer('Ivy', ivyId);
+  ivy.connected = true;
+  game.requestSeat(ivy, 300, 2);
+  if (ivy.status === 'requesting') game.approveSeat(ivy.id, true);
   host.stack = 550;
   eli.stack = 50;
+  ivy.stack = 300;
   game.handNo = 9;
   stats.syncSessionResults(game);
   game.close('done');
@@ -438,7 +446,7 @@ closeDb();
     hostAccountId: hostId, fromAccountId: eliId, toAccountId: hostId,
     amount: 150, recordedBy: hostId,
   });
-  check('the host can mark off a payment made to them', rest.ok === true);
+  check('the payee can mark off a payment made to them', rest.ok === true);
   const square = stats.runningTotals(hostId);
   check('two part payments square the debt as surely as one whole one',
     square.settle.length === 0);
@@ -458,6 +466,27 @@ closeDb();
     amount: 150, recordedBy: fayId,
   });
   check('a third player cannot declare somebody else\'s debt settled', meddling.ok === false);
+
+  // Hosting the table is not standing to settle other people's debts. The two
+  // people in a payment are the ones who know whether it happened; the host
+  // was not there when the money changed hands.
+  const hostMeddling = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: ivyId,
+    amount: 40, recordedBy: hostId,
+  });
+  check('the host cannot mark off a payment between two other players',
+    hostMeddling.ok === false && /payer or the payee/.test(hostMeddling.error));
+
+  // ...but the two of them can, on somebody else's tab, without the host.
+  const theirs = stats.recordSettlePayment({
+    hostAccountId: hostId, fromAccountId: eliId, toAccountId: ivyId,
+    amount: 40, recordedBy: ivyId,
+  });
+  check('the payee of that same payment can record it', theirs.ok === true);
+  check('and the host cannot undo it either',
+    stats.deleteSettlePayment(theirs.id, hostId).ok === false);
+  check('while either of the two people in it can',
+    stats.deleteSettlePayment(theirs.id, eliId).ok === true);
   const stranger = stats.recordSettlePayment({
     hostAccountId: hostId, fromAccountId: eliId, toAccountId: fayId,
     amount: 10, recordedBy: eliId,

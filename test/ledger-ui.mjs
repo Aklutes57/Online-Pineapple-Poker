@@ -129,6 +129,80 @@ check('undoing a payment puts the debt back',
   undone.settle.length === 1 && /Eli pays Dee 250/.test(undone.settle[0]));
 check('and clears it off the list of what has been paid', undone.paidList.length === 0);
 
+// ---- hosting a tab is not standing to settle other people's debts ----
+// A separate tab, whose host is square and whose two players owe each other,
+// so there is a settle line the host is not part of. Different players, so
+// Eli stays on exactly one tab and the picker check above still means what it
+// says.
+const zed = accounts.createAccount({ email: 'zed@example.com', password: 'password123', displayName: 'Zed' });
+const moe = accounts.createAccount({ email: 'moe@example.com', password: 'password123', displayName: 'Moe' });
+const nia = accounts.createAccount({ email: 'nia@example.com', password: 'password123', displayName: 'Nia' });
+const zg = createGame(
+  { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+  'Zed', zed.account.id
+);
+zg.game.hostAccountId = zed.account.id;
+const moeP = zg.game.addPlayer('Moe', moe.account.id);
+moeP.connected = true;
+zg.game.requestSeat(moeP, 200, 1);
+if (moeP.status === 'requesting') zg.game.approveSeat(moeP.id, true);
+const niaP = zg.game.addPlayer('Nia', nia.account.id);
+niaP.connected = true;
+zg.game.requestSeat(niaP, 200, 2);
+if (niaP.status === 'requesting') zg.game.approveSeat(niaP.id, true);
+moeP.stack = 100;   // Moe -100
+niaP.stack = 300;   // Nia +100 — Zed hosted but never sat down
+zg.game.handNo = 6;
+stats.syncSessionResults(zg.game);
+zg.game.close('done');
+
+const hostPage = await ctx.newPage();
+await hostPage.goto(base + '/', { waitUntil: 'domcontentloaded' });
+await hostPage.evaluate((t) => localStorage.setItem('pp:account', t), zed.token);
+await hostPage.goto(base + '/me', { waitUntil: 'domcontentloaded' });
+await hostPage.waitForSelector('#running-block .settle-block', { timeout: 8000 });
+const asHost = await hostPage.evaluate(() => ({
+  settle: [...document.querySelectorAll('.settle-block .settle-list li')]
+    .map((li) => li.textContent.replace(/\s+/g, ' ').trim()),
+  markButtons: document.querySelectorAll('.settle-block .pay-mark').length,
+  hint: document.querySelector('.pay-record .hint')?.textContent.replace(/\s+/g, ' ').trim() || '',
+}));
+check('the host can see what the table owes',
+  asHost.settle.length === 1 && /Moe pays Nia 100/.test(asHost.settle[0]));
+check('but is offered no way to mark off a debt between two other players',
+  asHost.markButtons === 0);
+check('and the page says why', /theirs to record/.test(asHost.hint));
+
+// The server is the boundary that counts — a client that skips the page's own
+// check must still be refused.
+// Deliberately a payment that is valid in every other respect — both players
+// are on this tab, the amount is sane — so the only thing left to refuse it
+// is who is asking.
+const refusedByServer = await hostPage.evaluate(async (ids) => {
+  const token = localStorage.getItem('pp:account');
+  const res = await fetch(`/api/me/ledgers/${ids.host}/payments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ fromAccountId: ids.from, toAccountId: ids.to, amount: 100 }),
+  });
+  return { status: res.status, body: await res.json() };
+}, { host: zed.account.id, from: moe.account.id, to: nia.account.id });
+check('and the server refuses it outright, not just the page',
+  refusedByServer.status === 400 && /payer or the payee/.test(refusedByServer.body.error || ''));
+
+// The same request from one of the two people in it goes through, which is
+// what proves the refusal above was about standing and nothing else.
+const allowed = await hostPage.evaluate(async (ids) => {
+  const res = await fetch(`/api/me/ledgers/${ids.host}/payments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ids.token}` },
+    body: JSON.stringify({ fromAccountId: ids.from, toAccountId: ids.to, amount: 100 }),
+  });
+  return { status: res.status, body: await res.json() };
+}, { host: zed.account.id, from: moe.account.id, to: nia.account.id, token: moe.token });
+check('the payer of that same payment is allowed to record it',
+  allowed.status === 200 && allowed.body.ok === true);
+
 // The same section on a phone. Five columns of numbers is exactly the shape
 // that quietly pushes a settings page sideways, and this game is played on
 // phones at a table.
