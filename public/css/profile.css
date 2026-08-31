@@ -395,3 +395,11 @@ table.ledger td.neg { color: var(--red); font-weight: 700; }
   margin-bottom: 12px;
 }
 .pay-row .field { display: flex; flex-direction: column; gap: 5px; }
+
+/* What the saved link resolves to, and why one was refused.
+   Deliberately NOT var(--red)/var(--green) like .auth-error: those are the
+   dark chip colours and measure about 1.9:1 against this panel, which is fine
+   for a filled toast and unreadable as 11.5px hint text. These are the same
+   two signals at a contrast you can actually act on. */
+.pay-resolved { color: var(--accent-lite); }
+.pay-error { color: #ff9d9d; }

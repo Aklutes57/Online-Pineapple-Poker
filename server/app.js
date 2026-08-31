@@ -673,8 +673,8 @@ export function buildServer() {
       res.status(401).json({ error: 'not signed in' });
       return;
     }
-    const payments = setPayments(account.id, (req.body || {}).payments || {});
-    res.json({ payments });
+    const { payments, errors } = setPayments(account.id, (req.body || {}).payments || {});
+    res.json({ payments, errors });
   });
 
   // The game's ledger as a dated CSV, generated from the persisted results so

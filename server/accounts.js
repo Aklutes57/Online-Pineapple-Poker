@@ -155,12 +155,19 @@ export function setRealName(accountId, raw) {
   return result.ok ? name : null;
 }
 
-// Linked P2P payment handles (Venmo/Cash App/PayPal/Zelle/Chime), validated
-// and stored in prefs so table-mates can pay this player from the ledger.
+// Linked payment methods (Venmo/Cash App/PayPal/Zelle/Chime), validated and
+// stored in prefs so table-mates can pay this player from the ledger.
+//
+// The three services with a public share link store the LINK — rebuilt from an
+// allowlisted host and a validated handle, never the string that was pasted.
+// Zelle and Chime have no such link and store a handle.
+//
+// Errors come back alongside so the profile can say which field it could not
+// read. A link that vanishes silently is worse than one that explains itself.
 export function setPayments(accountId, raw) {
-  const payments = cleanPayments(raw);
+  const { payments, errors } = cleanPayments(raw);
   const result = updatePrefs(accountId, { payments });
-  return result.ok ? payments : {};
+  return result.ok ? { payments, errors } : { payments: {}, errors };
 }
 
 // The profile picture, stored against the account so it follows the player to

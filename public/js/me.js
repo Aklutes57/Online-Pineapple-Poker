@@ -6,7 +6,7 @@ import { loadAccount, currentAccount, signout, updateAccount, authHeaders } from
 import { openAuthModal } from '/js/authModal.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { pushSupported, currentPushSubscription, enablePush, disablePush } from '/js/pwa.js';
-import { PAYMENT_SERVICES } from '/shared/payments.js';
+import { PAYMENT_SERVICES, displayHandle, handleOf } from '/shared/payments.js';
 import { payeeLabeller } from '/shared/settle.js';
 
 // ---- notifications on this device ----
@@ -83,23 +83,35 @@ function render() {
 
 // ---- payment methods ----
 
-function renderPayFields(account) {
+function renderPayFields(account, errors = {}) {
   const wrap = document.getElementById('pay-fields');
   if (!wrap) return;
   const saved = account.prefs?.payments || {};
-  wrap.innerHTML = PAYMENT_SERVICES.map(
-    (s) => `
+  wrap.innerHTML = PAYMENT_SERVICES.map((s) => {
+    const value = saved[s.key] || '';
+    // Venmo, Cash App and PayPal take the link the app hands you. The sigil
+    // box in front of the input belongs to the two services that are still a
+    // handle — it reads as nonsense in front of a URL.
+    const isLink = s.kind === 'link';
+    const handle = value ? handleOf(s.key, value) : '';
+    return `
     <div class="field pay-field">
       <label for="pay-${s.key}">${s.icon} ${escapeHtml(s.label)}</label>
       <div class="pay-input">
-        ${s.prefix ? `<span class="pay-prefix">${s.prefix}</span>` : ''}
-        <input id="pay-${s.key}" data-pay="${s.key}" maxlength="64"
+        ${!isLink && s.prefix ? `<span class="pay-prefix">${s.prefix}</span>` : ''}
+        <input id="pay-${s.key}" data-pay="${s.key}" maxlength="${isLink ? 300 : 64}"
+          type="${isLink ? 'url' : 'text'}" spellcheck="false"
           placeholder="${escapeHtml(s.placeholder)}" autocomplete="off"
-          value="${escapeHtml(saved[s.key] || '')}">
+          value="${escapeHtml(value)}">
       </div>
-      <span class="pay-hint">${escapeHtml(s.hint)}</span>
-    </div>`
-  ).join('');
+      ${errors[s.key]
+        ? `<span class="pay-hint pay-error">${escapeHtml(errors[s.key])}</span>`
+        : `<span class="pay-hint">${escapeHtml(s.hint)}</span>`}
+      ${value && isLink && handle
+        ? `<span class="pay-hint pay-resolved">Pays ${escapeHtml(displayHandle(s.key, value))}</span>`
+        : ''}
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('pay-save').addEventListener('click', async () => {
@@ -116,13 +128,20 @@ document.getElementById('pay-save').addEventListener('click', async () => {
     });
     if (!res.ok) throw new Error();
     const data = await res.json();
-    // Reflect the server-normalized handles back into the account + fields.
+    // Reflect the canonical links the server built back into the fields, so
+    // what you see is exactly what your table-mates will open.
     const account = currentAccount();
+    const errors = data.errors || {};
     if (account) {
       account.prefs = { ...account.prefs, payments: data.payments };
-      renderPayFields(account);
+      renderPayFields(account, errors);
     }
-    showToast('Payment methods saved', { ok: true });
+    const bad = Object.keys(errors);
+    if (bad.length) {
+      showToast(errors[bad[0]]);
+    } else {
+      showToast('Payment methods saved', { ok: true });
+    }
   } catch {
     showToast('Could not save payment methods');
   }

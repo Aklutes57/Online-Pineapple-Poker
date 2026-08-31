@@ -735,16 +735,29 @@ try {
   await dana.waitForSelector('#stats-block .stat-tile');
   await check('poker stat block renders', true);
 
-  // ---- payment methods: link a handle so table-mates can pay from the ledger ----
+  // ---- payment methods: the share link the app gives you, so table-mates can
+  // pay from the ledger without retyping a username ----
   await dana.waitForSelector('#pay-fields input[data-pay="venmo"]');
   await check('payment method fields render on the profile', true);
+  await dana.fill('#pay-fields input[data-pay="venmo"]', 'https://venmo.com/u/DanaPays');
+  await dana.click('#pay-save');
+  await dana.waitForSelector('#toast.show');
+  await dana.reload();
+  await dana.waitForSelector('#pay-fields input[data-pay="venmo"]');
+  await check('a pasted share link persists, canonicalised',
+    (await dana.inputValue('#pay-fields input[data-pay="venmo"]'))
+      === 'https://account.venmo.com/u/DanaPays');
+
+  // A bare username is still accepted — people will type one — and becomes
+  // the same link.
   await dana.fill('#pay-fields input[data-pay="venmo"]', '@DanaPays');
   await dana.click('#pay-save');
   await dana.waitForSelector('#toast.show');
   await dana.reload();
   await dana.waitForSelector('#pay-fields input[data-pay="venmo"]');
-  await check('a saved payment handle persists (@ stripped)',
-    (await dana.inputValue('#pay-fields input[data-pay="venmo"]')) === 'DanaPays');
+  await check('a bare username still works and becomes the same link',
+    (await dana.inputValue('#pay-fields input[data-pay="venmo"]'))
+      === 'https://account.venmo.com/u/DanaPays');
 
   // ---- invite list and Discord webhook validation through the UI ----
   await dana.fill('#n-email', 'friend@example.com');

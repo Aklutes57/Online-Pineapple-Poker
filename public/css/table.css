@@ -3046,3 +3046,16 @@ video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
 .running-block .sl-grid {
   grid-template-columns: 1fr auto auto;
 }
+
+/* The figure to send, spelled out beside the pay buttons. A payment app may
+   quietly ignore an amount carried in a link — the number has to be readable
+   whether or not the link prefills it, or somebody sends the wrong sum and the
+   ledger is silently wrong. */
+.pay-amount {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 4px 2px;
+}

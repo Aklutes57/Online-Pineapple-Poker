@@ -3,7 +3,7 @@
 import { EVENTS, GAME_STATUS, VARIANTS, rotatableVariants } from '/shared/constants.js';
 import { settleUp, payeeLabeller } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
-import { PAYMENT_SERVICES, paymentUrl, displayHandle } from '/shared/payments.js';
+import { PAYMENT_SERVICES, paymentLink, displayHandle } from '/shared/payments.js';
 import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '/shared/xlsx.js';
 
 let clientRef = null;
@@ -709,20 +709,29 @@ function renderLedger(client) {
   document.getElementById('ledger-xlsx')?.addEventListener('click', () => exportLedgerXlsx(client));
 }
 
-// Pay buttons for a settle-up line: a prefilled deep link for services that
-// support one (Venmo/Cash App/PayPal), a tap-to-copy handle for the rest.
+// Pay buttons for a settle-up line: the player's own share link for the
+// services that have one, a tap-to-copy handle for the two that do not.
+//
+// The amount is deliberately NOT trusted to the link. Venmo has not allowed a
+// payment to be started from the web since 2018 and documents no
+// person-to-person link parameters, so an amount bolted onto one may simply be
+// dropped — and somebody paying the wrong number silently desynchronises the
+// ledger. So the figure is always spelled out next to the buttons, and only
+// PayPal, which documents an amount in the path, carries one.
 function payButtons(payments, amount) {
   if (!payments) return '';
   const btns = PAYMENT_SERVICES.filter((s) => payments[s.key]).map((s) => {
-    const handle = payments[s.key];
-    const url = paymentUrl(s.key, handle, { amount, note: 'Poker' });
-    if (url) {
-      return `<a class="pay-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener">${s.icon} ${escapeHtml(s.label)}</a>`;
+    const value = payments[s.key];
+    const link = paymentLink(s.key, value, { amount });
+    const shown = displayHandle(s.key, value);
+    if (link) {
+      return `<a class="pay-btn" href="${escapeHtml(link.href)}" target="_blank" rel="noopener noreferrer"
+        title="Opens ${escapeHtml(s.label)}${link.prefilled ? ` for ${amount}` : ` — enter ${amount} yourself`}">${s.icon} ${escapeHtml(s.label)}</a>`;
     }
-    const shown = displayHandle(s.key, handle);
     return `<button type="button" class="pay-btn copy" data-copy="${escapeHtml(shown)}" title="Copy ${escapeHtml(s.label)} handle">${s.icon} ${escapeHtml(shown)}</button>`;
   });
-  return btns.length ? `<div class="pay-options">${btns.join('')}</div>` : '';
+  if (!btns.length) return '';
+  return `<div class="pay-options">${btns.join('')}<span class="pay-amount">send ${amount}</span></div>`;
 }
 
 // The last hand reads as what the winner won, and nothing else. Losing a pot
