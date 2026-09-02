@@ -89,7 +89,7 @@ your turn). Only upload audio you have the rights to use.
 |---|---|
 | `PP_DB_PATH` | SQLite file location (default `data/pineapple.db`) |
 | `PP_UPLOAD_DIR` | Where uploads are stored (default `data/uploads`) |
-| `SMTP_URL` | Enables real email delivery; without it invites are logged to an outbox and the UI says so |
+| `SMTP_URL` | Enables real email delivery; without it invites and the host's end-of-game ledger email are logged to an outbox and the UI says so |
 | `SMTP_FROM` | From address on invite emails |
 | `PORT` | HTTP port (default 3000) |
 

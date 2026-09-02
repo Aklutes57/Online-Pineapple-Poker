@@ -105,7 +105,7 @@ export function closeTableSession(game) {
 // be pulled long after the table is gone. Returns { filename, body } or null.
 export function ledgerCsvForGame(gameId) {
   const session = get(
-    `SELECT id, variant, small_blind, big_blind, started_at
+    `SELECT id, variant, small_blind, big_blind, started_at, hands_played
      FROM table_sessions WHERE game_id = ?`,
     gameId
   );
@@ -140,7 +140,18 @@ export function ledgerCsvForGame(gameId) {
       .map((p) => [settleLabel(p.fromId, p.from), settleLabel(p.toId, p.to), p.amount]),
   ];
   const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
-  return { filename: `pineapple-ledger-${iso}.csv`, body };
+  return {
+    filename: `pineapple-ledger-${iso}.csv`,
+    body,
+    // Everything a caller needs to describe this ledger without re-querying:
+    // the emailed copy names the game by its date in the subject line.
+    iso,
+    startedAt: session.started_at,
+    variant: session.variant,
+    blinds: `${session.small_blind}/${session.big_blind}`,
+    players: rows.length,
+    hands: session.hands_played || 0,
+  };
 }
 
 // The same saved ledger as a coloured spreadsheet: winners green, losers red.

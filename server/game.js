@@ -11,6 +11,7 @@ import { Hand } from './hand.js';
 import { Hand747 } from './hand747.js';
 import { payoutPots } from './pots.js';
 import { recordHandStats, syncSessionResults, closeTableSession } from './stats.js';
+import { mailLedgerToHost } from './notify.js';
 import { saveHand, updateHandShown } from './handStore.js';
 import { notifyTurn, notifySeatApproved } from './push.js';
 import {
@@ -1623,6 +1624,18 @@ export class Game {
       if (this.tableSessionId || this.handNo > 0) closeTableSession(this);
     } catch (err) {
       console.error(`closing table session for ${this.id} failed:`, err.message);
+    }
+    // The host gets the night's ledger by email, named by the date it was
+    // played. Here rather than in the sockets layer because that layer only
+    // wires onClosed once somebody has actually connected, and because this is
+    // the point at which the books are definitively closed. `close()` guards
+    // itself against running twice, so this cannot send twice either.
+    if (this.hostAccountId) {
+      mailLedgerToHost({
+        gameId: this.id,
+        hostAccountId: this.hostAccountId,
+        origin: this.origin || process.env.PUBLIC_URL || '',
+      }).catch((err) => console.error(`emailing the ledger for ${this.id} failed:`, err.message));
     }
     if (this.onClosed) this.onClosed(reason);
   }

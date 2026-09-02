@@ -137,6 +137,106 @@ check('announce for a guest host is a no-op',
 check('delivery log masks webhook targets',
   notify.recentDeliveries(10).every((r) => !r.target.includes('abcdefghijklmnop')));
 
+// ---- the ledger, emailed to the host when the game ends ----
+{
+  const { createGame } = await import('../server/gameManager.js');
+  const stats = await import('../server/stats.js');
+
+  const inbox = () => all("SELECT * FROM outbox WHERE subject LIKE 'Your poker ledger%' ORDER BY id");
+  const payloadOf = (row) => JSON.parse(row.body);
+
+  // A night that actually happened: two players, chip-conserving.
+  const { game, host } = createGame(
+    { smallBlind: 1, bigBlind: 2, minBuyIn: 40, maxBuyIn: 1000, defaultBuyIn: 200 },
+    'Hosty', acct.id
+  );
+  game.hostAccountId = acct.id;
+  game.origin = 'https://poker.example';
+  host.accountId = acct.id;
+  host.connected = true;
+  game.requestSeat(host, 200, 0);
+  const pal = game.addPlayer('Pal', null);
+  pal.connected = true;
+  game.requestSeat(pal, 200, 1);
+  if (pal.status === 'requesting') game.approveSeat(pal.id, true);
+  host.stack = 320;
+  pal.stack = 80;
+  game.handNo = 14;
+  stats.syncSessionResults(game);
+
+  check('nothing is emailed while the table is still running', inbox().length === 0);
+
+  game.close('host');
+  // close() fires the mail without being awaited, so let the microtask run.
+  await new Promise((r) => setTimeout(r, 50));
+
+  const sent = inbox();
+  check('closing the table emails the host exactly one ledger', sent.length === 1);
+  check('and it goes to the host, not to their invite list',
+    sent[0].target === 'host@example.com' && sent[0].channel === 'email');
+
+  const payload = payloadOf(sent[0]);
+  const csv = stats.ledgerCsvForGame(game.id);
+  check('the .csv is attached', !!payload.attachment && !!payload.attachment.content);
+  check('the attachment is the same ledger the download serves',
+    payload.attachment.content === csv.body && payload.attachment.filename === csv.filename);
+  check('the attachment names the file by the date of the game',
+    /^pineapple-ledger-\d{4}-\d{2}-\d{2}\.csv$/.test(payload.attachment.filename));
+
+  // The date of the game is the point of the subject line.
+  const when = notify.ledgerDateLabel(csv.startedAt);
+  check('the subject names the game by its date',
+    sent[0].subject === `Your poker ledger — ${when}`);
+  check('and that date is the date the ledger itself carries',
+    when === `${new Date(csv.startedAt).getUTCDate()} ${
+      ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+        'September', 'October', 'November', 'December'][new Date(csv.startedAt).getUTCMonth()]
+    } ${new Date(csv.startedAt).getUTCFullYear()}`);
+  check('the body says what the night was',
+    /2 players/.test(payload.body) && /14 hands/.test(payload.body)
+    && /blinds 1\/2/.test(payload.body));
+  check('the mail links to the saved copy on the server',
+    payload.link === `https://poker.example/api/games/${game.id}/ledger.csv`);
+  check('with a button that says what it opens', payload.cta === 'Open the ledger');
+  check('and says why they are getting it', /hosted this table/.test(payload.footer));
+
+  // Closing is guarded, so a second close must not send a second copy.
+  game.close('idle');
+  await new Promise((r) => setTimeout(r, 50));
+  check('closing an already-closed table does not send it twice', inbox().length === 1);
+
+  // With no SMTP configured the row is the delivery, and it says so rather
+  // than being retried for ever.
+  check('with no SMTP the outbox row records what would have gone out',
+    sent.length === 1 && all("SELECT * FROM outbox WHERE id = ?", sent[0].id)[0].status === 'logged');
+}
+{
+  // A guest host has no email, and a table nobody played at has no ledger.
+  // Neither is an error; both are silence.
+  const { createGame } = await import('../server/gameManager.js');
+  const stats = await import('../server/stats.js');
+  const before = all("SELECT COUNT(*) AS n FROM outbox")[0].n;
+
+  const guest = createGame({ smallBlind: 1, bigBlind: 2 }, 'Guesty', null);
+  guest.game.close('host');
+  await new Promise((r) => setTimeout(r, 30));
+  check('a guest-hosted table emails nobody',
+    all("SELECT COUNT(*) AS n FROM outbox")[0].n === before);
+
+  const empty = createGame({ smallBlind: 1, bigBlind: 2 }, 'Hosty', acct.id);
+  empty.game.hostAccountId = acct.id;
+  empty.game.close('idle');
+  await new Promise((r) => setTimeout(r, 30));
+  check('a table that never dealt a hand emails nothing',
+    all("SELECT COUNT(*) AS n FROM outbox")[0].n === before);
+
+  check('and the mailer says why rather than throwing',
+    (await notify.mailLedgerToHost({ gameId: 'nope', hostAccountId: acct.id })).reason === 'no ledger');
+  check('a guest host is a no-op',
+    (await notify.mailLedgerToHost({ gameId: 'nope', hostAccountId: null })).sent === 0);
+  void stats;
+}
+
 closeDb();
 rmSync(dir, { recursive: true, force: true });
 

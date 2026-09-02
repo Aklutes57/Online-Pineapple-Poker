@@ -10,6 +10,7 @@
 
 import nodemailer from 'nodemailer';
 import { run, get, all, now } from './db.js';
+import { ledgerCsvForGame } from './stats.js';
 import { randomUUID } from 'node:crypto';
 
 const MAX_ATTEMPTS = 3;
@@ -88,8 +89,17 @@ const email = {
       from: process.env.SMTP_FROM || 'Reg-Poker Online <no-reply@reg-poker.online>',
       to: target,
       subject: payload.subject,
-      text: `${payload.body}\n\n${payload.link}\n\n${payload.footer || ''}`,
+      text: [payload.body, payload.link, payload.footer].filter(Boolean).join('\n\n'),
       html: renderEmailHtml(payload),
+      ...(payload.attachment
+        ? {
+          attachments: [{
+            filename: payload.attachment.filename,
+            content: payload.attachment.content,
+            contentType: payload.attachment.contentType || 'text/csv; charset=utf-8',
+          }],
+        }
+        : {}),
     });
   },
 };
@@ -114,13 +124,19 @@ function escapeHtml(s) {
 }
 
 function renderEmailHtml(payload) {
+  // A ledger mail has a different call to action from an invite, and a mail
+  // with nothing to click should not grow a button pointing nowhere.
+  const button = payload.link
+    ? `<a href="${escapeHtml(payload.link)}"
+         style="display:inline-block;background:#f5c542;color:#1a1405;font-weight:700;
+                padding:12px 24px;border-radius:10px;text-decoration:none">${
+  escapeHtml(payload.cta || 'Take a seat')}</a>`
+    : '';
   return `
     <div style="font-family:system-ui,sans-serif;background:#10131c;color:#e8ebf4;padding:28px;border-radius:12px">
       <h2 style="margin:0 0 12px">${escapeHtml(payload.subject)}</h2>
-      <p style="color:#9aa3ba;margin:0 0 20px">${escapeHtml(payload.body)}</p>
-      <a href="${escapeHtml(payload.link)}"
-         style="display:inline-block;background:#f5c542;color:#1a1405;font-weight:700;
-                padding:12px 24px;border-radius:10px;text-decoration:none">Take a seat</a>
+      <p style="color:#9aa3ba;margin:0 0 20px;white-space:pre-line">${escapeHtml(payload.body)}</p>
+      ${button}
       <p style="color:#6b7280;font-size:12px;margin-top:24px">
         ${escapeHtml(payload.footer || 'Play money only — no real currency involved.')}
       </p>
@@ -218,11 +234,15 @@ export function removeNotifyTarget(accountId, targetId) {
 
 // ---- sending ----
 
-export function enqueue({ channel, target, subject, body, link, footer }) {
+// `attachment` is { filename, content } and is stored with the row rather than
+// regenerated at send time, so the outbox row IS the delivery — a retry sends
+// byte-for-byte what the first attempt would have, and the log shows what went
+// out even when SMTP is not configured. A ledger .csv is a couple of KB.
+export function enqueue({ channel, target, subject, body, link, footer, cta, attachment }) {
   const result = run(
     `INSERT INTO outbox (channel, target, subject, body, status, attempts, created_at)
      VALUES (?, ?, ?, ?, 'pending', 0, ?)`,
-    channel, target, subject, JSON.stringify({ body, link, footer }), now()
+    channel, target, subject, JSON.stringify({ body, link, footer, cta, attachment }), now()
   );
   return Number(result.lastInsertRowid);
 }
@@ -287,6 +307,75 @@ export async function announceTable(accountId, { gameId, variantLabel, blinds, l
   // Deliver in the background: creating a table must not wait on the network.
   Promise.allSettled(jobs.map((id) => deliver(id))).catch(() => {});
   return { sent: jobs.length };
+}
+
+// ---- the ledger, emailed to the host when the game ends ----
+
+// Written out rather than taken from a locale, so the subject line reads the
+// same on the server, in a test, and on whatever machine this ends up on.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+// The date the game is named by. UTC, matching the .csv filename and the dates
+// already shown on the profile page, so one game is one date everywhere.
+//
+// The wart: a table is stamped with when it STARTED, and a game that starts at
+// 8pm in North America has already ticked over into the next UTC day, so an
+// evening game can be named by the following morning's date. Fixing that needs
+// the host's timezone stored with the session; until then everything at least
+// agrees with everything else. This is the one place that decides, so there is
+// one line to change.
+export function ledgerDateLabel(startedAt) {
+  const d = new Date(startedAt);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+// The host's own record of their own game, sent when the table closes.
+//
+// Never throws and never blocks: a table closing must not wait on a mail
+// server, and a mail server being down must not stop a table closing.
+export async function mailLedgerToHost({ gameId, hostAccountId, origin }) {
+  if (!hostAccountId) return { sent: 0, reason: 'no signed-in host' };
+
+  let csv;
+  try {
+    csv = ledgerCsvForGame(gameId);
+  } catch (err) {
+    console.error(`building the ledger for ${gameId} failed:`, err.message);
+    return { sent: 0, reason: 'ledger failed' };
+  }
+  // A table nobody played at has no ledger, and an empty attachment is worse
+  // than no mail at all.
+  if (!csv) return { sent: 0, reason: 'no ledger' };
+
+  const account = get('SELECT email, display_name FROM accounts WHERE id = ?', hostAccountId);
+  if (!account?.email) return { sent: 0, reason: 'host has no email' };
+
+  const when = ledgerDateLabel(csv.startedAt);
+  const subject = `Your poker ledger — ${when}`;
+  const body = [
+    `${csv.variant} · blinds ${csv.blinds}`,
+    `${csv.players} player${csv.players === 1 ? '' : 's'} · `
+      + `${csv.hands} hand${csv.hands === 1 ? '' : 's'}`,
+    'The full ledger and the settle-up are attached as a .csv.',
+  ].join('\n');
+
+  const id = enqueue({
+    channel: 'email',
+    target: account.email,
+    subject,
+    body,
+    // The saved copy on the server, so the mail is still useful from a phone
+    // that will not open an attachment.
+    link: origin ? `${origin}/api/games/${encodeURIComponent(gameId)}/ledger.csv` : '',
+    cta: 'Open the ledger',
+    footer: 'You are getting this because you hosted this table. Play money only.',
+    attachment: { filename: csv.filename, content: csv.body },
+  });
+
+  // Deliberately not awaited by the caller: see above.
+  await deliver(id).catch(() => {});
+  return { sent: 1, outboxId: id, subject };
 }
 
 export function recentDeliveries(limit = 20) {

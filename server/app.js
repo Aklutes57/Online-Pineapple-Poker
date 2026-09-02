@@ -749,6 +749,10 @@ export function buildServer() {
       res.status(503).json({ error: 'server is full — try again later' });
       return;
     }
+    // Where this table lives, so the ledger emailed when it closes can link
+    // back to the saved copy. Recorded now because a table can close from the
+    // idle sweep, with no request to take an origin from.
+    created.game.origin = `${req.protocol}://${req.get('host')}`;
     // Continue from the host's last table. Read here rather than trusted from
     // the client: the browser says whether to carry over, never how much.
     if (account && (req.body || {}).carryStacks === true) {
