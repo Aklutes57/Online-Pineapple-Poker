@@ -11,6 +11,24 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-soak-')),
 
 const { io: ioc } = await import('socket.io-client');
 const { buildServer } = await import('../server/app.js');
+// Playing requires an account, so the bots get real ones. Made in-process
+// rather than through /api/auth/signup because that endpoint is rate-limited
+// to 20 a minute and a soak wants more crew than that, and because what is on
+// trial here is the engine, not the signup form.
+const { initDb } = await import('../server/db.js');
+const { createAccount } = await import('../server/accounts.js');
+initDb();
+const crew = new Map();
+function accountFor(name) {
+  if (!crew.has(name)) {
+    const made = createAccount({
+      email: `${name}@soak.example`, password: 'a good long password', displayName: name,
+    });
+    if (!made.ok) throw new Error(`could not make a soak account for ${name}: ${made.error}`);
+    crew.set(name, made.token);
+  }
+  return crew.get(name);
+}
 const { EVENTS, TIMINGS } = await import('../shared/constants.js');
 
 // Speed the game way up for the soak (in-process mutation of shared timings).
@@ -52,6 +70,7 @@ class Bot {
     this.name = name;
     this.isHost = isHost;
     this.token = token;
+    this.accountToken = accountFor(name);
     this.state = null;
     this.actedKeys = new Set();
     this.socket = null;
@@ -64,7 +83,10 @@ class Bot {
       this.socket.on('connect', () => {
         this.socket.emit(
           EVENTS.JOIN,
-          { gameId: this.gameId, token: this.token, nickname: this.name },
+          {
+            gameId: this.gameId, token: this.token, nickname: this.name,
+            accountToken: this.accountToken,
+          },
           (res) => {
             if (!res?.ok) {
               reject(new Error(`join failed for ${this.name}`));
@@ -214,7 +236,10 @@ async function soakVariant(variantKey, extraSettings = {}, label = variantKey) {
 
   const createRes = await fetch(`${url}/api/games`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accountFor('host')}`,
+    },
     body: JSON.stringify({
       nickname: 'host',
       settings: {

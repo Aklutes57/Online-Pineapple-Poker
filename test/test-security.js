@@ -13,6 +13,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-sec-')), 
 process.env.ALLOWED_ORIGINS = 'https://trusted.example';
 
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 const { buildServer } = await import('../server/app.js');
 const { EVENTS } = await import('../shared/constants.js');
 
@@ -55,9 +56,13 @@ const host = `localhost:${port}`;
 
 // ---- create a game to exercise the socket + upload surfaces ----
 
+const hostAccount = await tokenFor('host');
+const flooderAccount = await tokenFor('flooder');
+const impostorAccount = await tokenFor('impostor');
+const normalAccount = await tokenFor('normal');
 const createRes = await fetch(`${url}/api/games`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   body: JSON.stringify({ nickname: 'host', settings: {} }),
 });
 const { gameId, token } = await createRes.json();
@@ -71,15 +76,33 @@ const { gameId, token } = await createRes.json();
   check('unknown upload is a 404', res.status === 404);
 }
 
-// ---- per-IP rate limit on unauthenticated game creation ----
+// ---- creating a table without an account is refused ----
+//
+// Before the flood below, deliberately: the rate limiter runs ahead of the
+// sign-in check, so after 26 requests this would measure a 429 and prove
+// nothing about accounts.
 
+{
+  const r = await fetch(`${url}/api/games`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname: 'nobody', settings: {} }),
+  });
+  check('a table cannot be created without an account', r.status === 401);
+}
+
+// ---- per-IP rate limit on game creation ----
+//
+// Creating a table needs an account now, so these are signed-in requests: the
+// limiter is what stops them, not the sign-in check. Worth keeping either way
+// — one account can still spin up tables until the machine falls over.
 {
   let sawLimit = false;
   let created = 0;
   for (let i = 0; i < 26; i++) {
     const r = await fetch(`${url}/api/games`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${flooderAccount}` },
       body: JSON.stringify({ nickname: 'flood', settings: {} }),
     });
     if (r.status === 429) sawLimit = true;
@@ -113,7 +136,7 @@ check('a socket with no Origin (native client) is allowed', (await tryConnect(un
   const s = await new Promise((resolve, reject) => {
     const sock = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: `http://${host}` }, reconnection: false });
     sock.on('connect', () => {
-      sock.emit(EVENTS.JOIN, { gameId, token: null, nickname: 'flooder' }, (r) => {
+      sock.emit(EVENTS.JOIN, { gameId, token: null, nickname: 'flooder', accountToken: flooderAccount }, (r) => {
         if (r?.ok) resolve(sock); else reject(new Error('join failed'));
       });
     });
@@ -132,7 +155,7 @@ check('a socket with no Origin (native client) is allowed', (await tryConnect(un
   const ok = await new Promise((resolve) => {
     const sock = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: `http://${host}` }, reconnection: false });
     sock.on('connect', () => {
-      sock.emit(EVENTS.JOIN, { gameId, token: null, nickname: 'normal' }, (r) => {
+      sock.emit(EVENTS.JOIN, { gameId, token: null, nickname: 'normal', accountToken: normalAccount }, (r) => {
         sock.close();
         resolve(!!r?.ok);
       });
@@ -148,7 +171,7 @@ check('a socket with no Origin (native client) is allowed', (await tryConnect(un
   // Real host connects and holds the name 'host'.
   const realHost = await new Promise((resolve) => {
     const sock = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: `http://${host}` }, reconnection: false });
-    sock.on('connect', () => sock.emit(EVENTS.JOIN, { gameId, token }, (r) => resolve({ sock, r })));
+    sock.on('connect', () => sock.emit(EVENTS.JOIN, { gameId, token, accountToken: hostAccount }, (r) => resolve({ sock, r })));
   });
   const hostName = realHost.r.state.you?.nickname
     || realHost.r.state.seats.find((s) => s)?.nickname;
@@ -156,7 +179,7 @@ check('a socket with no Origin (native client) is allowed', (await tryConnect(un
   // A guest now tries to join as the same name while the host is connected.
   const impostor = await new Promise((resolve) => {
     const sock = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: `http://${host}` }, reconnection: false });
-    sock.on('connect', () => sock.emit(EVENTS.JOIN, { gameId, token: null, nickname: hostName }, (r) => resolve({ sock, r })));
+    sock.on('connect', () => sock.emit(EVENTS.JOIN, { gameId, token: null, nickname: hostName, accountToken: impostorAccount }, (r) => resolve({ sock, r })));
   });
   const impostorName = impostor.r.state.you?.nickname;
   check('an impostor cannot take a connected player\'s exact name',

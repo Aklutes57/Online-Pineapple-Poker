@@ -729,22 +729,30 @@ export function buildServer() {
   app.post('/api/games', createGameLimiter, (req, res) => {
     const { nickname, settings } = req.body || {};
     const account = accountForRequest(req);
+    // Hosting needs an account, like playing does. The host is the one the
+    // night's ledger belongs to, the one the running total is kept for, and
+    // the one the .csv is mailed to when the table closes — none of which has
+    // anywhere to go without one.
+    if (!account) {
+      res.status(401).json({ error: 'Sign in to start a table' });
+      return;
+    }
     const rawNick = typeof nickname === 'string' && nickname.trim()
       ? nickname
-      : account?.displayName || '';
+      : account.displayName || '';
     const nick = rawNick.trim().slice(0, SETTINGS_LIMITS.nickname.max);
     if (!nick) {
       res.status(400).json({ error: 'nickname required' });
       return;
     }
     // A signed-in host's saved table look follows them to every game.
-    const theme = account ? defaultTheme(account.id) : null;
+    const theme = defaultTheme(account.id);
     const withTheme = theme
       ? { ...(settings || {}), tableTheme: {
           feltImage: theme.feltImage, feltColor: theme.feltColor, railColor: theme.railColor,
         } }
       : settings || {};
-    const created = createGame(withTheme, nick, account?.id ?? null);
+    const created = createGame(withTheme, nick, account.id);
     if (!created) {
       res.status(503).json({ error: 'server is full — try again later' });
       return;
@@ -755,7 +763,7 @@ export function buildServer() {
     created.game.origin = `${req.protocol}://${req.get('host')}`;
     // Continue from the host's last table. Read here rather than trusted from
     // the client: the browser says whether to carry over, never how much.
-    if (account && (req.body || {}).carryStacks === true) {
+    if ((req.body || {}).carryStacks === true) {
       const last = lastTableStacks(account.id);
       const n = last ? created.game.setCarryStacks(last.players) : 0;
       if (n > 0) {
@@ -764,7 +772,7 @@ export function buildServer() {
     }
     // Fire the host's saved invite list. Deliberately not awaited: a slow
     // mail server must never delay handing back the table link.
-    if (account && (req.body || {}).announce !== false) {
+    if ((req.body || {}).announce !== false) {
       const s = created.game.settings;
       const origin = `${req.protocol}://${req.get('host')}`;
       announceTable(account.id, {

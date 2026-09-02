@@ -15,9 +15,14 @@ const { httpServer } = buildServer();
 await new Promise(r => httpServer.listen(0, r));
 const base = 'http://localhost:' + httpServer.address().port;
 const { io: ioc } = await import('socket.io-client');
-const sock = (g,t,n,seat) => new Promise(res => { const s = ioc(base,{transports:['websocket'],extraHeaders:{Origin:base},reconnection:false});
-  s.on('connect',()=>s.emit(EVENTS.JOIN,{gameId:g,token:t,nickname:n},(r)=>{s.emit(EVENTS.REQUEST_SEAT,{nickname:n,buyIn:200,seatIndex:seat});res({s,r});}));});
-const created = await (await fetch(base+'/api/games',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:'Host',settings:{}})})).json();
+const { tokenFor } = await import('./helpers/account.js');
+const sock = async (g,t,n,seat) => {
+  const accountToken = await tokenFor(n);
+  return new Promise(res => { const s = ioc(base,{transports:['websocket'],extraHeaders:{Origin:base},reconnection:false});
+    s.on('connect',()=>s.emit(EVENTS.JOIN,{gameId:g,token:t,nickname:n,accountToken},(r)=>{s.emit(EVENTS.REQUEST_SEAT,{nickname:n,buyIn:200,seatIndex:seat});res({s,r});}));});
+};
+const hostAccount = await tokenFor('Host');
+const created = await (await fetch(base+'/api/games',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${hostAccount}`},body:JSON.stringify({nickname:'Host',settings:{}})})).json();
 const host = await sock(created.gameId, created.token, 'Host', 0);
 const p1 = await sock(created.gameId, null, 'P1', 1);
 await new Promise(r=>setTimeout(r,250));

@@ -11,6 +11,7 @@ import path from 'node:path';
 process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-rtc-')), 'test.db');
 
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 const { buildServer } = await import('../server/app.js');
 const { EVENTS } = await import('../shared/constants.js');
 
@@ -50,18 +51,23 @@ const url = `http://localhost:${httpServer.address().port}`;
 
 async function makeGame(nick) {
   return fetch(`${url}/api/games`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${await tokenFor(nick)}`,
+    },
     body: JSON.stringify({ nickname: nick, settings: {} }),
   }).then((r) => r.json());
 }
-function connect(gameId, token, nick) {
+async function connect(gameId, token, nick) {
+  const accountToken = await tokenFor(nick);
   return new Promise((resolve, reject) => {
     const s = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: url }, reconnection: false });
     const signals = [];
     let state = null;
     s.on(EVENTS.RTC_SIGNAL, (m) => signals.push(m));
     s.on(EVENTS.STATE, (st) => { state = st; });
-    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId, token, nickname: nick }, (r) => {
+    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId, token, nickname: nick, accountToken }, (r) => {
       r?.ok ? resolve({ s, res: r, signals, get state() { return state; } }) : reject(new Error('join failed'));
     }));
     s.on('connect_error', reject);

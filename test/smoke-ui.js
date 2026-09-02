@@ -12,6 +12,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-smoke-'))
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
+const { signUpInPage } = await import('./helpers/account.js');
 const { VARIANTS } = await import('../shared/constants.js');
 
 // Every game a host can actually pick. Derived rather than counted by hand, so
@@ -90,6 +91,19 @@ try {
   // ---- host creates a table from the landing page ----
   const anna = await newPage('anna');
   await anna.goto(base);
+
+  // ---- an account is required to play ----
+  // Checked before signing anybody in, because this is the first thing a new
+  // visitor meets.
+  await anna.click('#start-btn');
+  await check('hosting a table asks a signed-out visitor to sign in first',
+    await anna.locator('#auth-modal:not(.hidden)').isVisible());
+  await anna.keyboard.press('Escape');
+  await check('and the create form is not opened behind it',
+    (await anna.locator('#create-modal').getAttribute('class') || '').includes('hidden'));
+
+  await signUpInPage(anna, base, 'Anna');
+  await anna.reload();
   // The install button is always offered on the landing page (Android + iOS +
   // desktop), not just when Chrome happens to fire its prompt event.
   await check('install button is visible on the landing page',
@@ -173,12 +187,16 @@ try {
 
   // ---- two friends join via the invite link ----
   const ben = await newPage('ben');
+  await ben.goto(base);
+  await signUpInPage(ben, base, 'Ben');
   await ben.goto(gameUrl);
   await ben.click('[data-act="open-join"]');
   await ben.fill('#j-nickname', 'Ben');
   await ben.click('#j-request');
 
   const cara = await newPage('cara');
+  await cara.goto(base);
+  await signUpInPage(cara, base, 'Cara');
   await cara.goto(gameUrl);
   await cara.click('[data-act="open-join"]');
   await cara.fill('#j-nickname', 'Cara');
@@ -453,8 +471,11 @@ try {
   // ---- emoji reactions reach the other players ----
   // React is its own top-bar button now — no menu needed.
   await check('React sits in the top bar', await ben.locator('#react-btn').isVisible());
-  await check('a guest is offered Sign in on the table',
-    await ben.locator('#signin-chip').isVisible());
+  // Everyone at a table is signed in now, so the bar shows who they are
+  // rather than offering them a way to sign in.
+  await check('a player sees their account on the table, not a sign-in prompt',
+    await ben.locator('#account-chip').isVisible()
+    && !(await ben.locator('#signin-chip').isVisible()));
   await ben.click('#react-btn');
   await ben.waitForSelector('#react-picker:not(.hidden)');
   await ben.click('.react-option[data-emoji="🔥"]');
@@ -699,8 +720,21 @@ try {
   await ben.waitForSelector('.seat.me .nameplate');
   await check('reload restores seat via stored token', true);
 
-  // ---- accounts are optional: guests above never signed in and played fine ----
-  await check('guests played a full hand without any account', winnerSeen);
+  // ---- an account is required, and the table says so rather than bouncing ----
+  await check('signed-in players played a full hand', winnerSeen);
+  {
+    const stranger = await newPage('stranger');
+    await stranger.goto(gameUrl);
+    // Following an invite link while signed out must ask for an account in
+    // place, not throw the visitor back to the home page and lose the table
+    // they were invited to.
+    await check('an invite link asks a signed-out visitor to sign in, on the table page',
+      await stranger.locator('#auth-modal:not(.hidden)').isVisible({ timeout: 8000 })
+        .catch(() => false));
+    await check('and does not bounce them to the home page',
+      stranger.url().startsWith(`${base}/games/`));
+    await stranger.close();
+  }
 
   // ---- sign up through the UI, then host a table as that account ----
   const dana = await newPage('dana');
@@ -810,11 +844,14 @@ try {
   await dana.waitForSelector('#table');
   await check('saved felt colour applies to a newly hosted table', await feltIsPink(dana));
 
-  // A guest opening the same table sees the host's look too.
+  // Somebody else opening the same table sees the host's look too.
   const guestView = await newPage('guestview');
-  await guestView.goto(dana.url());
+  const tableUrl = dana.url();
+  await guestView.goto(base);
+  await signUpInPage(guestView, base, 'Viewer');
+  await guestView.goto(tableUrl);
   await guestView.waitForSelector('#table');
-  await check("guests see the host's table look", await feltIsPink(guestView));
+  await check("other players see the host's table look", await feltIsPink(guestView));
 
   await dana.goto(`${base}/me`);
   await dana.waitForSelector('#signed-in:not(.hidden)');
@@ -1004,6 +1041,8 @@ try {
   // ---- tournament format lives in the create pop-up, cash game is default ----
   const tess = await newPage('tess');
   await tess.goto(base);
+  await signUpInPage(tess, base, 'Tess');
+  await tess.reload();
   await tess.click('#start-btn');
   await check('a new table is a cash game by default',
     await tess.inputValue('#c-format') === 'cash');

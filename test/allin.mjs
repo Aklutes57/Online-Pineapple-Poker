@@ -12,6 +12,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-ai-')), '
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
+const { signUpInPage } = await import('./helpers/account.js');
 
 const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
@@ -32,6 +33,8 @@ const mk = async () =>
 // ---- two players, one hand ----
 const anna = await mk();
 await anna.goto(base);
+await signUpInPage(anna, base, 'Anna');
+await anna.reload();
 await anna.click('#start-btn');
 await anna.fill('#c-nickname', 'Anna');
 await anna.selectOption('#c-variant', 'holdem');
@@ -43,6 +46,8 @@ await anna.click('#j-request');
 await anna.waitForSelector('.seat.me .nameplate');
 
 const ben = await mk();
+await ben.goto(base);
+await signUpInPage(ben, base, 'Ben');
 await ben.goto(url);
 await ben.click('.empty-seat-btn');
 await ben.fill('#j-nickname', 'Ben');

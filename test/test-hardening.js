@@ -9,6 +9,7 @@ import path from 'node:path';
 process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-hard-')), 'test.db');
 
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 const { buildServer } = await import('../server/app.js');
 const { EVENTS } = await import('../shared/constants.js');
 
@@ -28,20 +29,22 @@ await new Promise((r) => httpServer.listen(0, r));
 const port = httpServer.address().port;
 const url = `http://localhost:${port}`;
 
+const hostAccount = await tokenFor('host');
 const createRes = await fetch(`${url}/api/games`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   body: JSON.stringify({ nickname: 'host', settings: {} }),
 });
 const { gameId, token } = await createRes.json();
 
-function connect(name, tok) {
+async function connect(name, tok) {
+  const accountToken = await tokenFor(name);
   return new Promise((resolve, reject) => {
     const s = ioc(url, { transports: ['websocket'] });
     const errors = [];
     s.on(EVENTS.ERROR_MSG, (e) => errors.push(e));
     s.on('connect', () => {
-      s.emit(EVENTS.JOIN, { gameId, token: tok, nickname: name }, (r) => {
+      s.emit(EVENTS.JOIN, { gameId, token: tok, nickname: name, accountToken }, (r) => {
         if (!r?.ok) reject(new Error(`join failed for ${name}`));
         else resolve({ socket: s, errors, res: r });
       });
@@ -51,6 +54,7 @@ function connect(name, tok) {
 
 const host = await connect('host', token);
 const guest = await connect('guest', null);
+const guestAccount = await tokenFor('guest');
 
 // ---- malformed payloads on every guarded event must not crash the server ----
 
@@ -78,7 +82,7 @@ check('prototype pollution attempt did not stick', {}.evil === undefined);
 
 for (const bad of [42, 'javascript:alert(1)', 'x'.repeat(50000), {}, [], 'http://not-https']) {
   await new Promise((resolve) => {
-    guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token, pushEndpoint: bad }, () => resolve());
+    guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token, accountToken: guestAccount, pushEndpoint: bad }, () => resolve());
   });
 }
 check('server survives garbage pushEndpoint values',
@@ -109,7 +113,7 @@ await new Promise((r) => setTimeout(r, 200));
 check('bad buy-ins rejected with errors', guest.errors.length >= 3);
 
 const stateAfter = await new Promise((resolve) => {
-  guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token }, (r) => resolve(r.state));
+  guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token, accountToken: guestAccount }, (r) => resolve(r.state));
 });
 check('bad buy-ins did not seat the guest', stateAfter.seats.every((s) => !s || s.nickname !== 'guest'));
 
@@ -117,7 +121,7 @@ check('bad buy-ins did not seat the guest', stateAfter.seats.every((s) => !s || 
 
 async function currentSettings() {
   return new Promise((resolve) => {
-    host.socket.emit(EVENTS.JOIN, { gameId, token }, (r) => resolve(r.state.settings));
+    host.socket.emit(EVENTS.JOIN, { gameId, token, accountToken: hostAccount }, (r) => resolve(r.state.settings));
   });
 }
 
@@ -140,20 +144,33 @@ check('and it can change back', (await currentSettings()).variant === 'holdem');
 guest.socket.emit(EVENTS.HOST_ADJUST_STACK, { playerId: guest.res.playerId, delta: 100000 });
 await new Promise((r) => setTimeout(r, 200));
 const state2 = await new Promise((resolve) => {
-  guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token }, (r) => resolve(r.state));
+  guest.socket.emit(EVENTS.JOIN, { gameId, token: guest.res.token, accountToken: guestAccount }, (r) => resolve(r.state));
 });
 check('non-host cannot mint chips', state2.ledger.every((row) => row.buyIns <= 200));
 
 // ---- re-JOIN on a bound socket must not leave a stale connected player ----
 
 const rejoin = await new Promise((resolve) => {
-  guest.socket.emit(EVENTS.JOIN, { gameId }, (r) => resolve(r)); // no token -> brand-new player
+  guest.socket.emit(EVENTS.JOIN, { gameId }, (r) => resolve(r));
 });
-check('re-join without token creates a fresh identity', rejoin.playerId !== guest.res.playerId);
+// This used to mint a brand-new anonymous player. Playing requires an account
+// now, so a JOIN carrying no account is refused instead — which is the safer
+// of the two, since minting an identity was how a stale player was left
+// behind on a bound socket in the first place.
+check('a join with no account is refused',
+  rejoin.ok === false && rejoin.error === 'SIGN_IN_REQUIRED');
+
+// A join with an account that does not own this seat's token is refused too,
+// so a leaked seat token cannot be played from somebody else's browser.
+const stolen = await new Promise((resolve) => {
+  guest.socket.emit(EVENTS.JOIN, { gameId, token, accountToken: guestAccount }, (r) => resolve(r));
+});
+check('a seat token is no good to another account',
+  stolen.ok === false && stolen.error === 'SIGN_IN_REQUIRED');
 guest.socket.disconnect();
 await new Promise((r) => setTimeout(r, 300));
 const state3 = await new Promise((resolve) => {
-  host.socket.emit(EVENTS.JOIN, { gameId, token }, (r) => resolve(r.state));
+  host.socket.emit(EVENTS.JOIN, { gameId, token, accountToken: hostAccount }, (r) => resolve(r.state));
 });
 // After disconnect, no seat/nameplate should still claim the old guest is connected.
 check(

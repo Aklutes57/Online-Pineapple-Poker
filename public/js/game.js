@@ -1,8 +1,9 @@
 // Table-page entry: socket lifecycle, token storage, state store, dispatch.
 
-import { EVENTS, NAME_FONTS, DEFAULT_NAME_FONT, SKINS, DEFAULT_SKIN } from '/shared/constants.js';
+import { EVENTS, ERRORS, NAME_FONTS, DEFAULT_NAME_FONT, SKINS, DEFAULT_SKIN } from '/shared/constants.js';
 import { showToast, escapeHtml } from '/js/ui.js';
 import { getAccountToken, loadAccount, currentAccount, authHeaders } from '/js/auth.js';
+import { openAuthModal } from '/js/authModal.js';
 import { initReactions, showReaction } from '/js/reactions.js';
 import {
   play as playSound, setCustomClips, armAudioUnlock, audioState,
@@ -48,8 +49,21 @@ function join() {
   const { token, nickname } = saved();
   const accountToken = getAccountToken();
   const pushEndpoint = savedPushEndpoint();
+  // Following an invite link while signed out lands here. Ask for the account
+  // in place and join on the way out, rather than bouncing back to the home
+  // page and losing which table they were invited to.
+  if (!accountToken) {
+    openAuthModal({ onSuccess: () => join() });
+    return;
+  }
   socket.emit(EVENTS.JOIN, { gameId, token, nickname, accountToken, pushEndpoint }, (res) => {
     if (!res?.ok) {
+      if (res?.error === ERRORS.SIGN_IN_REQUIRED) {
+        // Signed out, or the session expired, or this seat belongs to somebody
+        // else's account.
+        openAuthModal({ onSuccess: () => join() });
+        return;
+      }
       location.href = '/?error=notfound';
       return;
     }

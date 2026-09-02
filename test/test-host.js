@@ -10,6 +10,7 @@ import path from 'node:path';
 process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-host-')), 'test.db');
 
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 const { Game } = await import('../server/game.js');
 const { createGame } = await import('../server/gameManager.js');
 const { buildServer } = await import('../server/app.js');
@@ -61,27 +62,32 @@ function check(name, cond) {
   await new Promise((r) => httpServer.listen(0, r));
   const url = `http://localhost:${httpServer.address().port}`;
 
+  const hostAccount = await tokenFor('Hosty');
   const created = await fetch(`${url}/api/games`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nickname: 'GuestHost', settings: {} }),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
+    body: JSON.stringify({ nickname: 'Hosty', settings: {} }),
   }).then((r) => r.json());
 
-  function connect(token, nickname) {
+  async function connect(token, nickname) {
+    const accountToken = await tokenFor(nickname);
     return new Promise((resolve, reject) => {
       const s = ioc(url, { transports: ['websocket'], extraHeaders: { Origin: url }, reconnection: false });
-      s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname }, (res) => {
-        res?.ok ? resolve({ s, res }) : reject(new Error('join failed'));
-      }));
+      s.on('connect', () => s.emit(EVENTS.JOIN,
+        { gameId: created.gameId, token, nickname, accountToken }, (res) => {
+          res?.ok ? resolve({ s, res, accountToken }) : reject(new Error(`join failed for ${nickname}`));
+        }));
       s.on('connect_error', reject);
     });
   }
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const stateOf = (h) => new Promise((r) => h.s.emit(EVENTS.JOIN, { gameId: created.gameId, token: h.res.token }, (res) => r(res.state)));
+  const stateOf = (h) => new Promise((r) => h.s.emit(EVENTS.JOIN,
+    { gameId: created.gameId, token: h.res.token, accountToken: h.accountToken }, (res) => r(res.state)));
 
-  const host = await connect(created.token, 'GuestHost'); // no account token anywhere
-  check('a guest host is the host (no account needed)', host.res.state.you.isHost === true);
+  const host = await connect(created.token, 'Hosty');
+  check('whoever created the table is its host', host.res.state.you.isHost === true);
 
-  host.s.emit(EVENTS.REQUEST_SEAT, { nickname: 'GuestHost', buyIn: 200 });
+  host.s.emit(EVENTS.REQUEST_SEAT, { nickname: 'Hosty', buyIn: 200 });
   const bob = await connect(null, 'Bob');
   bob.s.emit(EVENTS.REQUEST_SEAT, { nickname: 'Bob', buyIn: 200 });
   await wait(150);
@@ -98,12 +104,12 @@ function check(name, cond) {
   const afterStart = await stateOf(host);
   check('the host still holds host after starting', afterStart.you.isHost === true);
   check('the post-start request reaches the host', afterStart.seatRequests.some((r) => r.nickname === 'Carol'));
-  check('state carries hostName for the change toast', afterStart.hostName === 'GuestHost');
+  check('state carries hostName for the change toast', afterStart.hostName === 'Hosty');
 
   host.s.emit(EVENTS.HOST_APPROVE_SEAT, { playerId: carol.res.playerId, approve: true });
   await wait(200);
   const seated = (await stateOf(host)).seats.some((s) => s && s.nickname === 'Carol');
-  check('the guest host successfully accepts a player after start', seated);
+  check('the host successfully accepts a player after start', seated);
 
   host.s.close(); bob.s.close(); carol.s.close();
   await new Promise((r) => httpServer.close(r));

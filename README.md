@@ -1,8 +1,8 @@
 # Reg-Poker Online
 
 Free play-money poker with friends, in the browser. Create a private table,
-share the link, approve who sits down, and play — no downloads, no accounts,
-no real money.
+share the link, approve who sits down, and play — no downloads, no real money.
+Sign up with an email once; the ledger is written against your account.
 
 **Games:** Texas Hold'em · Pineapple (discard before the flop) ·
 Crazy Pineapple (discard after the flop) · Pot Limit Omaha ·
@@ -30,11 +30,16 @@ Open the site, click **Start a New Game**, pick your settings, and share the
 table URL. Friends request seats; the host approves each one with their
 buy-in. Works on phones (landscape recommended).
 
-## Accounts are optional
+## Accounts
 
-You never need one. Open a link, pick a nickname, play — exactly as before.
-Signing up with an email adds an all-time ledger across sessions, poker
-stats, a saved invite list, and a table theme that follows you.
+An account is required to host a table or sit at one. It is what the night's
+ledger is written against — the running total across nights, the stacks
+carried from one game to the next, and the .csv mailed to the host when a
+table closes all key on it. It also carries your poker stats, saved invite
+list and table theme from game to game.
+
+Signing up is an email, a password and a display name. Following an invite
+link while signed out asks for one in place, then joins that table.
 
 Data lives in a SQLite file at `data/pineapple.db` (override with
 `PP_DB_PATH`), created automatically on first run.
@@ -123,5 +128,5 @@ test/         plain-node test suites (no framework)
 ```bash
 npm test               # evaluator, side pots, betting, database/accounts, hardening
 npm run soak           # bots play hands on every variant end-to-end
-npm run smoke          # Playwright UI test (real browsers, guest + account flows)
+npm run smoke          # Playwright UI test (real browsers, sign-up + play flows)
 ```

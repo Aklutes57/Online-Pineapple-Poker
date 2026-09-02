@@ -150,15 +150,28 @@ export function attachSockets(io) {
       // A re-JOIN on a bound socket must release the old binding first.
       detachSocket(socket);
 
-      // Accounts are optional — a missing or bad token just means "guest".
       let account = null;
       try {
         account = accountForToken(accountToken);
       } catch {
         account = null;
       }
+      // An account is required to be at a table at all. Checked here rather
+      // than only in the page, because this is the door: a socket is all
+      // anybody needs to sit down.
+      if (!account) {
+        ack({ ok: false, error: ERRORS.SIGN_IN_REQUIRED });
+        return;
+      }
 
       let player = typeof token === 'string' ? game.playerByToken(token) : null;
+      // A seat token is only good for the account that took the seat. Without
+      // this, a token shared or scraped from one browser would seat somebody
+      // else on that player's ledger row.
+      if (player && player.accountId && player.accountId !== account.id) {
+        ack({ ok: false, error: ERRORS.SIGN_IN_REQUIRED });
+        return;
+      }
       if (!player) {
         if (game.players.size >= MAX_PLAYERS_PER_GAME) {
           ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
@@ -166,16 +179,15 @@ export function attachSockets(io) {
         }
         const nick = uniqueNickname(
           game,
-          cleanNickname(nickname) ||
-            cleanNickname(account?.displayName) ||
-            `Guest-${Math.floor(1000 + Math.random() * 9000)}`
+          cleanNickname(nickname) || cleanNickname(account.displayName) || 'Player'
         );
-        player = game.addPlayer(nick, account?.id ?? null);
-      } else if (account && !player.accountId) {
-        // Signed in after joining as a guest — adopt the account.
+        player = game.addPlayer(nick, account.id);
+      } else if (!player.accountId) {
+        // A player row from before this rule, or one seated by the host: bind
+        // it to whoever is actually here.
         player.accountId = account.id;
       }
-      if (account) {
+      {
         player.accountName = account.displayName;
         // Linked payment handles travel with the player so table-mates can pay
         // them from the ledger. Opt-in: absent unless the account set them.

@@ -16,6 +16,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-media-'))
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
+const { tokenFor } = await import('./helpers/account.js');
 
 let failures = 0;
 let passes = 0;
@@ -28,8 +29,10 @@ const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
 const base = `http://localhost:${httpServer.address().port}`;
 
+const hostAccount = await tokenFor('Host');
 const created = await fetch(`${base}/api/games`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   body: JSON.stringify({ nickname: 'Host', settings: {} }),
 }).then((r) => r.json());
 
@@ -49,6 +52,10 @@ async function page(name, token, nick) {
   p.on('pageerror', (e) => console.log(`[${name}] pageerror: ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error') console.log(`[${name}] console.error: ${m.text()}`); });
   if (token) await p.addInitScript(([k, v]) => localStorage.setItem(k, v), [`pp:${created.gameId}`, JSON.stringify({ token, nickname: nick })]);
+  // Playing needs an account: the host reuses the one that made the table
+  // (its seat token is only good for that account), everyone else gets theirs.
+  const accountToken = token ? hostAccount : await tokenFor(nick);
+  await p.addInitScript((t) => localStorage.setItem('pp:account', t), accountToken);
   await p.goto(`${base}/games/${created.gameId}`);
   return p;
 }

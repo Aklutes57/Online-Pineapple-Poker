@@ -25,16 +25,20 @@ const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
 const base = `http://localhost:${httpServer.address().port}`;
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 
+const hostAccount = await tokenFor('Host');
 const created = await fetch(`${base}/api/games`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   body: JSON.stringify({ nickname: 'Host', settings: {} }),
 }).then((r) => r.json());
 
-function sock(token, nick, seat) {
+async function sock(token, nick, seat) {
+  // The creator's seat token only works for the creator's account.
+  const accountToken = nick === 'Host' ? hostAccount : await tokenFor(nick);
   return new Promise((res) => {
     const s = ioc(base, { transports: ['websocket'], extraHeaders: { Origin: base }, reconnection: false });
-    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname: nick }, (r) => {
+    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname: nick, accountToken }, (r) => {
       s.emit(EVENTS.REQUEST_SEAT, { nickname: nick, buyIn: 200, seatIndex: seat });
       res({ s, r });
     }));
@@ -68,6 +72,7 @@ await page.route('**://*.youtube.com/**', (r) => r.abort());
 await page.route('**://*.ytimg.com/**', (r) => r.abort());
 await page.addInitScript(([k, v]) => localStorage.setItem(k, v),
   [`pp:${created.gameId}`, JSON.stringify({ token: created.token, nickname: 'Host' })]);
+await page.addInitScript((t) => localStorage.setItem('pp:account', t), hostAccount);
 await page.goto(`${base}/games/${created.gameId}`);
 await page.waitForSelector('#table');
 await page.waitForTimeout(400);

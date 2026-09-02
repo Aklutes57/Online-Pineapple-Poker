@@ -13,6 +13,7 @@ const dir = mkdtempSync(path.join(tmpdir(), 'pp-push-'));
 process.env.PP_DB_PATH = path.join(dir, 'test.db');
 
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 const { buildServer } = await import('../server/app.js');
 const { EVENTS, TIMINGS } = await import('../shared/constants.js');
 const { initDb, closeDb, get } = await import('../server/db.js');
@@ -103,18 +104,20 @@ const vapidRes = await fetch(`${url}/api/push/vapid-key`).then((r) => r.json());
 check('vapid key served over HTTP', vapidRes.key === key1);
 check('healthz responds', (await fetch(`${url}/healthz`)).ok);
 
+const hostAccount = await tokenFor('host');
 const created = await fetch(`${url}/api/games`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   body: JSON.stringify({ nickname: 'host', settings: { smallBlind: 1, bigBlind: 2 } }),
 }).then((r) => r.json());
 const gameId = created.gameId;
 
-function connect(name, { token = null, pushEndpoint = null } = {}) {
+async function connect(name, { token = null, pushEndpoint = null } = {}) {
+  const accountToken = await tokenFor(name);
   return new Promise((resolve, reject) => {
     const s = ioc(url, { transports: ['websocket'] });
     s.on('connect', () => {
-      s.emit(EVENTS.JOIN, { gameId, token, nickname: name, pushEndpoint }, (r) => {
+      s.emit(EVENTS.JOIN, { gameId, token, nickname: name, accountToken, pushEndpoint }, (r) => {
         if (!r?.ok) reject(new Error(`join failed for ${name}`));
         else resolve({ socket: s, token: r.token, playerId: r.playerId, state: r.state });
       });
@@ -130,7 +133,7 @@ host.socket.emit(EVENTS.REQUEST_SEAT, { nickname: 'host', buyIn: 200 });
 guest.socket.emit(EVENTS.REQUEST_SEAT, { nickname: 'guest', buyIn: 200 });
 await sleep(200);
 const reqState = await new Promise((resolve) => {
-  host.socket.emit(EVENTS.JOIN, { gameId, token: host.token }, (r) => resolve(r.state));
+  host.socket.emit(EVENTS.JOIN, { gameId, token: host.token, accountToken: hostAccount }, (r) => resolve(r.state));
 });
 for (const req of reqState.seatRequests) {
   host.socket.emit(EVENTS.HOST_APPROVE_SEAT, { playerId: req.playerId, approve: true });
@@ -158,7 +161,7 @@ host.socket.on(EVENTS.STATE, (s) => {
   }
 });
 // Kick a fresh state so the loop starts.
-host.socket.emit(EVENTS.JOIN, { gameId, token: host.token }, () => {});
+host.socket.emit(EVENTS.JOIN, { gameId, token: host.token, accountToken: hostAccount }, () => {});
 await sleep(1200);
 
 check('disconnected player got a turn push', sent.length >= 1);
@@ -199,7 +202,7 @@ sendBehavior = null;
 
 // The game shrugged all of this off.
 const finalState = await new Promise((resolve) => {
-  host.socket.emit(EVENTS.JOIN, { gameId, token: host.token }, (r) => resolve(r.state));
+  host.socket.emit(EVENTS.JOIN, { gameId, token: host.token, accountToken: hostAccount }, (r) => resolve(r.state));
 });
 check('game still running after push failures', finalState.status === 'running');
 

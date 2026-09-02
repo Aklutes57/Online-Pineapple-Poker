@@ -10,8 +10,9 @@ const MARKUP = `
 <div class="modal-backdrop hidden" id="auth-modal">
   <div class="modal">
     <h2 id="auth-title">Sign in</h2>
-    <p class="auth-blurb">Playing as a guest works fine — an account just remembers your results,
-      stats, friends list and table look between games.</p>
+    <p class="auth-blurb">An account is needed to sit at a table. It is what the night's
+      ledger is written against, and what carries your results, stats, friends list
+      and table look from one game to the next.</p>
     <div class="field auth-name-field hidden">
       <label for="a-name">Display name</label>
       <input id="a-name" maxlength="20" autocomplete="nickname" placeholder="e.g. AceHigh">

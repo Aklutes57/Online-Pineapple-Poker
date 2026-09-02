@@ -1,7 +1,7 @@
 {
   "name": "pineapple-poker",
   "version": "1.0.0",
-  "description": "Play poker with your friends \u2014 no downloads, no sign-ups, no real money.",
+  "description": "Play poker with your friends \u2014 no downloads, no real money.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {

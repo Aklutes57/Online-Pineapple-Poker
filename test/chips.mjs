@@ -21,17 +21,21 @@ const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
 const base = `http://localhost:${httpServer.address().port}`;
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
 
+const hostAccount = await tokenFor('Host');
 const created = await fetch(`${base}/api/games`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   // Bounty on: it is the one payout that is genuinely stack to stack.
   body: JSON.stringify({ nickname: 'Host', settings: { sevenDeuceBounty: 5 } }),
 }).then((r) => r.json());
 
-function sock(token, nick, seat) {
+async function sock(token, nick, seat) {
+  // The creator's seat token only works for the creator's account.
+  const accountToken = nick === 'Host' ? hostAccount : await tokenFor(nick);
   return new Promise((res) => {
     const s = ioc(base, { transports: ['websocket'], extraHeaders: { Origin: base }, reconnection: false });
-    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname: nick }, (r) => {
+    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname: nick, accountToken }, (r) => {
       s.emit(EVENTS.REQUEST_SEAT, { nickname: nick, buyIn: 200, seatIndex: seat });
       res({ s, r });
     }));
@@ -72,6 +76,9 @@ async function watcher({ reducedMotion } = {}) {
   page.on('pageerror', (e) => { console.log(`  pageerror: ${e.message}`); bad++; });
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v),
     [`pp:${created.gameId}`, JSON.stringify({ token: created.token, nickname: 'Host' })]);
+  // The page has to be signed in as the account that holds this seat token —
+  // playing requires an account, and a seat token is only good for its owner.
+  await page.addInitScript((t) => localStorage.setItem('pp:account', t), hostAccount);
   await page.addInitScript(OBSERVE);
   await page.goto(`${base}/games/${created.gameId}`);
   await page.waitForSelector('#table');

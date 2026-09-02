@@ -95,13 +95,23 @@ async function offerCarryOver() {
 }
 
 document.getElementById('start-btn').addEventListener('click', () => {
+  // Hosting needs an account. Ask for one here rather than letting somebody
+  // fill in blinds, buy-ins and a game format and only then be told no.
+  if (!currentAccount()) {
+    openAuthModal({ onSuccess: () => openCreateModal() });
+    return;
+  }
+  openCreateModal();
+});
+
+function openCreateModal() {
   modal.classList.remove('hidden');
   offerCarryOver();
   const nickInput = document.getElementById('c-nickname');
   const account = currentAccount();
   if (account && !nickInput.value) nickInput.value = account.displayName;
   nickInput.focus();
-});
+}
 
 // ---- account chip in the header (optional — guests see a Sign in button) ----
 
@@ -198,6 +208,10 @@ document.getElementById('c-format').addEventListener('change', syncFormatFields)
 syncFormatFields();
 
 async function createGame() {
+  if (!currentAccount()) {
+    openAuthModal({ onSuccess: () => createGame() });
+    return;
+  }
   const nickname = document.getElementById('c-nickname').value.trim();
   if (!nickname) {
     showToast('Pick a nickname first');
@@ -235,6 +249,12 @@ async function createGame() {
         carryStacks: document.getElementById('c-carry')?.checked === true,
       }),
     });
+    if (res.status === 401) {
+      // The session expired between opening the form and sending it.
+      openAuthModal({ onSuccess: () => createGame() });
+      btn.disabled = false;
+      return;
+    }
     if (!res.ok) throw new Error('create failed');
     const { gameId, token } = await res.json();
     localStorage.setItem(`pp:${gameId}`, JSON.stringify({ token, nickname, ts: Date.now() }));

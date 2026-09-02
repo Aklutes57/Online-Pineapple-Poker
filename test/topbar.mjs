@@ -21,6 +21,7 @@ process.env.PP_DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'pp-topbar-')
 
 const { chromium } = await import('playwright');
 const { buildServer } = await import('../server/app.js');
+const { signUpInPage } = await import('./helpers/account.js');
 const { httpServer } = buildServer();
 await new Promise((r) => httpServer.listen(0, r));
 const base = `http://localhost:${httpServer.address().port}`;
@@ -33,6 +34,8 @@ const page = await (await browser.newContext({ viewport: { width: 1280, height: 
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
 
 await page.goto(base);
+await signUpInPage(page, base, 'Anna');
+await page.reload();
 await page.click('#start-btn');
 await page.fill('#c-nickname', 'Anna');
 await page.selectOption('#c-variant', 'holdem');

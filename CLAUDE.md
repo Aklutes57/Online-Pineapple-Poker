@@ -42,4 +42,8 @@ SQLite via built-in `node:sqlite`, installable PWA with Web Push.
 - Hole cards never leave `server/views.js` except to their owner.
 - The service worker (`public/sw.js`) must never intercept `/socket.io/*`
   or `/api/*`, and updates must never force a reload mid-hand.
-- Guests are first-class: every feature must work without an account.
+- An account is required to play: creating a table and joining one are both
+  gated on a signed-in account, at the HTTP route and the socket JOIN. The
+  ledger across nights, the stacks carried between them and the .csv mailed to
+  the host are all keyed to an account, so a player without one is a hole in
+  all of it. (This replaced an earlier "guests are first-class" rule.)

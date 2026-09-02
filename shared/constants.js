@@ -496,4 +496,9 @@ export const ERRORS = {
   NOT_HOST: 'NOT_HOST',
   BAD_REQUEST: 'BAD_REQUEST',
   RATE_LIMITED: 'RATE_LIMITED',
+  // Playing needs an account. The table is where the money is recorded, and
+  // every part of that record — the ledger across nights, the stacks carried
+  // between them, the .csv mailed to the host — is keyed to an account. A
+  // player without one is a hole in all of it.
+  SIGN_IN_REQUIRED: 'SIGN_IN_REQUIRED',
 };

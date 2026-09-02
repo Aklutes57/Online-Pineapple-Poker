@@ -24,8 +24,10 @@ await new Promise((r) => httpServer.listen(0, r));
 const base = `http://localhost:${httpServer.address().port}`;
 
 const { io: ioc } = await import('socket.io-client');
+const { tokenFor } = await import('./helpers/account.js');
+const hostAccount = await tokenFor('Host');
 const created = await fetch(`${base}/api/games`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hostAccount}` },
   // Which game to lay out. Stud is the worst case for the pods: seven cards in
   // front of every player, where the geometry was designed around two.
   body: JSON.stringify({
@@ -33,10 +35,12 @@ const created = await fetch(`${base}/api/games`, {
     settings: process.env.PP_VARIANT ? { variant: process.env.PP_VARIANT } : {},
   }),
 }).then((r) => r.json());
-function sock(token, nick, seat) {
+async function sock(token, nick, seat) {
+  // The creator's seat token only works for the creator's account.
+  const accountToken = nick === 'Host' ? hostAccount : await tokenFor(nick);
   return new Promise((res) => {
     const s = ioc(base, { transports: ['websocket'], extraHeaders: { Origin: base }, reconnection: false });
-    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname: nick }, (r) => {
+    s.on('connect', () => s.emit(EVENTS.JOIN, { gameId: created.gameId, token, nickname: nick, accountToken }, (r) => {
       s.emit(EVENTS.REQUEST_SEAT, { nickname: nick, buyIn: 200, seatIndex: seat });
       res({ s, r });
     }));
@@ -117,6 +121,7 @@ for (const [name, w, h, wantUpright] of views) {
   page.on('pageerror', (e) => { console.log(`  [${name}] pageerror: ${e.message}`); bad++; });
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v),
     [`pp:${created.gameId}`, JSON.stringify({ token: created.token, nickname: 'Host' })]);
+  await page.addInitScript((t) => localStorage.setItem('pp:account', t), hostAccount);
   await page.goto(`${base}/games/${created.gameId}`);
   await page.waitForSelector('#table');
   await page.waitForTimeout(800);
@@ -330,6 +335,7 @@ for (const [name, w, h, wantUpright] of views) {
   const page = await ctx.newPage();
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v),
     [`pp:${created.gameId}`, JSON.stringify({ token: created.token, nickname: 'Host' })]);
+  await page.addInitScript((t) => localStorage.setItem('pp:account', t), hostAccount);
   await page.goto(`${base}/games/${created.gameId}`);
   await page.waitForSelector('#table');
   await page.waitForTimeout(600);
