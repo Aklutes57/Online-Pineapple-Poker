@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your profile — Reg-Poker Online</title>
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#2c0a14">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/landing.css">
+  <link rel="stylesheet" href="/css/profile.css">
+  <script src="/js/skin.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand-mark" href="/"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></a>
+      <nav>
+        <a href="/">Home</a>
+        <span id="account-slot"></span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap profile-wrap">
+    <div id="signed-out" class="hidden signed-out-card">
+      <h1>Your profile</h1>
+      <p>Sign in to play, and to see your all-time ledger, poker stats, invite list and table theme.</p>
+      <button class="btn btn-primary" id="so-signin">Sign in or create an account</button>
+      <p class="fine">An account is needed to sit at a table — it is what the ledger is written against.</p>
+    </div>
+
+    <div id="signed-in" class="hidden">
+      <h1 id="profile-name"></h1>
+      <p class="profile-sub" id="profile-sub"></p>
+
+      <section class="profile-section">
+        <h2>Your profile picture</h2>
+        <p class="section-note">
+          Shown in your seat at every table you sit at, whenever your camera is
+          off. Saved to your account, so you only ever upload it once.
+        </p>
+        <div class="avatar-editor">
+          <img id="avatar-preview" class="avatar-preview hidden" alt="Your profile picture">
+          <div id="avatar-empty" class="avatar-preview avatar-empty">No picture yet</div>
+          <div class="avatar-controls">
+            <div class="field">
+              <label for="a-image">Picture</label>
+              <input id="a-image" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp">
+              <p class="hint">PNG, JPEG, GIF or WebP, up to 4MB.</p>
+            </div>
+            <div class="actions-left">
+              <button class="btn btn-ghost" id="a-clear">Remove picture</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Get paid</h2>
+        <p class="section-note">Link your payment apps so table-mates can pay you in one tap right from the ledger. Only people at your tables see these. Leave any blank.</p>
+        <div id="pay-fields" class="pay-fields"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="pay-save">Save payment methods</button>
+        </div>
+      </section>
+
+      <section class="profile-section">
+        <h2>All-time ledger</h2>
+        <div id="alltime-summary" class="stat-row"></div>
+        <div id="sessions-table"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Running total across nights</h2>
+        <p class="section-note">
+          The tab across every night at one host's tables — who is up, who is down,
+          and the fewest payments that square the lot. Mark money off as it changes
+          hands; part payments are fine, and anything wrong can be undone.
+        </p>
+        <div class="field hidden" id="ledger-picker">
+          <label for="ledger-host">Whose tab</label>
+          <select id="ledger-host"></select>
+        </div>
+        <div id="running-block"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Poker stats</h2>
+        <div id="stats-block"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Notifications on this device</h2>
+        <p class="section-note">
+          Get a ping when it's your turn or your seat is approved while the app is
+          closed. Works on desktop, Android, and iPhones with the app installed (iOS 16.4+).
+        </p>
+        <button class="btn btn-primary" id="push-toggle">Turn on notifications</button>
+      </section>
+
+      <section class="profile-section">
+        <h2>Auto-invite list</h2>
+        <p class="section-note" id="email-status"></p>
+        <div class="row">
+          <div class="field">
+            <label for="n-email">Friend's email</label>
+            <input id="n-email" type="email" placeholder="friend@example.com">
+          </div>
+          <div class="field">
+            <label for="n-label">Name (optional)</label>
+            <input id="n-label" maxlength="40" placeholder="Ben">
+          </div>
+          <div class="field field-btn">
+            <button class="btn btn-primary" id="n-add">Add</button>
+          </div>
+        </div>
+        <div id="contact-list"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Discord</h2>
+        <p class="section-note">
+          Paste a webhook URL from your Discord server's channel settings and new tables
+          post there automatically. Nothing else about your server is accessed.
+        </p>
+        <div class="row">
+          <div class="field">
+            <label for="n-webhook">Discord webhook URL</label>
+            <input id="n-webhook" type="url" placeholder="https://discord.com/api/webhooks/…">
+          </div>
+          <div class="field field-btn">
+            <button class="btn btn-primary" id="n-add-webhook">Connect</button>
+          </div>
+        </div>
+        <div id="target-list"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Your table look</h2>
+        <p class="section-note">Applied automatically to every table you host.</p>
+        <div class="theme-editor">
+          <div class="theme-preview" id="theme-preview"><span>Your table</span></div>
+          <div class="theme-controls">
+            <div class="field">
+              <label for="t-image">Felt image</label>
+              <input id="t-image" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp">
+              <p class="hint">PNG, JPEG, GIF or WebP, up to 4MB.</p>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="t-felt">Felt colour</label>
+                <input id="t-felt" type="color" value="#1f6b43">
+              </div>
+              <div class="field">
+                <label for="t-rail">Rail colour</label>
+                <input id="t-rail" type="color" value="#3b2a1e">
+              </div>
+            </div>
+            <div class="actions-left">
+              <button class="btn btn-primary" id="t-save">Save table look</button>
+              <button class="btn btn-ghost" id="t-clear">Reset</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Soundboard</h2>
+        <p class="section-note">
+          Upload your own clips for big moments. Anything you have the rights to use —
+          the app ships with its own generated sounds and no third-party audio.
+        </p>
+        <div id="sound-slots"></div>
+      </section>
+
+      <section class="profile-section">
+        <h2>Settings</h2>
+        <div class="row">
+          <div class="field">
+            <label for="p-name">Display name</label>
+            <input id="p-name" maxlength="20">
+          </div>
+          <div class="field field-btn">
+            <button class="btn btn-primary" id="p-save">Save</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+  <script type="module" src="/js/me.js"></script>
+</body>
+</html>

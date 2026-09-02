@@ -1,0 +1,54 @@
+# Deploys to Fly.io from GitHub's servers — no local terminal needed.
+#
+# One-time setup: add a repository secret named FLY_API_TOKEN
+# (GitHub repo → Settings → Secrets and variables → Actions), containing a
+# Fly deploy token for the app. After that, every push to the branch below
+# deploys automatically. Until the secret exists, runs skip harmlessly.
+
+name: Deploy to Fly.io
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/pokernow-website-clone-w0si2o]
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for deploy token
+        id: token
+        run: |
+          if [ -n "${{ secrets.FLY_API_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "FLY_API_TOKEN secret is not set yet — skipping deploy."
+          fi
+
+      - name: Checkout
+        if: steps.token.outputs.present == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up flyctl
+        if: steps.token.outputs.present == 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Ensure the data volume exists
+        if: steps.token.outputs.present == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if ! flyctl volumes list --json | grep -q '"pp_data"'; then
+            flyctl volumes create pp_data --size 1 --region ord --yes
+          fi
+
+      - name: Deploy (single machine — tables live in process memory)
+        if: steps.token.outputs.present == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --ha=false

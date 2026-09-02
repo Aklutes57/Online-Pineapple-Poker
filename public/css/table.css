@@ -1,0 +1,3064 @@
+/* Table page layout: header / table + side panel / action bar. */
+
+:root {
+  /* Real playing-card proportion (2.5 x 3.5 = 1 : 1.4), sized to fill the
+     felt the way PokerNow's do. The board is the hero; hole cards sit a step
+     under it, and your own get a further 18% in the seat rules below. */
+  --card-w: 48px;
+  --card-h: 67px;
+  --board-card-w: 86px;
+  --board-card-h: 120px;
+  --panel-w: 320px;
+  /* The action bar's fixed height. Fixed on purpose: see #action-bar. */
+  --bar-h: 76px;
+}
+
+.table-page {
+  overflow: hidden;
+}
+
+/* Never let anything push the page wider than the device. */
+html, body.table-page {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#app {
+  display: grid;
+  height: 100vh;
+  height: 100dvh;
+  max-width: 100vw;
+  /* The client-format frame: the table gets the whole width, and the bottom
+     band belongs to the chrome — chat docked bottom-left, the action buttons
+     bottom-right, room showing between them. Separate grid cells, so the
+     chat can never overlap the table or the buttons. */
+  /* minmax(0, …) instead of a bare 1fr: a 1fr track is really minmax(auto,1fr),
+     so a wide, non-wrapping row would force the whole grid — and the felt —
+     wider than the screen. The 0 minimum lets it shrink to fit. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Two tracks, not three: the chat dock takes only the width it is actually
+     using (a folded dock is its tab strip and nothing more) and the action bar
+     gets everything else. A wide bar is the point — the betting controls lay
+     out along it in one short row instead of stacking into a block that would
+     eat the felt. */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'top top'
+    'table table'
+    'chat bar';
+}
+
+/* Grid children must be allowed to shrink below their content's min-width. */
+#top-bar, #table-area, #action-bar { min-width: 0; }
+
+body.disconnected #app {
+  filter: grayscale(0.6) brightness(0.8);
+}
+
+body.disconnected::after {
+  content: 'Reconnecting…';
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--red);
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 300;
+}
+
+/* ---- top bar ---- */
+
+#top-bar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  /* The three tracks stay on one flex line — the CONTROLS wrap, inside their
+     own track. Letting the bar itself wrap pushed the counterweight onto a
+     second line on a wide screen, which quietly un-centred everything. */
+  flex-wrap: nowrap;
+  gap: 8px 14px;
+  min-height: 52px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+#top-bar .brand-mark {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+#game-badge {
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The identity track and the counterweight share the leftover width equally,
+   which is what puts the buttons on the screen's centre line rather than on
+   the centre of whatever space the badges happened to leave. */
+/* The caret on the Menu button turns when the sheet is open. */
+#menu-toggle .caret {
+  display: inline-block;
+  margin-left: 2px;
+  transition: transform 0.18s ease;
+}
+
+#menu-toggle[aria-expanded='true'] .caret {
+  transform: rotate(180deg);
+}
+
+#menu-toggle[aria-expanded='true'] {
+  background: var(--ghost-hover);
+  border-color: var(--accent-lite);
+}
+
+/* The dropdown sheet: every control that used to crowd the bar, laid out as a
+   grid under it. Fixed-positioned (top set in JS from the bar's real height)
+   so neither the bar's own scrolling on a phone nor the grid row can clip it. */
+.top-menu {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px 14px;
+  background: var(--bg-panel);
+  border-bottom: 2px solid var(--accent);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.top-menu.hidden {
+  display: none;
+}
+
+.menu-group.hidden {
+  display: none;
+}
+
+/* Each sub-menu is a real <details>: the header folds its group. Headers
+   read as section dividers, so twenty controls read as six ideas. */
+.menu-sec {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 2px 4px;
+  margin-top: 2px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.menu-sec::-webkit-details-marker {
+  display: none;
+}
+
+/* The fold indicator: a caret that turns when the group is open. */
+.menu-sec::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--accent);
+  transition: transform 0.15s ease;
+}
+
+.menu-group[open] > .menu-sec::before {
+  transform: rotate(90deg);
+}
+
+/* The controls of one group: the same auto-fill grid the whole sheet used
+   to be, now scoped per group. */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  padding: 8px 0 6px;
+}
+
+.menu-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* A group whose controls are labelled fields rather than a row of buttons. */
+.menu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 6px;
+}
+
+.menu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.menu-field input {
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.menu-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.menu-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+#menu-toggle .gear {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Inside the sheet every control stretches to its cell, so the grid reads as
+   tidy rows rather than a ragged pile of pills. */
+.top-menu .top-btn,
+.top-menu .top-select,
+.top-menu .react-wrap,
+.top-menu .react-wrap .top-btn {
+  width: 100%;
+}
+
+/* The live-video cluster keeps its buttons together on one grid row span. */
+.top-menu .av-live {
+  display: contents;
+}
+
+/* The identity track keeps whatever width its content needs — clipping it hid
+   the account chip completely, which is the table's only link to /me. The
+   counterweight opposite is matched to it in JS (syncTopBar), so the controls
+   land on the screen's centre line without anything being cut off. */
+.top-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+  max-width: 46%;
+  overflow: hidden;
+}
+
+.top-meta > * {
+  flex: 0 0 auto;
+}
+
+/* The game badge is the designated shrinker — it already ellipses, and it is
+   the one thing here that is repeated elsewhere in the UI. */
+.top-meta > #game-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.top-spacer {
+  flex: 0 0 auto;
+}
+
+.top-actions {
+  display: flex;
+  /* One row that slides, never a stack. Wrapping put the controls on two or
+     three rows and every row it added came straight off the height of the
+     table — the one thing on this screen worth the space. If they do not fit,
+     they scroll sideways instead. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  align-items: center;
+  /* `safe` is doing real work here, not decoration. Plain `center` splits the
+     overflow to BOTH sides of a scrolling row: the left half lands before the
+     scroll origin, where no scroll position can reach it, so the first button
+     was permanently unreachable the moment the bar was 60px too wide — and
+     every re-render re-centred the row and threw away wherever you had slid
+     to. `safe center` centres while it fits and falls back to start alignment
+     the moment it does not, which makes the scrollable range exactly the
+     overflow and nothing more. A browser too old to know `safe` drops the
+     whole declaration and start-aligns always, which is the harmless way to
+     be wrong. */
+  justify-content: safe center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.top-actions::-webkit-scrollbar { display: none; }
+
+/* Buttons in a scroller must not be squeezed thin to fit — that is the same
+   crowding by another name. They keep their size and the row slides. */
+.top-actions > * {
+  flex: 0 0 auto;
+}
+
+.top-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  position: relative;
+}
+
+/* A top-bar toggle that is currently ON wears the accent filled in, so
+   "Straddle: on" reads as a live commitment at a glance rather than as one
+   more grey button. */
+.top-btn.on {
+  background: linear-gradient(var(--accent-lite), var(--accent));
+  border-color: transparent;
+  color: var(--btn-ink);
+  font-weight: 600;
+}
+
+/* The name-font picker wears the same brass ring as the buttons beside it. */
+.top-select {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  background: var(--ghost-bg);
+  color: var(--text);
+}
+
+#unread-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--red);
+  border-radius: 10px;
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 4px;
+}
+
+/* Pending seat requests — top-left so it can sit alongside the chat badge, and
+   green/pulsing because it's an invitation to act, not an alert. */
+#seatreq-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  background: var(--green, #2ea043);
+  color: #06210f;
+  font-weight: 700;
+  border-radius: 10px;
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 4px;
+  animation: seatreq-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes seatreq-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+/* ---- table ---- */
+
+#table-area {
+  grid-area: table;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  min-height: 0;
+  overflow: hidden; /* the scaled stage is sized to fit, so nothing should spill */
+}
+
+/* The whole frame sits in the skin's room, so the band between the chat dock
+   and the buttons reads as floor, not as a hole in the page. */
+#app {
+  background: var(--room-bg);
+}
+
+/* The skin-tinted room backdrop (campus towers, chapel, panelling). The box
+   is identical in every skin — only paint and opacity differ. */
+#room-scape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--scape-o);
+  pointer-events: none;
+}
+
+/* The felt watermark. A fixed box centred low on the felt, text supplied by
+   the skin (content comes from --wm-a / --wm-b), clipped so a long name can
+   never change anyone's geometry. */
+#felt-mark {
+  position: absolute;
+  left: 50%;
+  top: 71%;
+  transform: translate(-50%, -50%);
+  width: 56%;
+  height: 24%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#felt-mark::before {
+  content: var(--wm-a);
+  white-space: pre-line;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.12;
+  font-size: clamp(18px, 3vw, 32px);
+  color: var(--wm-ink);
+}
+
+#felt-mark::after {
+  content: var(--wm-b);
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  margin-top: 5px;
+  font-size: clamp(9px, 1.3vw, 13px);
+  color: var(--wm-ink);
+}
+
+#table {
+  /* A logical box that JS (fitTableStage) both SIZES and scales as one piece —
+     felt, seats, bets and all — to fit whatever screen we're on. Everything
+     inside is positioned in percentages of this box, so stretching it spreads
+     the seats along the rim and scaling it keeps the layout pixel-exact at
+     every size, with nothing clipping or overflowing. The values here are only
+     the pre-paint default; JS overwrites both on the first fit. */
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  width: 1150px;
+  height: 500px;
+  transform-origin: center center;
+  background:
+    radial-gradient(ellipse at 50% 36%, var(--felt-hi) 0%, var(--felt) 52%, var(--felt-dark) 100%);
+  /* Walnut rail with a polished brass ring on its inside edge. */
+  border: 16px solid var(--rail);
+  border-radius: 50% / 52%;
+  box-shadow:
+    inset 0 0 0 4px var(--rail-ring),
+    inset 0 0 70px rgba(0, 0, 0, 0.5),
+    0 0 0 2px var(--rail-edge),
+    0 20px 64px rgba(0, 0, 0, 0.6);
+}
+
+/* Phone held upright: the same table stood on its end, so a portrait screen
+   gets a real vertical table filling it rather than a letterboxed landscape
+   one. Only the felt turns — every seat, card and label stays upright. */
+/* Stood on its end: only the rounding needs saying — JS has already swapped
+   the box's width and height by the time this class goes on. */
+#table.upright {
+  border-radius: 52% / 50%;
+}
+
+#table::before {
+  content: '';
+  position: absolute;
+  inset: 26px;
+  /* A faint hairline drawn on the felt — deliberately not the solid ring on
+     the rail, which is why it has a token of its own. */
+  border: 1px solid var(--felt-line);
+  border-radius: 50% / 52%;
+  pointer-events: none;
+}
+
+#table.upright::before {
+  border-radius: 52% / 50%;
+}
+
+#table-center {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: 78%;
+  /* Above the other seats (z 1), below your own (z 5): the community cards
+     are the one thing at the table nobody's fan may ever cover. The box is
+     click-through so the raised layer never swallows a tap meant for a seat
+     behind it — only its own buttons catch the pointer. */
+  z-index: 2;
+  pointer-events: none;
+}
+
+#table-center button,
+#table-center a {
+  pointer-events: auto;
+}
+
+#board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--board-card-h);
+  margin-bottom: 10px;
+}
+
+/* A game with no community cards gives the space back rather than holding a
+   card's height open in the middle of an empty felt. */
+#board.no-board {
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.board-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Two boards means half the vertical room each. */
+#board.two-boards .card {
+  --face: calc(var(--board-card-w) * 0.74);
+  width: calc(var(--board-card-w) * 0.74);
+  height: calc(var(--board-card-h) * 0.74);
+}
+
+.card.rabbit {
+  opacity: 0.5;
+  filter: grayscale(0.4);
+  outline: 1px dashed rgba(255, 255, 255, 0.35);
+}
+
+#board .card {
+  --face: var(--board-card-w);
+  width: var(--board-card-w);
+  height: var(--board-card-h);
+}
+
+/* The upright felt is narrow: full-size board cards reach into the rim
+   seats, so the board (and its dashed slots) runs at 4/5 size and the whole
+   centre sits a touch higher, clear of the mid-height seats. */
+#table.upright #board .card,
+#table.upright .board-slot {
+  --face: calc(var(--board-card-w) * 0.8);
+  width: calc(var(--board-card-w) * 0.8);
+  height: calc(var(--board-card-h) * 0.8);
+}
+
+#table.upright #table-center {
+  top: 46%;
+}
+
+#board.two-boards .board-row:nth-child(2) {
+  opacity: 0.92;
+}
+
+/* The pot reads above the board, plain and bold, like the client format. */
+#pot-line {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--chip-ink);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* Board cards still to come: dashed outlines where they will land. */
+.board-slot {
+  width: var(--board-card-w);
+  height: var(--board-card-h);
+  border-radius: 7px;
+  border: 2px dashed var(--felt-line);
+}
+
+#center-message {
+  margin-top: 10px;
+  color: #cfe8d8;
+  font-size: 15px;
+}
+
+#center-message p {
+  margin-bottom: 10px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+#center-message .win-line {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--chip-ink);
+}
+
+/* ---- the odds strip: equity per player once the betting is closed ---- */
+
+.odds-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  max-width: min(560px, 86vw);
+  margin: 6px auto 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.odds-label,
+.odds-note {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.odds-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* A bar as well as a number: at a glance you want the shape of the race, not
+   to read four decimals off the felt. */
+.odds-bar {
+  display: inline-block;
+  width: 46px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.odds-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.odds-pct {
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* The same number on the nameplate, for players watching their own seat
+   rather than the middle of the table. */
+.np-equity {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .odds-strip {
+    gap: 3px 10px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+  }
+
+  .odds-bar { width: 32px; }
+}
+
+/* ---- seats ---- */
+
+#seats-layer,
+#bets-layer {
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+}
+
+/* Bet amounts are live information: the clearing search keeps them off the
+   pods, and if a webcam-packed arc really leaves no room, they paint on TOP
+   rather than vanishing under a tile. (Your own seat still outranks them.) */
+#bets-layer {
+  z-index: 3;
+}
+
+.seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 150px;
+  z-index: 1;
+}
+
+/* Your own seat always paints on top: in the wide-fan games a neighbour's
+   cards or plate can geometrically reach your hand, and whatever else gives,
+   YOUR cards are never the thing that gets covered. */
+.seat.me {
+  z-index: 5;
+}
+
+.seat.empty .empty-seat-btn {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: all 0.15s;
+}
+
+.seat.empty .empty-seat-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(var(--pulse), 0.08);
+}
+
+.seat.empty .empty-label {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.22);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cards-fan {
+  display: flex;
+  gap: 3px;
+  min-height: calc(var(--card-h) * 0.9);
+  /* The fan used to tuck under the nameplate; with cards this size that hid
+     the name, so they now stack clear of it. */
+  margin-bottom: 4px;
+  z-index: 1;
+}
+
+.cards-fan .card {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* The pods were laid out against hold'em's two cards. Every other game deals
+   more — three in Pineapple, five in Draw, seven in Stud — and flat in a row
+   they run off the felt and into the seat next door. From the third card on
+   they overlap the way a hand held in one hand does: each tucked behind the
+   one before it, still readable because a card's rank and suit live in its
+   top-left corner, and already separated by the shadow they each carry.
+
+   This is what a ten-handed Pineapple table needed all along; it was never
+   caught because the layout test only ever dealt hold'em. */
+/* How hard the fan tucks, 0 to 1. Zero by default: on a laptop there is room
+   to lay a hand out flat and stacking the cards there just makes them harder
+   to read for no reason. It goes to 1 only where space is genuinely tight —
+   the upright ring at any size, and any small screen. */
+.cards-fan { --fan-tuck: 0; }
+#table.upright .cards-fan { --fan-tuck: 1; }
+
+.cards-fan[data-count="3"],
+.cards-fan[data-count="4"],
+.cards-fan[data-count="5"],
+.cards-fan[data-count="6"],
+.cards-fan[data-count="7"] {
+  gap: calc(3px * (1 - var(--fan-tuck)));
+}
+
+.cards-fan[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.14 * var(--fan-tuck)); }
+.cards-fan[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.24 * var(--fan-tuck)); }
+.cards-fan[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.32 * var(--fan-tuck)); }
+.cards-fan[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.40 * var(--fan-tuck)); }
+.cards-fan[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.46 * var(--fan-tuck)); }
+
+/* Your own hand is drawn larger, so it has to tuck further to fit the same
+   space. Picking a card up to throw it lifts it clear of its neighbours,
+   which is what keeps the overlap safe to click through. */
+.cards-fan.mine[data-count="3"] .card + .card { margin-left: calc(var(--card-w) * -0.18 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="4"] .card + .card { margin-left: calc(var(--card-w) * -0.30 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="5"] .card + .card { margin-left: calc(var(--card-w) * -0.38 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="6"] .card + .card { margin-left: calc(var(--card-w) * -0.46 * var(--fan-tuck)); }
+.cards-fan.mine[data-count="7"] .card + .card { margin-left: calc(var(--card-w) * -0.54 * var(--fan-tuck)); }
+
+.cards-fan .card.picked,
+.cards-fan .card.discardable:hover {
+  z-index: 2;
+}
+
+/* Your own hand is the main pair on the table — with the controls folded away
+   behind the caret, the height the bar gave back goes to these. */
+.cards-fan.mine .card {
+  --face: calc(var(--card-w) * 1.66);
+  width: calc(var(--card-w) * 1.66);
+  height: calc(var(--card-h) * 1.66);
+}
+
+/* The upright ring is narrow: the full big-screen bonus reaches the seats
+   flanking yours (tablet portrait), so your hand keeps a smaller boost. */
+@media (min-width: 721px) {
+  #table.upright .cards-fan.mine .card {
+    --face: calc(var(--card-w) * 1.34);
+    width: calc(var(--card-w) * 1.34);
+    height: calc(var(--card-h) * 1.34);
+  }
+}
+
+/* Four- and five-card games: everyone's fan doubles in width, and on the ring
+   the seats beside yours reach straight into your hand. The flexible thing in
+   a pod is the CARDS — never the webcam tile, which keeps its full size — so a
+   neighbour's backs shrink until their fan is no wider than a two-card one,
+   and your own gives back a step of its big-screen bonus. */
+.cards-fan.fan-4,
+.cards-fan.fan-5 {
+  gap: 2px;
+}
+
+.cards-fan.fan-4:not(.mine) .card {
+  --face: calc(var(--card-w) * 0.62);
+  width: calc(var(--card-w) * 0.62);
+  height: calc(var(--card-h) * 0.62);
+}
+
+.cards-fan.fan-5:not(.mine) .card {
+  --face: calc(var(--card-w) * 0.5);
+  width: calc(var(--card-w) * 0.5);
+  height: calc(var(--card-h) * 0.5);
+}
+
+.cards-fan.mine.fan-4 .card,
+.cards-fan.mine.fan-5 .card {
+  --face: calc(var(--card-w) * 1.18);
+  width: calc(var(--card-w) * 1.18);
+  height: calc(var(--card-h) * 1.18);
+}
+
+/* The client-format plate: a rounded card with the name stacked over the
+   money, money in the skin's own cash colour. */
+.nameplate {
+  position: relative;
+  background: linear-gradient(var(--plate-a), var(--plate-b));
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 5px 14px;
+  min-width: 108px;
+  max-width: 164px;
+  text-align: center;
+  z-index: 2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.seat.me .nameplate {
+  border-color: var(--accent);
+}
+
+.seat.to-act .nameplate {
+  border-color: var(--accent);
+  border-width: 2px;
+  box-shadow: 0 0 0 3px rgba(var(--pulse), 0.85), 0 0 30px rgba(var(--pulse), 0.55);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.seat.to-act .np-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* A halo behind the WHOLE pod, not just the plate. It has to work for a seat
+   with no picture and no camera — which used to get nothing but a faint
+   outline — so it hangs off the pod itself rather than off a tile that may
+   not be there. Click-through, and behind everything the pod draws. */
+.seat.to-act::before {
+  content: '';
+  position: absolute;
+  inset: -14px -10px -10px;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 50% 60%, rgba(var(--pulse), 0.30), transparent 72%);
+  box-shadow: 0 0 26px 6px rgba(var(--pulse), 0.28);
+  pointer-events: none;
+  z-index: -1;
+  animation: pulse-halo 1.6s ease-in-out infinite;
+}
+
+/* Whose turn it is reads from across the room: their picture (or webcam
+   tile) rings green until they act. */
+.seat.to-act .seat-avatar,
+.seat.to-act video.seat-cam {
+  border-color: #35c46f !important;
+  box-shadow: 0 0 0 3px rgba(53, 196, 111, 0.8), 0 0 22px rgba(53, 196, 111, 0.65);
+}
+
+/* Nothing dims a player who is still in the hand. The acting seat is found by
+   what it gains — the halo, the pulse and the green ring above — never by
+   fading everyone who is still live, which used to leave a table mid-hand
+   looking uniformly washed out. Only folding takes the light off you. */
+
+@keyframes pulse {
+  50% { box-shadow: 0 0 0 3px rgba(var(--pulse), 0.35), 0 0 12px rgba(var(--pulse), 0.2); }
+}
+
+@keyframes pulse-halo {
+  50% { box-shadow: 0 0 18px 3px rgba(var(--pulse), 0.14); }
+}
+
+/* Who is still in the hand has to read from across the room, so the split is
+   carried by the seats themselves: live seats sit at full strength and folded
+   seats go dark and desaturated. The whole pod dims — picture, plate, chips
+   and all — because a half-dimmed pod reads as a rendering glitch rather than
+   as "out of the hand". */
+.seat.folded {
+  opacity: 0.38;
+  filter: saturate(0.5);
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+/* Your own folded seat is the one exception: it stays legible enough to read
+   the hand you let go, which is the whole reason it is left on the table. */
+.seat.folded.me {
+  opacity: 0.62;
+  filter: saturate(0.75);
+}
+
+/* Your own folded hand, kept on the table so you can see what you let go.
+   It has to be unmistakably out of play: washed out, desaturated, and struck
+   through. Only ever your own — nobody else is sent a folded player's cards
+   unless that player chooses to show them. */
+.card.mucked {
+  opacity: 0.55;
+  filter: grayscale(0.85);
+  position: relative;
+}
+
+.card.mucked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px), rgba(0, 0, 0, 0.55) 50%, transparent calc(50% + 1px)
+  );
+  border-radius: inherit;
+}
+
+/* One label for the hand, rather than a word on every card. */
+.cards-fan.mucked-fan {
+  position: relative;
+}
+
+.cards-fan.mucked-fan::after {
+  content: 'Folded';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Fold, on a hand you could check for free, asks a second time. */
+.ab-confirm {
+  animation: pulse-confirm 900ms ease-in-out infinite;
+}
+
+@keyframes pulse-confirm {
+  50% { filter: brightness(1.35); }
+}
+
+.seat.away .nameplate,
+.seat.disconnected .nameplate {
+  opacity: 0.6;
+}
+
+.seat.winner .nameplate {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(46, 158, 91, 0.7), 0 0 26px rgba(46, 158, 91, 0.45);
+}
+
+.np-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1.25;
+}
+
+.np-name {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 132px;
+}
+
+.np-stack {
+  font-size: 13px;
+  color: var(--money);
+  font-weight: 700;
+}
+
+/* The status line ("all-in", "away", "deciding…", "discarding…") hangs BELOW
+   the plate rather than sitting inside it. In flow it added a row to the
+   nameplate, and because the games that use it push a status onto every
+   occupied plate at once — Pineapple's discard, 747's decision, an all-in
+   street in Stud — all ten plates grew together and collided with their
+   neighbours on a tight ten-handed ring, worst in portrait. Out of flow it
+   costs the pod no height, which is the same reason .np-bubble and .np-mute
+   are positioned. It needs its own background now that it no longer sits on
+   the plate's. */
+.np-status {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -15px;
+  font-size: 11px;
+  line-height: 1.15;
+  color: var(--text-dim);
+  background: var(--bg-raised);
+  border-radius: 8px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.np-bubble {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -34px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 11.5px;
+  padding: 2px 10px;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+.np-bubble.win {
+  background: var(--green-dark);
+  border-color: var(--green);
+  color: #eafff2;
+  font-weight: 700;
+}
+
+.dealer-disc {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f4f6fb;
+  color: #1c2230;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.timer-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.timer-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.timer-fill.urgent {
+  background: var(--red);
+}
+
+/* ---- bet chips ---- */
+
+.bet-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--plate-b);
+  border: 1.5px solid var(--accent);
+  color: var(--chip-ink);
+  border-radius: 14px;
+  padding: 2px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+
+.bet-chip::before {
+  content: '●';
+  color: var(--accent);
+  margin-right: 5px;
+  font-size: 10px;
+}
+
+/* ---- cards ---- */
+
+/* Every card face is sized from --face, so a seat card, your own bigger cards
+   and the board all keep the same proportions.
+   The face is the client layout everyone recognises: a white card with big
+   round corners, one heavy rank sitting high on the left, and one big suit
+   below it. No corner indices, no pip grid — the rank and the suit ARE the
+   card, with real white space left around them. */
+.card {
+  --face: var(--card-w);
+  width: var(--card-w);
+  height: var(--card-h);
+  background: var(--card-face);
+  color: var(--card-ink);
+  /* Proportional, not a fixed 6px: the corners have to stay this round when
+     the same card is drawn at board size and at seat size. */
+  border-radius: calc(var(--face) * 0.13);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* Sized off the card's own face, never a percentage: percentage padding
+     resolves against the PARENT's inline size, so the index slid down the card
+     every time another one was dealt into the row. */
+  padding: calc(var(--face) * 0.07) calc(var(--face) * 0.09) calc(var(--face) * 0.09);
+  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  user-select: none;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.34);
+}
+
+/* The rank hangs off the top-left corner; the suit sits under it, nudged in
+   from the left the way the client draws it. */
+.card .rank {
+  font-size: calc(var(--face) * 0.62);
+  line-height: 0.78;
+  align-self: flex-start;
+}
+
+/* Bigger than the rank's point size, because the Unicode suit glyphs draw
+   well under their em box — on the card the two read as the same weight. */
+.card .suit {
+  font-size: calc(var(--face) * 0.72);
+  /* A line box shorter than the glyph makes the club and spade stems overflow
+     it, and the card clips them. Keep the box a full line tall and let the
+     card's bottom padding carry the difference. */
+  line-height: 1;
+  letter-spacing: 0;
+  align-self: flex-start;
+  margin-left: calc(var(--face) * 0.02);
+}
+
+/* "10" is the only two-character rank — it gets the width to itself, and the
+   suit lines up under it rather than under a single glyph. */
+.card[data-card^='T'] .rank {
+  font-size: calc(var(--face) * 0.46);
+  letter-spacing: -0.09em;
+}
+
+/* Four-color deck: spades stay black, hearts red, diamonds go indigo and
+   clubs green. A per-player display preference toggled on <body>. */
+.four-color .card.suit-d {
+  color: #4a56d6;
+}
+
+.four-color .card.suit-c {
+  color: #1d8a48;
+}
+
+.card.red {
+  color: var(--card-red);
+}
+
+/* The back: one flat colour with a fine diagonal weave and a white edge
+   inside the rounded corner, so a face-down card reads as the same deck as a
+   face-up one rather than as a different object. */
+.card.back {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--card-back-a) 0 calc(var(--face) * 0.045),
+      var(--card-back-b) calc(var(--face) * 0.045) calc(var(--face) * 0.09)
+    );
+  border: calc(var(--face) * 0.045) solid var(--card-face);
+  /* border-box so the white edge eats into the card instead of growing it —
+     a back must occupy exactly the same footprint as a face. */
+  box-sizing: border-box;
+}
+
+.card.dealt {
+  /* Backwards fill: a card waiting on its animation-delay sits at the 'from'
+     frame (invisible), so a staggered deal arrives one card at a time. */
+  animation: deal 0.28s ease-out backwards;
+}
+
+@keyframes deal {
+  from {
+    transform: translateY(-14px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* The marker on a card you may throw sits just INSIDE the card edge and is a
+   hairline rather than a band — it is a hint about a card, not a second
+   rectangle drawn around one. A positive offset here used to push it clear of
+   the card, which read as a box floating behind the hand. */
+.card.discardable {
+  cursor: pointer;
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+  transition: transform 0.12s;
+}
+
+.card.discardable:hover {
+  transform: translateY(-8px);
+  outline-color: var(--red);
+}
+
+/* A card you have picked to throw in a draw game. Nothing has been sent yet —
+   this is you thinking — so it reads as "on its way out" rather than as gone:
+   dropped below the rest of the fan and ringed in red. Tapping it again takes
+   it back. */
+.card.picked {
+  transform: translateY(10px);
+  outline: 2px solid var(--red);
+  outline-offset: -2px;
+  filter: brightness(0.75) saturate(0.7);
+}
+
+.card.picked:hover {
+  transform: translateY(6px);
+}
+
+/* ---- the table's music ---- */
+
+/* The player is a real YouTube <iframe> and has to stay in the layout for the
+   browser to keep it alive — a display:none embed is allowed to stop. So it is
+   parked off-screen at one pixel instead of hidden. It is audio to us. */
+.music-player-mount {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.music-now {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  min-height: 54px;
+}
+
+.music-thumb {
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex: none;
+}
+
+.music-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.music-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-by,
+.music-idle {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.music-controls {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  flex-wrap: wrap;
+}
+
+/* Muted is a state you want to notice you are in — otherwise you spend the
+   night wondering why the table is quiet. */
+#music-mute.on {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.music-vol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.music-vol input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.music-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+#music-form {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+#music-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#music-clear {
+  margin: 0 12px 10px;
+}
+
+/* ---- reactions ---- */
+
+.react-wrap {
+  position: relative;
+}
+
+#react-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  z-index: 80;
+}
+
+.react-option {
+  width: 38px;
+  height: 38px;
+  font-size: 20px;
+  background: none;
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.react-option:hover {
+  background: var(--bg-raised);
+  transform: scale(1.15);
+}
+
+/* Dead money a player has pushed into the pot, shown on their plate for the
+   rest of the hand. Absolutely positioned for the same reason the mute button
+   is: it must cost the pod no height, or ten plates growing at once push each
+   other into their neighbours on a tight ring. Sits opposite Mute so the two
+   never collide. */
+.np-posted {
+  position: absolute;
+  top: -11px;
+  left: -8px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--chip-ink);
+  background: var(--plate-b);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---- chips in flight ---- */
+
+/* Same geometry as the bets layer, so a seat's chip coordinates mean the same
+   thing in both. Above the felt and the pods but below reactions: an emoji
+   someone threw should still land on top. */
+#fx-layer {
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 40;
+}
+
+.fx-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--plate-b);
+  border: 1.5px solid var(--accent);
+  color: var(--chip-ink);
+  border-radius: 14px;
+  padding: 2px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+  /* Position is animated rather than a transform so the chip stays correct if
+     the felt is re-fitted mid-flight — the coordinates are percentages of a
+     layer that resizes with the table. */
+  transition: left 520ms cubic-bezier(0.33, 0, 0.2, 1),
+              top 520ms cubic-bezier(0.33, 0, 0.2, 1),
+              opacity 220ms ease;
+}
+
+.fx-chip::before {
+  content: '●';
+  color: var(--accent);
+  margin-right: 5px;
+  font-size: 10px;
+}
+
+/* Chips coming back OUT of the pot are the good news, so they are the ones
+   that get the colour. */
+.fx-chip.win {
+  border-color: var(--money, #fff);
+  color: var(--money, #fff);
+}
+
+.fx-chip.win::before {
+  color: var(--money, #fff);
+}
+
+.fx-chip.landing {
+  opacity: 0;
+}
+
+/* Somebody who has asked not to be moved gets none of this: the chips are a
+   flourish, and every number they describe is already on the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .fx-chip {
+    display: none;
+  }
+}
+
+#reactions-layer {
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 50;
+}
+
+.floating-reaction {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  animation: float-up 2.4s ease-out forwards;
+  pointer-events: none;
+}
+
+.fr-emoji {
+  display: block;
+  font-size: 30px;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.6));
+}
+
+.fr-name {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: var(--plate-b);
+  border-radius: 8px;
+  padding: 0 6px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--drift, 0px)), calc(-50% - 110px)) scale(0.95);
+  }
+}
+
+/* ---- cooler banner ---- */
+
+#cooler-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, 90%);
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: center;
+  z-index: 70;
+  box-shadow: var(--shadow);
+  animation: banner-in 0.35s ease-out;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+#cooler-banner strong {
+  color: var(--accent);
+  margin-right: 6px;
+}
+
+.cooler-badBeat {
+  border-color: var(--red) !important;
+  background: linear-gradient(180deg, rgba(224, 82, 82, 0.22), var(--bg-raised)) !important;
+}
+
+.cooler-quads {
+  border-color: var(--accent) !important;
+  background: linear-gradient(180deg, rgba(var(--pulse), 0.22), var(--bg-raised)) !important;
+}
+
+@keyframes banner-in {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+}
+
+/* ---- rotate hint ---- */
+
+#rotate-hint {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  z-index: 40;
+  white-space: nowrap;
+}
+
+#rotate-hint button {
+  background: none;
+  margin-left: 8px;
+  color: var(--text-dim);
+}
+
+/* ---- side panel ---- */
+
+/* Desktop: the chat is a dock in the bottom-left cell of the grid — its own
+   track, so it can never sit on the table or the action buttons. */
+#side-panel {
+  grid-area: chat;
+  display: flex;
+  flex-direction: column;
+  /* Its own width now, not a whole grid track: folded, the dock is its tab
+     strip and the action bar takes the width back. */
+  width: min(360px, 32vw);
+  height: 240px;
+  margin: 0 0 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  min-height: 0;
+  align-self: end;
+}
+
+/* Hide folds the dock down to its tab strip and hands the height back to
+   the felt (the bottom row shrinks and the table refits). Desktop only —
+   the phone drawer has its own slide-away. Seat requests stay visible even
+   folded: the host should never miss one. */
+.dock-toggle {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+@media (min-width: 1000px) {
+  /* Folded: the tab strip and nothing else, in both directions. The felt
+     takes back the height AND the width, which is the point of folding it. */
+  #side-panel.dock-closed {
+    height: auto;
+    width: auto;
+  }
+
+  #side-panel.dock-closed .tab-body {
+    display: none;
+  }
+
+  /* Folded, the tabs are a row of doors rather than a divided strip: they
+     stop stretching to fill a panel that isn't there, and each keeps enough
+     room around its label to read as its own button. */
+  #side-panel.dock-closed .tabs {
+    border-bottom: none;
+  }
+
+  #side-panel.dock-closed .tab {
+    flex: 0 0 auto;
+    padding: 9px 14px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 999px) {
+  .dock-toggle {
+    display: none;
+  }
+}
+
+#seat-requests {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  background: rgba(var(--pulse), 0.06);
+}
+
+.sr-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.sr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  padding: 3px 0;
+}
+
+.sr-btn {
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1;
+  /* "Verifying Integrity" is a long label — let tabs shrink and wrap their
+     text over two lines rather than pushing the row wider than the panel. */
+  min-width: 0;
+  padding: 8px 4px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.15;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab-close {
+  flex: 0 0 44px;
+  display: none;
+}
+
+.tab-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.scroll-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  font-size: 14px;
+}
+
+.chat-msg {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.chat-from {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+#chat-form {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+}
+
+#chat-form .btn {
+  padding: 8px 14px;
+}
+
+.log-line {
+  margin-bottom: 5px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.log-no {
+  color: var(--border);
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-link {
+  display: block;
+  margin-bottom: 10px;
+  padding: 7px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  text-align: center;
+}
+
+.replay-link:hover {
+  border-color: var(--accent);
+}
+
+table.ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.ledger th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+table.ledger td {
+  padding: 6px;
+  border-bottom: 1px solid rgba(42, 49, 70, 0.5);
+}
+
+td.pos { color: var(--green); font-weight: 700; }
+td.neg { color: var(--red); font-weight: 700; }
+td.dim { color: var(--text-dim); }
+
+/* ---- Session Ledger pop-up: card rows, PokerNow-style ---- */
+
+.sledger {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.sl-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px 58px 54px 62px;
+  gap: 8px;
+  align-items: center;
+}
+
+.sl-grid > .sl-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-head {
+  padding: 0 12px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.sl-head span:not(:first-child) {
+  text-align: right;
+}
+
+.sl-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+}
+
+.sl-player {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sl-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sl-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-id {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A dim second line under the name — what has been paid off against the
+   running tab, which is not what the cards did and must not read as it. */
+.sl-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-details {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sl-details:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Tipping sits in the same drawer as "how do I pay this person", because it
+   is the same question asked mid-game: it moves chips from your stack to
+   theirs and touches no pot. Accent-bordered so it reads as an action rather
+   than as another line of the ledger. */
+.sl-tip {
+  align-self: flex-start;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sl-tip:hover {
+  color: #10131c;
+  background: var(--accent);
+}
+
+.sl-net.pos { color: var(--green); font-weight: 700; }
+.sl-net.neg { color: var(--red); font-weight: 700; }
+
+.sl-more {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.sl-more .pos { color: var(--green); font-weight: 700; }
+.sl-more .neg { color: var(--red); font-weight: 700; }
+.sl-more .dim { color: var(--text-dim); }
+
+.sl-total {
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 700;
+}
+
+.sl-total-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+}
+
+/* Phone-width modal: tighter numeric columns, and the Details button drops
+   under the name instead of squeezing it to nothing. */
+@media (max-width: 480px) {
+  .sledger { font-size: 12.5px; }
+  .sl-grid { grid-template-columns: minmax(0, 1fr) 42px 46px 42px 50px; gap: 6px; }
+  .sl-player { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .sl-details { padding: 2px 7px; font-size: 10px; }
+}
+
+.settle-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.settle-block h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.settle-list {
+  list-style: none;
+  margin-bottom: 12px;
+}
+
+.settle-list li {
+  padding: 4px 0;
+  font-size: 13.5px;
+}
+
+.settle-amt {
+  color: var(--accent);
+  font-weight: 700;
+  float: right;
+}
+
+.ledger-export {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+}
+
+/* The spreadsheet is THE ledger — colour-coded, and what everyone actually
+   wants. Plain CSV stays for whoever needs to paste it somewhere, but it is
+   not the thing you reach for by default. */
+.empty-note {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* The ledger pop-up: wider than a form modal, with its own Close. */
+.ledger-modal {
+  max-width: 580px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.modal-head h2 {
+  margin-bottom: 0;
+}
+
+.modal-x {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+/* The ledger's public audit line: green when every chip is accounted for. */
+.books-line {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.books-line.ok {
+  color: var(--green);
+}
+
+.books-line.bad {
+  color: var(--red);
+}
+
+/* ---- action bar ---- */
+
+/* Desktop: the Fold / Check / Bet cluster lives in the bottom-RIGHT cell,
+   like the client format — its own grid track, clear of the chat dock.
+   The bar is a WIDE, SHORT strip: it takes the whole width beside the chat
+   dock and gives back the height, because every pixel it doesn't use is
+   another pixel of felt.
+
+   Its height is FIXED, never content-driven. The table is sized to the room
+   left over, so a bar that grew when the bet controls opened would shove the
+   felt down and resize it mid-decision. Anything too big for one row rises
+   ABOVE the bar instead, over the felt — see .ab-inner. */
+#action-bar {
+  grid-area: bar;
+  position: relative;
+  /* A RESERVED STRIP, nothing more: fixed height, no content of its own. The
+     controls live in .ab-inner, which is anchored to this box's bottom edge
+     and free to be taller than it. That is the whole trick — the grid row
+     never changes, so the felt above it never changes either, whatever the
+     bar happens to be saying. */
+  height: var(--bar-h);
+  align-self: end;
+  margin: 0 12px 10px 0;
+  overflow: visible;
+}
+
+.ab-inner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap; /* controls stack instead of forcing the page wider */
+  gap: 8px 14px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 -12px 26px rgba(0, 0, 0, 0.35);
+}
+
+/* On a wide bar the message belongs at the far end from the buttons: it reads
+   as a status line along the strip instead of crowding the thing you are
+   about to press. */
+.ab-note {
+  color: var(--text-dim);
+  font-size: 15px;
+  margin-right: auto;
+}
+
+.ab-highlight {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The shove's second look. The question and the cost each take a full line so
+   the two buttons underneath read as the answer to it, rather than as three
+   more choices in the same row. */
+.ab-allin-ask,
+.ab-allin-ask + .ab-note {
+  flex-basis: 100%;
+  text-align: right;
+}
+
+.ab-allin-ask {
+  font-size: 16px;
+}
+
+.ab-actions {
+  display: flex;
+  gap: 12px;
+  /* Four buttons (Fold / Call / Raise / All in) have to survive a narrow
+     phone, so the row wraps and the buttons give up their min-width rather
+     than pushing the shove off the screen. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  /* Take the width the bar has to give. Without this the row is sized to its
+     own intrinsic width — and because the buttons' min-width is a percentage,
+     that intrinsic width is measured WITHOUT it, coming out too narrow for
+     four buttons and wrapping the All in onto a second line on a screen with
+     a thousand pixels to spare. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ab-btn {
+  /* min() so a narrow phone can shrink the button instead of pushing the
+     fourth one (All in) off the edge of the screen. */
+  min-width: min(118px, 100%);
+  padding: 13px 20px;
+  font-size: 16px;
+  flex: 0 1 auto;
+}
+
+/* All in wears the accent, filled: not the green of a sized raise (it is not a
+   size you picked) and not the red of Fold at the other end of the row. Every
+   skin defines --accent and --btn-ink, so it repaints with the room. */
+.ab-allin {
+  background: linear-gradient(var(--accent-lite), var(--accent));
+  border-color: transparent;
+  color: var(--btn-ink);
+  font-weight: 600;
+}
+
+.ab-allin:hover:not(:disabled) { filter: brightness(1.06); }
+
+/* The shove preset in the tray, called out the same way. */
+.preset-allin {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ab-check {
+  background: var(--blue);
+  color: #fff;
+}
+
+.ab-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.pre-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pre-btn {
+  padding: 8px 16px;
+  font-size: 13.5px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.pre-btn:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.pre-btn.armed {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.pre-btn.armed::before {
+  content: '✓ ';
+}
+
+.timer-fill.timebank {
+  background: var(--blue);
+}
+
+/* The bet tab: summoned by the Bet/Raise button, it lays itself OVER the
+   Fold/Check row (and whatever sliver of felt it still needs) instead of
+   making the bar taller — opening it never resizes the table. Close hands
+   the buttons back. */
+/* The bet tray covers .ab-inner the same way .ab-inner covers the bar: pinned
+   to the bottom, free to grow upward. */
+.bet-tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  background: var(--bg-panel);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.45);
+  padding: 10px clamp(14px, 4vw, 40px) 12px;
+}
+
+/* On the rounded desktop bar the tray keeps the same corners, so it reads as
+   the bar opening up rather than as a slab dropped on top of it. */
+.ab-inner > .bet-tray {
+  border-radius: 11px;
+}
+
+/* Close looks like a preset pill but never behaves like one — it hands the
+   Fold/Check/Bet row back. */
+.tray-close {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  font-size: 13px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.tray-close:hover {
+  border-color: var(--red);
+  color: var(--text);
+}
+
+.bet-tray .btn {
+  white-space: nowrap;
+}
+
+/* The tray lays out ALONG the bar: presets, slider, amount and confirm on one
+   line wherever there is width for it. Wide and short is the whole point —
+   every row it doesn't stack is felt it doesn't cover. */
+.tray-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tray-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+}
+
+.preset {
+  flex: 1;
+  min-width: 60px;
+  padding: 7px 4px;
+  font-size: 13px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+.preset:hover {
+  border-color: var(--accent);
+}
+
+/* The steppers, the slider, the typed amount and the confirm, in line. The
+   slider is the elastic one: it takes whatever width the rest leaves, so a
+   wide bar gets a long slider without a second row. */
+.tray-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* The slider used to claim a row of its own (flex-basis 100%). Now it is the
+   stretchy item on the one row there is: still the longest control in the
+   tray, without costing a second line. */
+.tray-controls input[type='range'] {
+  flex: 1 1 140px;
+  min-width: 90px;
+  height: 26px;
+  accent-color: var(--accent);
+}
+
+.tray-controls input[type='number'] {
+  /* Wide enough for a six-figure raise: a tournament stack in a deep pot is
+     exactly when you least want the number you typed to be cut off. */
+  width: 104px;
+  text-align: right;
+}
+
+.step {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 18px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ---- host modal bits ---- */
+
+.hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: -4px;
+}
+
+.hp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(42, 49, 70, 0.5);
+  font-size: 14px;
+}
+
+.hp-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hp-stack {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.hp-btn {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.hp-kick {
+  color: var(--red);
+}
+
+.option-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.option-toggles .toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+  margin: 0;
+  cursor: pointer;
+}
+
+.option-toggles .toggle input {
+  width: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ---- responsive ---- */
+
+/* The chat drawer's handle: an arrow sticking out of its left edge, pointing
+   the way the drawer goes. Tap it — or drag the drawer right — to put the
+   chat away without hunting for the Close tab. Only exists where the panel
+   overlays the table (phones); on a laptop the panel is a fixed column. */
+.panel-arrow {
+  display: none;
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 74px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: var(--bg-panel);
+  color: var(--accent-lite);
+  font-size: 17px;
+  box-shadow: -6px 0 16px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 999px) {
+  #app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'top'
+      'table'
+      'bar';
+  }
+
+  #side-panel {
+    position: fixed;
+    top: 52px;
+    right: 0;
+    bottom: 0;
+    width: min(340px, 92vw);
+    height: auto;
+    margin: 0;
+    border-radius: 0;
+    align-self: auto;
+    z-index: 60;
+    transform: translateX(100%);
+    transition: transform 0.22s ease-out;
+    border: none;
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  /* The phone bar goes back to a full-width strip — but the buttons keep to
+     the lower right, matching the client format. */
+  #action-bar {
+    margin: 0;
+    align-self: stretch;
+  }
+
+  .ab-inner {
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+  }
+
+  .ab-inner > .bet-tray {
+    border-radius: 0;
+  }
+
+  #side-panel.open {
+    transform: translateX(0);
+  }
+
+  #side-panel.open .panel-arrow {
+    display: block;
+  }
+
+  /* While a finger is dragging the drawer, the snap animation gets out of the
+     way so it tracks the touch 1:1. */
+  #side-panel.dragging {
+    transition: none;
+  }
+
+  .tab-close {
+    display: block;
+  }
+
+  #table-area { padding: 4px; }
+}
+
+/* Below ~1500px, reserving the identity track's full width on both sides
+   pushes the controls into five or six rows and eats the felt. The wordmark
+   drops to its chip and the controls tighten up, which buys the room back
+   without giving up the centre line or hiding anything that says what game
+   you are in. */
+@media (max-width: 1500px) {
+  #top-bar .brand-mark .brand-words {
+    display: none;
+  }
+
+  .top-btn, .top-select {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .top-actions {
+    gap: 7px;
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --card-w: 30px;
+    --card-h: 42px;
+    --board-card-w: 40px;
+    --board-card-h: 56px;
+    /* A phone gives up the least felt it can: one row of buttons and no more.
+       Measured against the tallest one-row state, with a couple of pixels to
+       spare — if the content ever outgrows this, it is drawn over the felt. */
+    --bar-h: 58px;
+  }
+
+  /* Tight by definition at this width, laid down or upright — and declared
+     here, after the default above, because an equal-specificity rule
+     earlier in the file loses the cascade no matter what media query it
+     sits in. */
+  .cards-fan { --fan-tuck: 1; }
+
+  /* A phone has no width to spare for the ± steppers: the slider and the
+     typed number do the same job, and dropping them keeps the tray to two
+     rows instead of three — a whole row of felt back at the moment you are
+     looking at your cards. */
+  .tray-controls .step {
+    display: none;
+  }
+
+  .tray-controls input[type='number'] {
+    width: 86px;
+  }
+
+  /* On a phone the word labels would wrap to four rows and swallow the felt,
+     so the bar stays on ONE row and scrolls sideways instead. */
+  #top-bar {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 5px 8px;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  #top-bar::-webkit-scrollbar { display: none; }
+
+  #top-bar .brand-mark .brand-words,
+  #game-badge {
+    display: none;
+  }
+
+  /* No room to centre anything on a phone: the bar is one scrolling row, so
+     the tracks stop competing for width and simply follow each other. */
+  .top-meta, .top-spacer {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .top-spacer { display: none; }
+  .top-actions { max-width: none; }
+
+  /* Phones: the bar is the caret and nothing else. Every control still exists,
+     one tap away in the settings sheet, and the height they were taking goes
+     to the table — which is what people actually came to look at. */
+  #straddle-btn,
+  #restraddle-btn,
+  #panel-toggle,
+  #ledger-btn,
+  .react-wrap {
+    display: none;
+  }
+
+  /* …so the caret has to carry the one live signal the Chat button was
+     carrying: that somebody has said something. */
+  #menu-toggle.has-unread::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  #menu-toggle {
+    position: relative;
+  }
+
+  .top-actions {
+    /* The bar is shrink-to-fit here, so alignment inside it is moot — the
+       `safe center` on the base rule covers both cases at every width. */
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  /* Word labels are wider than the glyphs they replaced — tighten them up so
+     more of the bar is reachable without scrolling. */
+  .top-btn, .top-select {
+    padding: 5px 9px;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+
+  /* A phone's bar was already one row, so the caret freed no height here — and
+     at 1.66x your own cards start brushing the neighbouring seat's. The bigger
+     hand is a big-screen luxury. */
+  .cards-fan.mine .card {
+    --face: calc(var(--card-w) * 1.42);
+    width: calc(var(--card-w) * 1.42);
+    height: calc(var(--card-h) * 1.42);
+  }
+
+  /* Five cards across a phone: your fan still has to fit between the two
+     seats beside it, so it drops to barely over seat size. */
+  .cards-fan.mine.fan-4 .card,
+  .cards-fan.mine.fan-5 .card {
+    --face: calc(var(--card-w) * 1.05);
+    width: calc(var(--card-w) * 1.05);
+    height: calc(var(--card-h) * 1.05);
+  }
+
+  /* The sheet's grids are roomy on a phone; two columns read as a list. */
+  .top-menu {
+    gap: 4px;
+    padding: 8px 10px 10px;
+  }
+
+  .menu-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+  }
+
+  .tray-controls input[type='number'] {
+    flex: 1;
+    min-width: 64px;
+  }
+
+  .bet-tray .btn {
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  #table-area { padding: 4px; }
+
+  #table {
+    border-width: 9px;
+  }
+
+  .seat {
+    width: 110px;
+  }
+
+  .nameplate {
+    min-width: 84px;
+    padding: 4px 8px;
+  }
+
+  .np-name,
+  .np-stack {
+    font-size: 11.5px;
+  }
+
+  /* Four buttons have to sit on ONE line here. The bar reserves a fixed strip
+     of the screen, and anything that does not fit that strip is drawn over
+     the felt — which on a phone is your own cards and nameplate. So the
+     buttons give up width, and the shove gives up its chip count (the confirm
+     that follows states it in full anyway). */
+  .ab-btn {
+    min-width: 62px;
+    padding: 9px 9px;
+    font-size: 14px;
+  }
+
+  .ab-allin .ab-amt {
+    display: none;
+  }
+
+  .ab-inner {
+    gap: 8px;
+  }
+
+  .ab-actions {
+    gap: 8px;
+  }
+
+  /* The tray's pills shrink with them, so presets and controls keep to two
+     rows instead of three on a small phone. */
+  .preset {
+    min-width: 48px;
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+
+  .tray-close {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .bet-tray {
+    padding: 8px 10px 10px;
+  }
+
+  .tray-row {
+    gap: 8px;
+  }
+
+  .empty-seat-btn,
+  .seat.empty .empty-label {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  /* …but NOT on the live table. Everything there lives inside a stage that is
+     already scaled to fit the screen, so shrinking it again would shrink it
+     twice. The table keeps its full logical sizes at every viewport and the
+     scale alone decides how big it lands; the shrinks above are for the replay
+     page, which sizes by width instead. */
+  body.table-page {
+    --card-w: 48px;
+    --card-h: 67px;
+    --board-card-w: 86px;
+    --board-card-h: 120px;
+  }
+
+  .table-page #table {
+    border-width: 14px;
+  }
+
+  .table-page .seat {
+    width: 150px;
+  }
+
+  .table-page .nameplate {
+    min-width: 110px;
+    padding: 6px 12px;
+  }
+
+  .table-page .np-name,
+  .table-page .np-stack {
+    font-size: 13px;
+  }
+
+  .table-page .empty-seat-btn {
+    width: 66px !important;
+    height: 66px !important;
+  }
+
+  .table-page .seat.empty .empty-label {
+    width: 58px !important;
+    height: 58px !important;
+  }
+}
+
+/* Short landscape phones: tighten vertical space. */
+@media (max-height: 480px) {
+  :root {
+    --bar-h: 54px;
+  }
+
+  /* A phone on its side is wider than 720px, so the phone rules above miss
+     it — but it has even less height to spare. Same treatment: one short row
+     of buttons, and no chip count on the shove. */
+  .ab-btn {
+    min-width: 62px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+
+  .ab-allin .ab-amt {
+    display: none;
+  }
+
+  .ab-inner {
+    padding: 5px 10px;
+  }
+
+  #app {
+    grid-template-rows: 40px 1fr auto;
+  }
+
+  #top-bar {
+    height: 40px;
+  }
+
+  #side-panel {
+    top: 40px;
+  }
+
+  #table-area { padding: 3px; }
+
+  .ab-inner {
+    padding: 6px 10px;
+  }
+}
+
+/* ---- 747 Poker ---- */
+
+/* The dealer's hand sits where the community board normally goes. */
+.dealer-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--chip-ink);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* Live readout of what your own cards currently make. */
+.hand-now {
+  margin-top: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--chip-ink);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.hand-now.natural {
+  background: var(--green-dark);
+  border-color: var(--green);
+  color: #eafff2;
+  animation: natural-pulse 0.9s ease-in-out infinite alternate;
+}
+
+/* The simultaneous-reveal countdown. */
+.countdown-747 {
+  font-size: 64px;
+  font-weight: 800;
+  color: var(--chip-ink);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
+  animation: natural-pulse 0.5s ease-in-out infinite alternate;
+}
+
+#center-message .natural-banner {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffd75e;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  animation: natural-pulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes natural-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.12); }
+}
+
+/* ---- provably-fair chip + panel ---- */
+.fair-chip {
+  background: var(--ghost-hover); color: var(--accent-lite); border: 1px solid var(--accent);
+  border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fair-chip:hover { background: var(--ghost-bg); border-color: var(--accent-lite); }
+#fair-panel { padding: 4px 2px; }
+#fair-panel .fp-lead { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 12px; }
+#fair-panel .fp-float {
+  font-size: 24px; font-weight: 700; color: var(--accent-lite); margin: 0 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+#fair-panel .fp-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; margin: 0 0 14px; }
+#fair-panel .fp-list dt { color: var(--text-dim); }
+#fair-panel .fp-list dd { margin: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; }
+#fair-panel .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+#fair-panel .fp-note { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin: 8px 0 0; }
+.fair-seed-form label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
+.fair-seed-row { display: flex; gap: 6px; }
+.fair-seed-row input {
+  flex: 1; min-width: 0; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+}
+
+/* ---- ledger settle-up pay buttons ---- */
+.settle-list li { margin-bottom: 10px; }
+.settle-line { margin-bottom: 4px; }
+.pay-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.pay-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer;
+  background: rgba(255,255,255,0.07); color: var(--text);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 4px 10px;
+}
+.pay-btn:hover { background: rgba(245,197,66,0.16); border-color: rgba(245,197,66,0.4); }
+.pay-btn.copy { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 500; }
+.ledger-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ledger-actions .btn { text-decoration: none; }
+
+/* ---- in-app webcam + voice ---- */
+.av-live { display: inline-flex; gap: 6px; align-items: center; }
+.av-live .av-off { opacity: 0.55; text-decoration: line-through; }
+
+/* The profile picture: same footprint as the webcam tile, so a pod looks the
+   same whether the camera is on or off. */
+.seat-avatar {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid var(--accent-dark);
+  background: var(--bg-raised);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  margin-bottom: -6px;
+  z-index: 1;
+}
+.seat.me .seat-avatar { border-color: var(--accent); }
+
+@media (max-width: 720px) {
+  .seat-avatar { width: 62px; height: 62px; }
+}
+
+/* The webcam feed sits where a seat's avatar would, just above the nameplate. */
+video.seat-cam {
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: #05070d;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  margin-bottom: -6px;
+  z-index: 1;
+}
+video.seat-cam.mine {
+  transform: scaleX(-1); /* mirror your own preview, like every video app */
+  border-color: var(--accent);
+}
+video.seat-cam.cam-off { visibility: hidden; }
+.seat.me video.seat-cam { border-color: var(--accent); }
+
+/* The upright ring stacks pods closer together, so its tiles trim a step. */
+@media (min-width: 721px) {
+  #table.upright video.seat-cam { width: 132px; height: 99px; }
+}
+
+@media (max-width: 720px) {
+  video.seat-cam { width: 118px; height: 88px; }
+}
+
+/* ---- per-player mute + muted styling ---- */
+/* A word, not a speaker icon — you should be able to tell what it does
+   without decoding a glyph. It sits on the nameplate's corner and is
+   absolutely positioned on purpose: it costs the pod no height, which the
+   seat-overlap gates depend on. Big enough to read and to hit with a thumb,
+   which the 9.5px version it replaces was not. */
+.np-mute {
+  position: absolute;
+  top: -11px;
+  right: -8px;
+  padding: 2px 12px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--bg-panel);
+  color: var(--accent);
+  cursor: pointer;
+  z-index: 3;
+}
+.np-mute:hover { background: var(--ghost-hover); }
+/* Muted is a state you should never be in by accident and never wonder
+   about: filled red, and their tile greys out to match. */
+.np-mute.on { background: var(--red); border-color: var(--red); color: #fff; }
+video.seat-cam.muted-peer { filter: grayscale(0.5) brightness(0.75); }
+
+/* ---- Boot cover: what you look at while the socket hands you your seat ---- */
+#boot {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(78% 60% at 50% 34%, var(--glow), transparent 66%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 9px),
+    linear-gradient(var(--bg-raised), var(--bg) 62%, var(--ink));
+  transition: opacity .45s ease;
+}
+#boot.gone { opacity: 0; pointer-events: none; }
+.boot-inner { text-align: center; padding: 0 24px; color: var(--text-dim); }
+.boot-mark { width: min(430px, 78vw); height: auto; display: block; margin: 0 auto; }
+.boot-word {
+  font-family: 'Arial Black', 'Arial Bold', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 900;
+  letter-spacing: -.015em;
+}
+.boot-sub {
+  font-family: Impact, Haettenschweiler, 'Franklin Gothic Bold', 'Arial Narrow Bold', sans-serif;
+  letter-spacing: .38em;
+}
+.boot-chips {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 22px 0 14px;
+}
+.boot-chips i {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--ink), 0 2px 8px rgba(0, 0, 0, .55);
+  animation: bootChip 1.05s ease-in-out infinite;
+}
+.boot-chips i:nth-child(2) { animation-delay: .14s; }
+.boot-chips i:nth-child(3) { animation-delay: .28s; }
+@keyframes bootChip {
+  0%, 70%, 100% { transform: translateY(0); opacity: .55; }
+  35% { transform: translateY(-9px); opacity: 1; }
+}
+.boot-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot-chips i { animation: none; opacity: .85; }
+  #boot { transition: none; }
+}
+
+/* ---- tournament clock ---- */
+.tourney-clock {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--accent-lite);
+  background: var(--ghost-bg);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tourney-clock[data-rebuys='closed'] { border-color: var(--red); }
+
+/* The running tab, folded away under the session ledger. Closed by default:
+   tonight is what the ledger is for, and the tab across nights is the thing
+   you go looking for rather than the thing you need in front of you. */
+.running-block {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.running-block > summary {
+  cursor: pointer;
+}
+
+.running-block .sl-grid {
+  grid-template-columns: 1fr auto auto;
+}
+
+/* The figure to send, spelled out beside the pay buttons. A payment app may
+   quietly ignore an amount carried in a link — the number has to be readable
+   whether or not the link prefills it, or somebody sends the wrong sum and the
+   ledger is silently wrong. */
+.pay-amount {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 4px 2px;
+}

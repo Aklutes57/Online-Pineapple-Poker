@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reg-Poker Online — Play Poker with Friends</title>
+  <meta name="description" content="Free private poker tables for you and your friends. No downloads, no real money. Texas Hold'em, Pineapple, Crazy Pineapple, and Pot Limit Omaha.">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#2c0a14">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/landing.css">
+  <script src="/js/skin.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <span class="brand-mark"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></span>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#games">Games</a>
+        <a href="#faq">FAQ</a>
+        <span id="account-slot">
+          <button class="btn btn-ghost nav-btn" id="signin-btn">Sign in</button>
+        </span>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <svg class="hero-mark" viewBox="0 0 760 176" role="img" aria-label="Reg-Poker Online">
+          <defs>
+            <!-- Reads the skin's accent tokens, so the wordmark is brass in
+                 the Velvet room, chrome in Tour Circuit and gold in Championship. -->
+            <linearGradient id="heroGold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="var(--accent-lite)" /><stop offset=".38" stop-color="var(--accent)" />
+              <stop offset=".52" stop-color="var(--accent-dark)" /><stop offset=".62" stop-color="var(--accent-lite)" />
+              <stop offset="1" stop-color="var(--accent-dark)" />
+            </linearGradient>
+          </defs>
+          <g class="hero-bubble">
+            <text x="380" y="96" text-anchor="middle" font-size="84"
+                  fill="url(#heroGold)" stroke="var(--ink)" stroke-width="24"
+                  stroke-linejoin="round" paint-order="stroke">Reg-Poker</text>
+            <text x="380" y="96" text-anchor="middle" font-size="84"
+                  fill="none" stroke="var(--accent-lite)" stroke-width="1.6" opacity=".9"
+                  stroke-linejoin="round" transform="translate(-2,-3)">Reg-Poker</text>
+          </g>
+          <!-- x is nudged by half the .hero-sub letter-spacing: the trailing space is in
+               the advance width but draws nothing, so text-anchor="middle" alone sits left. -->
+          <text class="hero-sub" x="386.3" y="150" text-anchor="middle" font-size="30" fill="currentColor">ONLINE</text>
+          <g stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round">
+            <line x1="176" y1="138" x2="248" y2="138" /><line x1="512" y1="138" x2="584" y2="138" />
+          </g>
+          <g fill="var(--accent)">
+            <rect x="258" y="134" width="8" height="8" transform="rotate(45 262 138)" />
+            <rect x="494" y="134" width="8" height="8" transform="rotate(45 498 138)" />
+          </g>
+        </svg>
+        <h1 class="hero-line">Play poker with your friends.<br><span class="accent">Right now. Right here.</span></h1>
+        <p class="sub">
+          Spin up a private table in seconds and send your friends the link.
+          No downloads, no real money — just cards.
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-xl" id="start-btn">Start a New Game</button>
+          <button class="btn btn-ghost btn-install hidden" id="install-btn">Install the app</button>
+        </div>
+        <!-- Joining from inside the installed app. An iPhone will not hand a
+             pasted link to a PWA — it opens Safari every time — so the app has
+             to be able to take the link itself. -->
+        <form class="join-link" id="join-link-form">
+          <label class="sr-only" for="join-link">Table link or code</label>
+          <input id="join-link" placeholder="Paste a table link or code" autocomplete="off"
+                 inputmode="text" spellcheck="false">
+          <button class="btn btn-ghost" type="submit">Join</button>
+        </form>
+        <p class="fine" id="join-link-note"></p>
+        <p class="fine">Free play-money poker · works on iPhone, Android &amp; laptops</p>
+      </div>
+      <div class="hero-cards" aria-hidden="true">
+        <div class="hcard c1"><span>A<b>♠</b></span></div>
+        <div class="hcard c2 red"><span>K<b>♥</b></span></div>
+        <div class="hcard c3"><span>Q<b>♣</b></span></div>
+      </div>
+    </section>
+
+    <!-- Every table this browser ever sat at leaves a rejoin token behind;
+         this surfaces them, so a lost invite link is never a lost ledger. -->
+    <section id="recent-tables" class="recent hidden">
+      <div class="wrap">
+        <h2>Your recent tables</h2>
+        <p class="recent-note">Tables you've played on this device — reopen one or grab its saved ledger.</p>
+        <ul id="recent-list"></ul>
+      </div>
+    </section>
+
+    <section id="how" class="features">
+      <div class="wrap grid">
+        <div class="feature">
+          <div class="ico">🔗</div>
+          <h3>Instant private tables</h3>
+          <p>Create a table, copy the link, and share it anywhere. Friends click, pick a name, and ask for a seat — you approve who plays.</p>
+        </div>
+        <div class="feature">
+          <div class="ico">🃏</div>
+          <h3>Four ways to play</h3>
+          <p>Texas Hold'em, Pineapple, Crazy Pineapple, and Pot Limit Omaha — with real rules: side pots, min-raises, the works.</p>
+        </div>
+        <div class="feature">
+          <div class="ico">📱</div>
+          <h3>Nothing to install</h3>
+          <p>Runs entirely in the browser on any phone, tablet, or computer. Refresh mid-hand and you're right back in your seat.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="games" class="variants">
+      <div class="wrap">
+        <h2>Pick your game</h2>
+        <div class="grid">
+          <div class="variant"><h4>Texas Hold'em</h4><p>The classic. Two hole cards, no-limit betting.</p></div>
+          <div class="variant"><h4>Pineapple</h4><p>Three hole cards — throw one away before the flop.</p></div>
+          <div class="variant"><h4>Crazy Pineapple</h4><p>Keep all three through the flop, then discard one.</p></div>
+          <div class="variant"><h4>Pot Limit Omaha</h4><p>Four hole cards, use exactly two. Pot-limit bets.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="faq">
+      <div class="wrap">
+        <h2>Questions</h2>
+        <details>
+          <summary>Is this real-money poker?</summary>
+          <p>No. Everything here is play money. Chips have no value; the built-in ledger just helps you track who's up and who's down for bragging rights.</p>
+        </details>
+        <details>
+          <summary>Do my friends need accounts?</summary>
+          <p>No. They open your table link, type a nickname, and request a seat. As the host you approve each player and their buy-in. An account is optional — it just remembers your results, stats, friends list and table look between games.</p>
+        </details>
+        <details>
+          <summary>What does signing up actually get me?</summary>
+          <p>An all-time ledger of every session you've played, poker stats, a saved list of friends to auto-invite, a Discord webhook for your group, and a custom table look that follows you to every game you host.</p>
+        </details>
+        <details>
+          <summary>What can the host control?</summary>
+          <p>Blinds, action timer, pausing between hands, approving seats, topping up stacks, removing players, and closing the table.</p>
+        </details>
+        <details>
+          <summary>What happens if I get disconnected?</summary>
+          <p>Reopen the same link on the same device and you're back in your seat, cards intact. If it's your turn and the timer runs out, you auto-check or auto-fold and sit out until you're back.</p>
+        </details>
+        <details>
+          <summary>How long does a table live?</summary>
+          <p>A table stays open while people are playing and is cleaned up after an hour of inactivity. When the host closes it, the session ledger is the final word — and if you're signed in, that result is saved to your all-time ledger.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span class="brand-mark"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></span>
+      <p>Play-money poker for friends. No gambling, no real currency, just fun.</p>
+    </div>
+  </footer>
+
+  <!-- Create game modal -->
+  <div class="modal-backdrop hidden" id="create-modal">
+    <div class="modal">
+      <h2>Start a new game</h2>
+      <div class="field">
+        <label for="c-nickname">Your nickname</label>
+        <input id="c-nickname" maxlength="20" placeholder="e.g. AceHigh" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="c-format">Format</label>
+        <select id="c-format">
+          <option value="cash" selected>Cash game — buy in and out whenever</option>
+          <option value="tournament">Tournament — blinds go up, last one standing wins</option>
+        </select>
+      </div>
+      <div class="row hidden" id="c-tourney-row">
+        <div class="field">
+          <label for="c-level">Minutes a level</label>
+          <input id="c-level" type="number" min="1" max="240" value="15">
+        </div>
+        <div class="field">
+          <label for="c-rebuy">Re-buy period (minutes)</label>
+          <input id="c-rebuy" type="number" min="0" max="1440" value="60">
+        </div>
+      </div>
+      <p class="hint hidden" id="c-tourney-note">
+        The clock starts on the first hand. Blinds climb a level at a time from
+        the ones you set below, and once the re-buy period is up, busting means
+        you're out — set it to 0 for a freezeout.
+      </p>
+      <div class="field">
+        <label for="c-variant">Game</label>
+        <select id="c-variant">
+          <option value="holdem">Texas Hold'em</option>
+          <option value="pineapple">Pineapple (discard before the flop)</option>
+          <option value="crazyPineapple">Crazy Pineapple (discard after the flop)</option>
+          <option value="plo">Pot Limit Omaha</option>
+          <option value="747">747 Poker (beat the dealer, 4s wild)</option>
+        </select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="c-sb">Small blind</label>
+          <input id="c-sb" type="number" min="1" value="1">
+        </div>
+        <div class="field">
+          <label for="c-bb">Big blind</label>
+          <input id="c-bb" type="number" min="2" value="2">
+        </div>
+      </div>
+      <div class="field hidden" id="c-carry-row">
+        <label class="check-label" for="c-carry">
+          <input type="checkbox" id="c-carry"> <span id="c-carry-label">Continue from your last table</span>
+        </label>
+        <p class="hint" id="c-carry-note"></p>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="c-buyin">Starting stack</label>
+          <input id="c-buyin" type="number" min="1" value="200">
+        </div>
+        <div class="field">
+          <label for="c-timer">Action timer</label>
+          <select id="c-timer">
+            <option value="15">15 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="0">No limit</option>
+          </select>
+        </div>
+      </div>
+      <div class="row hidden" id="c-747-row">
+        <div class="field">
+          <label for="c-747-ante">747 ante (per hand)</label>
+          <input id="c-747-ante" type="number" min="1" step="1" value="2">
+        </div>
+        <div class="field">
+          <label for="c-747-cap">747 most you can pay</label>
+          <input id="c-747-cap" type="number" min="0" step="1" value="25">
+        </div>
+      </div>
+      <p class="hint hidden" id="c-747-note">
+        Everyone antes every hand. Only the best hand among the players who hold
+        gets to play the dealer — everyone else pays the pot, up to this cap,
+        into the <em>next</em> hand's pot. Losing to the dealer pays the same.
+      </p>
+      <div class="row">
+        <div class="field">
+          <label class="check-label" for="c-72">
+            <input type="checkbox" id="c-72"> 7-2 bounty game
+          </label>
+        </div>
+        <div class="field">
+          <label for="c-72-amount">Bounty per player</label>
+          <input id="c-72-amount" type="number" min="1" value="10" disabled>
+        </div>
+      </div>
+      <p class="hint" id="c-72-note">
+        Hold'em and the Pineapples only — 7-2 is the worst hand you can be dealt
+        two cards, which is the whole joke. Omaha, Draw and Stud deal more than
+        two, so the bounty does not apply there (bomb pots included).
+      </p>
+      <div class="actions">
+        <button class="btn btn-ghost" id="c-cancel">Cancel</button>
+        <button class="btn btn-primary" id="c-create">Create table</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script type="module" src="/js/landing.js"></script>
+</body>
+</html>

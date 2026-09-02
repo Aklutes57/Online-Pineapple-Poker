@@ -1,0 +1,625 @@
+// Socket.IO protocol boundary: token auth, input validation, host checks,
+// and tailored per-socket state broadcasts.
+
+import { EVENTS, ERRORS, SETTINGS_LIMITS, REACTIONS, REACTION_COOLDOWN } from '../shared/constants.js';
+import { buildViews } from './views.js';
+import { getGame, destroyGame } from './gameManager.js';
+import { accountForToken, setRealName as setAccountRealName } from './accounts.js';
+
+const socketsByGame = new Map(); // gameId -> Set<socket>
+
+export function broadcast(game) {
+  const sockets = socketsByGame.get(game.id);
+  if (!sockets || sockets.size === 0) {
+    game.seq++;
+    return;
+  }
+  const { pub, forPlayer } = buildViews(game);
+  for (const socket of sockets) {
+    const { playerId } = socket.data;
+    socket.emit(EVENTS.STATE, { ...pub, you: forPlayer(playerId) });
+  }
+}
+
+function sendError(socket, code, message) {
+  socket.emit(EVENTS.ERROR_MSG, { code, message });
+}
+
+function cleanNickname(raw) {
+  if (typeof raw !== 'string') return null;
+  const nick = raw.trim().replace(/\s+/g, ' ').slice(0, SETTINGS_LIMITS.nickname.max);
+  return nick.length >= SETTINGS_LIMITS.nickname.min ? nick : null;
+}
+
+// A fresh joiner must not be able to claim the exact display name of someone
+// already at the table — that is how a guest would impersonate the host (or
+// another player) in chat and the action log. If the name collides with a
+// connected player, hand back a disambiguated variant ("Ayden (2)"); the
+// impostor is visibly not the original.
+function uniqueNickname(game, nick) {
+  const taken = new Set(
+    [...game.players.values()]
+      .filter((p) => p.connected)
+      .map((p) => p.nickname.toLowerCase())
+  );
+  if (!taken.has(nick.toLowerCase())) return nick;
+  const base = nick.slice(0, SETTINGS_LIMITS.nickname.max - 4);
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base} (${n})`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+  return `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+// Clients control event payloads entirely — a null/string/array payload must
+// not be able to throw inside a handler and take the process down.
+function asObject(payload) {
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+}
+
+// Chip amounts arrive from the client as whatever the browser felt like
+// sending. Anything that is not a whole number of chips becomes null, which
+// every caller rejects with its own message rather than coercing to zero.
+function toInt(value) {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return Number.isInteger(n) ? n : null;
+}
+
+const MAX_PLAYERS_PER_GAME = 60;
+
+// Undo a socket's current player/game binding (used on disconnect and when a
+// socket re-JOINs, so stale bindings can't pin `connected=true` forever).
+function detachSocket(socket) {
+  const { gameId, playerId } = socket.data;
+  if (!gameId) return null;
+  const sockets = socketsByGame.get(gameId);
+  if (sockets) {
+    sockets.delete(socket);
+    if (sockets.size === 0) socketsByGame.delete(gameId);
+  }
+  const game = getGame(gameId);
+  const player = game?.players.get(playerId);
+  socket.data.gameId = null;
+  socket.data.playerId = null;
+  if (!game || !player) return null;
+  player.sockets.delete(socket.id);
+  if (player.sockets.size === 0) {
+    player.connected = false;
+    // Drop out of the A/V session so peers tear down. The epoch moves with it:
+    // a reconnecting player must not be handed a connection built for the
+    // tracks they had before they vanished.
+    if (player.mediaOn) player.mediaEpoch = (player.mediaEpoch || 0) + 1;
+    player.mediaOn = false;
+    player.camOn = false;
+    game.noteDisconnect(player);
+  }
+  return game;
+}
+
+// Per-socket flood control. A human clicks a handful of times a second; these
+// ceilings are far above that but well below what it takes to burn CPU or
+// churn broadcasts. Each socket refills BUCKET_REFILL tokens/sec up to
+// BUCKET_MAX; a packet with no token is dropped, and a socket that stays
+// empty long enough to rack up FLOOD_LIMIT drops in one window is cut loose.
+const BUCKET_MAX = 40;
+const BUCKET_REFILL = 25; // tokens per second
+const FLOOD_LIMIT = 200;
+
+function installFloodGuard(socket) {
+  let tokens = BUCKET_MAX;
+  let last = Date.now();
+  let dropped = 0;
+  socket.use((_packet, next) => {
+    const nowMs = Date.now();
+    tokens = Math.min(BUCKET_MAX, tokens + ((nowMs - last) / 1000) * BUCKET_REFILL);
+    last = nowMs;
+    if (tokens >= 1) {
+      tokens -= 1;
+      dropped = 0;
+      next();
+      return;
+    }
+    // Out of tokens: drop this packet. A socket that keeps hammering while
+    // empty is a flood, not a fast human — disconnect it.
+    if (++dropped > FLOOD_LIMIT) {
+      socket.disconnect(true);
+      return;
+    }
+    next(new Error('rate_limited'));
+  });
+  // socket.use rejections surface as an 'error' event; swallow it so a dropped
+  // packet never bubbles into an unhandled error.
+  socket.on('error', () => {});
+}
+
+export function attachSockets(io) {
+  io.on('connection', (socket) => {
+    socket.data = { gameId: null, playerId: null };
+    installFloodGuard(socket);
+
+    socket.on(EVENTS.JOIN, (payload, ack) => {
+      if (typeof ack !== 'function') return;
+      const { gameId, token, nickname, accountToken, pushEndpoint } = asObject(payload);
+      const game = getGame(typeof gameId === 'string' ? gameId : '');
+      if (!game || game.closed) {
+        ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
+        return;
+      }
+      game.touch();
+
+      // A re-JOIN on a bound socket must release the old binding first.
+      detachSocket(socket);
+
+      let account = null;
+      try {
+        account = accountForToken(accountToken);
+      } catch {
+        account = null;
+      }
+      // An account is required to be at a table at all. Checked here rather
+      // than only in the page, because this is the door: a socket is all
+      // anybody needs to sit down.
+      if (!account) {
+        ack({ ok: false, error: ERRORS.SIGN_IN_REQUIRED });
+        return;
+      }
+
+      let player = typeof token === 'string' ? game.playerByToken(token) : null;
+      // A seat token is only good for the account that took the seat. Without
+      // this, a token shared or scraped from one browser would seat somebody
+      // else on that player's ledger row.
+      if (player && player.accountId && player.accountId !== account.id) {
+        ack({ ok: false, error: ERRORS.SIGN_IN_REQUIRED });
+        return;
+      }
+      if (!player) {
+        if (game.players.size >= MAX_PLAYERS_PER_GAME) {
+          ack({ ok: false, error: ERRORS.GAME_NOT_FOUND });
+          return;
+        }
+        const nick = uniqueNickname(
+          game,
+          cleanNickname(nickname) || cleanNickname(account.displayName) || 'Player'
+        );
+        player = game.addPlayer(nick, account.id);
+      } else if (!player.accountId) {
+        // A player row from before this rule, or one seated by the host: bind
+        // it to whoever is actually here.
+        player.accountId = account.id;
+      }
+      {
+        player.accountName = account.displayName;
+        // Linked payment handles travel with the player so table-mates can pay
+        // them from the ledger. Opt-in: absent unless the account set them.
+        player.payments = account.prefs?.payments || null;
+        // The name they settle up under travels with the account too, so the
+        // ledger reads the same at every table they sit at.
+        if (account.prefs?.realName) player.realName = account.prefs.realName;
+        // The account's profile picture follows them to every table, so it is
+        // re-applied on each join and each reconnect.
+        if (account.avatarUrl) player.avatarUrl = account.avatarUrl;
+      }
+
+      // This browser's push subscription, so turn alerts reach guests too.
+      // Anything malformed is silently ignored.
+      if (
+        typeof pushEndpoint === 'string' &&
+        pushEndpoint.length <= 1024 &&
+        pushEndpoint.startsWith('https://')
+      ) {
+        player.pushEndpoint = pushEndpoint;
+      } else if (pushEndpoint === null) {
+        player.pushEndpoint = null; // explicit opt-out from this device
+      }
+
+      // Bind this socket to the player (multiple tabs allowed).
+      socket.data.gameId = game.id;
+      socket.data.playerId = player.id;
+      player.sockets.add(socket.id);
+      player.connected = true;
+      player.disconnectedAt = null;
+
+      // If the table's creator is returning after host had passed on, hand the
+      // controls straight back to them.
+      game.reclaimHostIfCreator(player);
+
+      // A reconnecting current actor gets their turn timer re-evaluated
+      // (restores the "no timer" state when the action clock is off).
+      const hand = game.currentHand;
+      // Both sides of that comparison can be null — toActSeat is null whenever
+      // the table is waiting on everyone at once (an all-in run-out, a discard,
+      // the run-it-twice vote), and a spectator or a player who stood up has no
+      // seatIndex. null === null used to pass the guard and call beginTurn for
+      // a seat that does not exist, which threw and took the process (and with
+      // it every other table) down.
+      if (
+        hand && !hand.finished && hand.isBettingPhase()
+        && player.seatIndex !== null && hand.toActSeat !== null
+        && hand.toActSeat === player.seatIndex
+      ) {
+        hand.beginTurn();
+      }
+
+      if (!socketsByGame.has(game.id)) socketsByGame.set(game.id, new Set());
+      socketsByGame.get(game.id).add(socket);
+
+      if (!game.onChanged) game.onChanged = () => broadcast(game);
+      if (!game.onClosed) {
+        game.onClosed = (reason) => {
+          const sockets = socketsByGame.get(game.id);
+          if (sockets) {
+            for (const s of sockets) s.emit(EVENTS.TABLE_CLOSED, { reason });
+          }
+          socketsByGame.delete(game.id);
+          destroyGame(game.id);
+        };
+      }
+
+      const { pub, forPlayer } = buildViews(game);
+      ack({ ok: true, token: player.token, playerId: player.id, state: { ...pub, you: forPlayer(player.id) } });
+      broadcast(game);
+    });
+
+    // Every other event requires a bound player. Payloads are normalized and
+    // handler errors are contained per-event — a bad message from one client
+    // must never crash the process and take every table with it.
+    function withGame(handler) {
+      return (rawPayload) => {
+        const game = getGame(socket.data.gameId || '');
+        const player = game && game.players.get(socket.data.playerId);
+        if (!game || !player) {
+          sendError(socket, ERRORS.NOT_JOINED, 'Join the game first');
+          return;
+        }
+        if (game.closed) return;
+        game.touch();
+        try {
+          handler(game, player, asObject(rawPayload));
+        } catch (err) {
+          sendError(socket, ERRORS.BAD_REQUEST, 'Something went wrong');
+          game.recoverFromError(err);
+        }
+      };
+    }
+
+    function withHost(handler) {
+      return withGame((game, player, payload) => {
+        if (!game.isHost(player)) {
+          sendError(socket, ERRORS.NOT_HOST, 'Only the host can do that');
+          return;
+        }
+        handler(game, player, payload);
+      });
+    }
+
+    function result(game, r, code = ERRORS.BAD_REQUEST) {
+      if (!r.ok) {
+        sendError(socket, code, r.error);
+      } else {
+        broadcast(game);
+      }
+    }
+
+    socket.on(EVENTS.REQUEST_SEAT, withGame((game, player, payload) => {
+      const nick = cleanNickname(payload.nickname);
+      if (nick && player.status !== 'seated' && !game.nicknameTaken(nick)) {
+        player.nickname = nick;
+      }
+      const seatIndex = payload.seatIndex === undefined || payload.seatIndex === null
+        ? null
+        : payload.seatIndex;
+      result(game, game.requestSeat(player, payload.buyIn, seatIndex), ERRORS.SEAT_TAKEN);
+    }));
+
+    socket.on(EVENTS.CANCEL_SEAT_REQUEST, withGame((game, player) => {
+      result(game, game.cancelSeatRequest(player));
+    }));
+
+    socket.on(EVENTS.ACTION, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || hand.finished || payload.handId !== hand.handId) {
+        sendError(socket, ERRORS.BAD_ACTION, 'That hand is over');
+        return;
+      }
+      if (!game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'You are not in this hand');
+        return;
+      }
+      const action = payload.action;
+      if (!['fold', 'check', 'call', 'bet', 'raise'].includes(action)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'Unknown action');
+        return;
+      }
+      if (player.seatIndex !== hand.toActSeat) {
+        sendError(socket, ERRORS.NOT_YOUR_TURN, 'Not your turn');
+        return;
+      }
+      const amount = payload.amount === undefined || payload.amount === null ? null : payload.amount;
+      const r = hand.handleAction(player, action, amount);
+      result(game, r, ERRORS.BAD_AMOUNT);
+    }));
+
+    socket.on(EVENTS.DISCARD, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'No discard right now');
+        return;
+      }
+      result(game, hand.handleDiscard(player, payload.cardIndex), ERRORS.BAD_ACTION);
+    }));
+
+    socket.on(EVENTS.SHOW_CARDS, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId) return;
+      result(game, hand.handleShowCards(player));
+    }));
+
+    socket.on(EVENTS.SIT_OUT, withGame((game, player) => {
+      result(game, game.sitOut(player));
+    }));
+
+    socket.on(EVENTS.SIT_IN, withGame((game, player) => {
+      result(game, game.sitIn(player));
+    }));
+
+    socket.on(EVENTS.SET_STRADDLE, withGame((game, player, payload) => {
+      result(game, game.setStraddle(player, !!payload?.on, !!payload?.deep));
+    }));
+
+    socket.on(EVENTS.DRAW_CARDS, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || hand.finished) {
+        sendError(socket, ERRORS.BAD_REQUEST, 'no hand to draw in');
+        return;
+      }
+      const indices = Array.isArray(payload?.indices) ? payload.indices : null;
+      const r = hand.handleDraw(player, indices);
+      if (!r.ok) sendError(socket, ERRORS.BAD_REQUEST, r.error);
+      else broadcast(game);
+    }));
+
+    socket.on(EVENTS.TIP_PLAYER, withGame((game, player, payload) => {
+      result(game, game.tipPlayer(player, payload?.playerId, toInt(payload?.amount)));
+    }));
+
+    socket.on(EVENTS.POST_TO_POT, withGame((game, player, payload) => {
+      result(game, game.postToPot(player, toInt(payload?.amount)));
+    }));
+
+    socket.on(EVENTS.MUSIC_ADD, withGame((game, player, payload) => {
+      result(game, game.musicAdd(player, payload?.url, payload?.title));
+    }));
+
+    socket.on(EVENTS.MUSIC_SKIP, withGame((game, player) => {
+      result(game, game.musicSkip(player));
+    }));
+
+    socket.on(EVENTS.MUSIC_PAUSE, withGame((game, player, payload) => {
+      result(game, game.musicPause(player, !!payload?.paused));
+    }));
+
+    // Fired by whichever browser reaches the end first; the rest are ignored
+    // because the index will no longer match.
+    socket.on(EVENTS.MUSIC_ENDED, withGame((game, player, payload) => {
+      result(game, game.musicEnded(toInt(payload?.index)));
+    }));
+
+    socket.on(EVENTS.MUSIC_CLEAR, withHost((game) => {
+      result(game, game.musicClear());
+    }));
+
+    socket.on(EVENTS.STAND_UP, withGame((game, player) => {
+      result(game, game.removeFromSeat(player, 'leave'));
+    }));
+
+    socket.on(EVENTS.CHAT, withGame((game, player, payload) => {
+      const r = game.addChat(player, payload.text);
+      if (!r.ok) {
+        sendError(socket, ERRORS.RATE_LIMITED, r.error);
+        return;
+      }
+      const sockets = socketsByGame.get(game.id);
+      if (sockets) {
+        for (const s of sockets) s.emit(EVENTS.CHAT_MSG, r.msg);
+      }
+    }));
+
+    // Reactions are ephemeral: fanned out directly like chat rather than
+    // churning the whole game state for a floating emoji.
+    socket.on(EVENTS.REACT, withGame((game, player, payload) => {
+      if (!REACTIONS.includes(payload.emoji)) {
+        sendError(socket, ERRORS.BAD_REQUEST, 'Unknown reaction');
+        return;
+      }
+      const nowMs = Date.now();
+      if (nowMs - (player.lastReactAt || 0) < REACTION_COOLDOWN) return;
+      player.lastReactAt = nowMs;
+
+      const message = {
+        emoji: payload.emoji,
+        from: player.nickname,
+        seatIndex: player.seatIndex,
+        ts: nowMs,
+      };
+      const sockets = socketsByGame.get(game.id);
+      if (sockets) {
+        for (const s of sockets) s.emit(EVENTS.REACTION, message);
+      }
+    }));
+
+    socket.on(EVENTS.SET_PREACTION, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'That hand is over');
+        return;
+      }
+      const r = hand.setPreAction(player, payload.kind ?? null);
+      if (!r.ok) {
+        sendError(socket, ERRORS.BAD_ACTION, r.error);
+        return;
+      }
+      broadcast(game);
+    }));
+
+    // 747: the simultaneous stay/fold decision. Mirrors DISCARD's guards;
+    // the choice itself never appears in any broadcast until the countdown.
+    socket.on(EVENTS.DECISION_747, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'No decision to make right now');
+        return;
+      }
+      if (typeof hand.handleDecision !== 'function') {
+        sendError(socket, ERRORS.BAD_ACTION, 'This game has no stay/fold decision');
+        return;
+      }
+      result(game, hand.handleDecision(player, !!payload.stay), ERRORS.BAD_ACTION);
+    }));
+
+    socket.on(EVENTS.SET_CLIENT_SEED, withGame((game, player, payload) => {
+      result(game, game.setClientSeed(player, payload.clientSeed));
+    }));
+
+    // ---- WebRTC voice/video (peer-to-peer; the server only relays) ----
+
+    // Announce joining/leaving the A/V session so peers know to connect, and
+    // whether the camera is actually on (a switched-off camera still sends a
+    // disabled track, so receivers can only tell by being told).
+    //
+    // mediaEpoch changes whenever the player's outgoing tracks change. Both
+    // ends of a peer connection watch it to decide, without any further
+    // signalling, that the connection is stale and must be rebuilt.
+    socket.on(EVENTS.RTC_MEDIA, withGame((game, player, payload) => {
+      const on = !!payload.on;
+      if (player.mediaOn !== on) player.mediaEpoch = (player.mediaEpoch || 0) + 1;
+      player.mediaOn = on;
+      player.camOn = on && payload.cam !== false;
+      broadcast(game);
+    }));
+
+    // Relay one player's connection handshake (SDP/ICE) to another player in
+    // the SAME game. The payload is opaque and never parsed here; validating
+    // the target is a co-player is what stops it being a cross-table relay.
+    socket.on(EVENTS.RTC_SIGNAL, withGame((game, player, payload) => {
+      const targetId = typeof payload.to === 'string' ? payload.to : '';
+      const target = game.players.get(targetId);
+      if (!target || !target.connected) return;
+      const sockets = socketsByGame.get(game.id);
+      if (!sockets) return;
+      for (const s of sockets) {
+        if (s.data.playerId === target.id) {
+          s.emit(EVENTS.RTC_SIGNAL, { from: player.id, data: payload.data });
+        }
+      }
+    }));
+
+    socket.on(EVENTS.SET_NAME_FONT, withGame((game, player, payload) => {
+      result(game, game.setNameFont(player, payload.font));
+    }));
+
+    // The name this player is settled up under. Signed-in players keep it on
+    // their account so it follows them to every table; guests re-assert it
+    // from their own browser on each connect, the same way avatars do.
+    socket.on(EVENTS.SET_REAL_NAME, withGame((game, player, payload) => {
+      const res = game.setRealName(player, payload?.name ?? null);
+      if (res.ok && player.accountId) {
+        try {
+          setAccountRealName(player.accountId, player.realName);
+        } catch {
+          /* the table still has it; persistence is best-effort */
+        }
+      }
+      result(game, res);
+    }));
+
+    // Guests have no account to hang a picture on, so their browser re-asserts
+    // the upload URL it remembers on every connect. Validated in setAvatar.
+    socket.on(EVENTS.SET_AVATAR, withGame((game, player, payload) => {
+      result(game, game.setAvatar(player, payload?.url ?? null));
+    }));
+
+    socket.on(EVENTS.RUN_IT_TWICE_VOTE, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId || !game.playerInLiveHand(player)) {
+        sendError(socket, ERRORS.BAD_ACTION, 'No vote right now');
+        return;
+      }
+      if (typeof hand.handleRitVote !== 'function') return;
+      result(game, hand.handleRitVote(player, !!payload.yes), ERRORS.BAD_ACTION);
+    }));
+
+    socket.on(EVENTS.REBUY, withGame((game, player, payload) => {
+      result(game, game.rebuy(player, payload.amount), ERRORS.BAD_AMOUNT);
+    }));
+
+    socket.on(EVENTS.RABBIT_HUNT, withGame((game, player, payload) => {
+      const hand = game.currentHand;
+      if (!hand || payload.handId !== hand.handId) return;
+      result(game, hand.handleRabbitHunt(player), ERRORS.BAD_ACTION);
+    }));
+
+    socket.on(EVENTS.LEAVE_WAITLIST, withGame((game, player) => {
+      result(game, game.leaveWaitlist(player));
+    }));
+
+    // ---- host controls ----
+
+    socket.on(EVENTS.HOST_NUDGE, withHost((game, _player, payload) => {
+      result(game, game.nudgePlayer(payload.playerId, !!payload.immediate));
+    }));
+
+    socket.on(EVENTS.HOST_APPROVE_WAITLIST, withHost((game, _player, payload) => {
+      result(game, game.approveWaitlist(payload.playerId, !!payload.approve));
+    }));
+
+    socket.on(EVENTS.HOST_APPROVE_SEAT, withHost((game, _player, payload) => {
+      result(game, game.approveSeat(payload.playerId, !!payload.approve));
+    }));
+
+    socket.on(EVENTS.HOST_START_GAME, withHost((game, player) => {
+      result(game, game.startGame(player));
+    }));
+
+    socket.on(EVENTS.HOST_PAUSE, withHost((game, _player, payload) => {
+      result(game, game.setPaused(!!payload.paused));
+    }));
+
+    socket.on(EVENTS.HOST_KICK, withHost((game, _player, payload) => {
+      const target = game.players.get(payload.playerId);
+      if (!target) {
+        sendError(socket, ERRORS.BAD_REQUEST, 'No such player');
+        return;
+      }
+      result(game, game.removeFromSeat(target, 'kick'));
+    }));
+
+    socket.on(EVENTS.HOST_TRANSFER, withHost((game, _player, payload) => {
+      result(game, game.transferHost(payload.playerId));
+    }));
+
+    socket.on(EVENTS.HOST_ADJUST_STACK, withHost((game, _player, payload) => {
+      result(game, game.adjustStack(payload.playerId, payload.delta));
+    }));
+
+    socket.on(EVENTS.HOST_UPDATE_SETTINGS, withHost((game, _player, payload) => {
+      result(game, game.updateSettings(payload || {}));
+    }));
+
+    socket.on(EVENTS.HOST_CLOSE_TABLE, withHost((game) => {
+      game.addLog('The host closed the table');
+      game.close('host');
+    }));
+
+    socket.on('disconnect', () => {
+      const playerId = socket.data.playerId;
+      const game = detachSocket(socket);
+      if (!game || game.closed) return;
+      // Going offline must never stall the hand: if the leaver is the one to
+      // act, re-arm their turn so the short disconnect clock starts NOW and
+      // folds (or checks) for them — not whenever the full timer would.
+      const player = game.players.get(playerId);
+      if (player && !player.connected) game.nudgeCurrentTurn(player);
+      broadcast(game);
+    });
+  });
+}

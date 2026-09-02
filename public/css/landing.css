@@ -1,0 +1,390 @@
+.wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: rgba(16, 19, 28, 0.85);
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.site-header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+.site-header .brand-mark {
+  font-size: 18px;
+}
+
+.site-header nav {
+  display: flex;
+  align-items: center; /* text links share the Sign-in button's centre line */
+  gap: 22px;
+}
+
+/* #account-slot wraps the Sign in / account link, so it needs to centre its own
+   child too — otherwise the button sits at the top of a stretched span. */
+.site-header nav > * {
+  display: flex;
+  align-items: center;
+}
+
+.site-header nav a {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.site-header a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.site-header a:hover {
+  color: var(--text);
+}
+
+/* ---- hero ---- */
+
+.hero {
+  position: relative;
+  padding: 90px 0 110px;
+  text-align: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 900px 420px at 50% -80px, rgba(46, 158, 91, 0.18), transparent),
+    radial-gradient(ellipse 600px 300px at 85% 100%, rgba(var(--pulse), 0.07), transparent);
+}
+
+.hero h1 {
+  font-size: clamp(30px, 5.4vw, 54px);
+  line-height: 1.15;
+  margin-bottom: 18px;
+}
+
+.hero .accent {
+  color: var(--accent);
+}
+
+.hero .sub {
+  max-width: 560px;
+  margin: 0 auto 30px;
+  color: var(--text-dim);
+  font-size: 18px;
+}
+
+.btn-xl {
+  font-size: 19px;
+  padding: 16px 36px;
+  box-shadow: 0 10px 34px rgba(var(--pulse), 0.25);
+}
+
+.hero .fine {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.hero-cards {
+  position: absolute;
+  right: max(2vw, 8px);
+  bottom: -48px;
+  opacity: 0.92;
+}
+
+.hcard {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 132px;
+  height: 185px;
+  background: #f4f6fb;
+  color: #1c2230;
+  border-radius: 9px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+  font-size: 40px;
+  font-weight: 700;
+  padding: 12px;
+}
+
+.hcard span b {
+  display: block;
+  font-size: 46px;
+  line-height: 1;
+}
+
+.hcard.red {
+  color: #c0392b;
+}
+
+.hcard.c1 { transform: rotate(14deg) translate(-10px, -16px); }
+.hcard.c2 { transform: rotate(-2deg) translate(-116px, 10px); }
+.hcard.c3 { transform: rotate(-18deg) translate(-223px, 38px); }
+
+/* ---- your recent tables ---- */
+
+.recent {
+  padding: 36px 0 44px;
+  border-top: 1px solid var(--border);
+}
+
+.recent h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.recent-note {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.recent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.recent-who code {
+  background: var(--bg-raised);
+  border-radius: 6px;
+  padding: 1px 7px;
+}
+
+.recent-links {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.recent-links .btn {
+  text-decoration: none;
+}
+
+/* ---- features ---- */
+
+.features {
+  padding: 70px 0;
+  border-top: 1px solid var(--border);
+}
+
+.features .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 22px;
+}
+
+.feature {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 26px;
+}
+
+.feature .ico {
+  font-size: 30px;
+  margin-bottom: 12px;
+}
+
+.feature h3 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.feature p {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+/* ---- variants ---- */
+
+.variants {
+  padding: 30px 0 70px;
+}
+
+.variants h2,
+.faq h2 {
+  font-size: 26px;
+  margin-bottom: 22px;
+}
+
+.variants .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.variant {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 18px;
+  background: var(--bg-panel);
+}
+
+.variant h4 {
+  margin-bottom: 6px;
+}
+
+.variant p {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* ---- faq ---- */
+
+.faq {
+  padding: 20px 0 80px;
+}
+
+.faq details {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  margin-bottom: 10px;
+  padding: 0 18px;
+}
+
+.faq summary {
+  cursor: pointer;
+  padding: 14px 0;
+  font-weight: 600;
+  list-style: none;
+}
+
+.faq summary::before {
+  content: '▸ ';
+  color: var(--accent);
+}
+
+.faq details[open] summary::before {
+  content: '▾ ';
+}
+
+.faq details p {
+  color: var(--text-dim);
+  padding-bottom: 14px;
+  font-size: 15px;
+}
+
+/* ---- footer ---- */
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 30px 0 50px;
+  text-align: center;
+}
+
+.site-footer p {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* ---- hero action buttons: grouped, spaced, never overlapping ---- */
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+}
+.btn-install { font-size: 15px; }
+.hero .wrap { position: relative; z-index: 1; } /* content above the decorative cards */
+
+/* The decorative cards live in the bottom-right corner; on smaller screens the
+   centered buttons reach into that corner, so retire the cards there. */
+@media (max-width: 900px) {
+  .hero-cards { display: none; }
+  .hero { padding: 64px 0 72px; }
+}
+
+/* Header: let the nav breathe instead of colliding on small screens. */
+@media (max-width: 560px) {
+  .site-header nav { gap: 12px; }
+  .site-header .wrap { gap: 10px; padding: 0 16px; }
+  .hero-actions { flex-direction: column; }
+  .hero-actions .btn { width: 100%; max-width: 320px; }
+}
+
+/* ---- The room you walk into ----
+   Every surface reads a token, so the landing page turns with the skin the
+   player picked at the table instead of staying stuck in one room. */
+.hero {
+  background:
+    radial-gradient(90% 70% at 50% -12%, var(--glow), transparent 62%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 3px, transparent 3px 9px),
+    linear-gradient(var(--bg-raised), var(--bg));
+}
+.hero-mark { width: min(660px, 92%); height: auto; margin: 0 auto 10px; display: block; color: var(--text-dim); }
+.hero-bubble text { font-family: 'Arial Black','Arial Bold','Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: 900; letter-spacing: -.015em; }
+.hero-sub { font-family: Impact, Haettenschweiler, 'Franklin Gothic Bold', 'Arial Narrow Bold', sans-serif; letter-spacing: .42em; }
+.hero-line { font-size: clamp(20px, 3vw, 30px); line-height: 1.25; margin-bottom: 14px; font-weight: 600; }
+.hero .accent { color: var(--accent); }
+.hero .sub { color: var(--text-dim); }
+.site-header { background: var(--ghost-bg); border-bottom: 1px solid var(--border); }
+.features, .variants, .faq { background: linear-gradient(var(--bg), var(--ink)); }
+.feature, .variant { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-panel); }
+.hcard { border: 2px solid var(--accent); }
+
+/* Visible to a screen reader, not on screen. The join field has a placeholder
+   but a placeholder is not a label. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Paste a table link to join from inside the installed app. Sits under the
+   two big buttons because it is the quieter way in — most people arrive by
+   tapping a link, and only reach for this when their phone opened a browser
+   instead of the app. */
+.join-link {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.join-link input {
+  flex: 0 1 320px;
+  min-width: 0;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.join-link input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#join-link-note:empty {
+  display: none;
+}

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Original Pineapple Poker mark: a lattice pineapple over a felt table. -->
+  <defs>
+    <radialGradient id="felt" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#2a8c58"/>
+      <stop offset="55%" stop-color="#1f6b43"/>
+      <stop offset="100%" stop-color="#153a2b"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd966"/>
+      <stop offset="100%" stop-color="#e8a821"/>
+    </linearGradient>
+    <clipPath id="bodyClip">
+      <ellipse cx="256" cy="316" rx="118" ry="148"/>
+    </clipPath>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="#10131c"/>
+  <circle cx="256" cy="256" r="216" fill="url(#felt)"/>
+  <circle cx="256" cy="256" r="216" fill="none" stroke="#3b2a1e" stroke-width="18"/>
+
+  <!-- crown -->
+  <g fill="#2e9e5b" stroke="#1d6b3c" stroke-width="6" stroke-linejoin="round">
+    <path d="M256 178 L214 84 L250 128 Z"/>
+    <path d="M256 178 L298 84 L262 128 Z"/>
+    <path d="M256 172 L166 108 L226 150 Z"/>
+    <path d="M256 172 L346 108 L286 150 Z"/>
+    <path d="M256 168 L256 62 L256 120 Z" stroke-width="10"/>
+  </g>
+
+  <!-- body -->
+  <ellipse cx="256" cy="316" rx="118" ry="148" fill="url(#body)" stroke="#a86e12" stroke-width="10"/>
+  <g clip-path="url(#bodyClip)" stroke="#c78c1e" stroke-width="7" fill="none" opacity="0.9">
+    <path d="M110 220 L420 420"/>
+    <path d="M110 280 L400 470"/>
+    <path d="M110 340 L340 500"/>
+    <path d="M150 180 L440 370"/>
+    <path d="M220 160 L450 310"/>
+    <path d="M402 220 L92 420"/>
+    <path d="M402 280 L112 470"/>
+    <path d="M402 340 L172 500"/>
+    <path d="M362 180 L72 370"/>
+    <path d="M292 160 L62 310"/>
+  </g>
+
+  <!-- suit pips tucked at the base, table-style -->
+  <g font-family="Georgia, 'Times New Roman', serif" font-size="44" text-anchor="middle">
+    <text x="196" y="472" fill="#10131c">♠</text>
+    <text x="316" y="472" fill="#b03434">♥</text>
+  </g>
+</svg>

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Reg-Poker Online — Table</title>
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#2c0a14">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/table.css">
+  <script src="/js/skin.js"></script>
+</head>
+<body class="table-page">
+  <!-- Painted from markup so it is on screen before any script runs; removed on
+       the first table state. Never blocks the table — purely a cover. -->
+  <div id="boot">
+    <div class="boot-inner">
+      <svg class="boot-mark" viewBox="0 0 520 146" role="img" aria-label="Reg-Poker Online">
+        <defs>
+          <linearGradient id="bootGold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--accent-lite)" /><stop offset=".38" stop-color="var(--accent)" />
+            <stop offset=".52" stop-color="var(--accent-dark)" /><stop offset=".62" stop-color="var(--accent-lite)" />
+            <stop offset="1" stop-color="var(--accent-dark)" />
+          </linearGradient>
+        </defs>
+        <text class="boot-word" x="260" y="72" text-anchor="middle" font-size="62"
+              fill="url(#bootGold)" stroke="var(--ink)" stroke-width="18"
+              stroke-linejoin="round" paint-order="stroke">Reg-Poker</text>
+        <text class="boot-sub" x="264" y="126" text-anchor="middle" font-size="21" fill="currentColor">ONLINE</text>
+      </svg>
+      <div class="boot-chips" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="boot-note">Dealing you in…</p>
+    </div>
+  </div>
+
+  <div id="app">
+    <header id="top-bar">
+      <!-- Three tracks: the table's identity, the controls, and an empty
+           counterweight the same width as the first. The buttons then sit on
+           the centre line of the screen, not on the centre of what is left
+           over after the badges. -->
+      <div class="top-meta">
+        <a class="brand-mark" href="/"><i class="brand-chip" aria-hidden="true"></i><span class="brand-words"><span class="brand-hi">Reg-Poker</span> Online</span></a>
+        <span id="game-badge"></span>
+        <span id="tourney-clock" class="tourney-clock hidden"></span>
+        <a id="account-chip" class="account-chip hidden" href="/me"></a>
+        <a id="signin-chip" class="account-chip hidden" href="/me" title="Sign in or create an account">Sign in</a>
+      </div>
+      <div class="top-actions">
+        <button id="fair-chip" class="fair-chip hidden" title="Provably-fair shuffle — click for details"></button>
+        <button id="straddle-btn" class="btn-ghost btn top-btn hidden" title="Straddle: post a blind raise before the cards come out — two big blinds, under the gun.">Straddle: off</button>
+        <button id="restraddle-btn" class="btn-ghost btn top-btn hidden" title="Re-straddle: if somebody straddles ahead of you, post double what they did — four big blinds, then eight, then sixteen. A separate choice from the straddle itself.">Re-straddle: off</button>
+        <button id="panel-toggle" class="btn-ghost btn top-btn" title="Open the chat">Chat<span id="unread-badge" class="hidden"></span><span id="seatreq-badge" class="req-badge hidden"></span></button>
+        <button id="ledger-btn" class="btn-ghost btn top-btn" title="Who bought in for what, who's up, who's down">Ledger</button>
+        <span class="react-wrap">
+          <button id="react-btn" class="btn-ghost btn top-btn" title="Send a reaction">React</button>
+          <div id="react-picker" class="hidden"></div>
+        </span>
+        <button id="menu-toggle" class="btn-ghost btn top-btn" title="Settings"
+                aria-expanded="false" aria-controls="top-menu" aria-haspopup="true"
+                aria-label="Settings"><span class="gear" aria-hidden="true">⚙</span> <span class="caret" aria-hidden="true">▾</span></button>
+      </div>
+      <div class="top-spacer" aria-hidden="true"></div>
+
+      <!-- The settings sheet: real sub-menus, each a <details> that folds.
+           All start open so nothing is hidden from a first-time player; the
+           fold is there for phones. The Host group only exists for the host. -->
+      <div id="top-menu" class="top-menu hidden">
+        <details class="menu-group" open>
+          <summary class="menu-sec">Table</summary>
+          <div class="menu-grid">
+            <button id="copy-link" class="btn-ghost btn top-btn" title="Copy the invite link">Invite</button>
+            <button id="menu-chat" class="btn-ghost btn top-btn" title="Open the chat">Chat<span id="menu-unread" class="hidden"></span></button>
+            <button id="menu-ledger" class="btn-ghost btn top-btn" title="Who bought in for what, who's up, who's down">Ledger</button>
+            <button id="open-log" class="btn-ghost btn top-btn" title="Every action this session, hand by hand">Game log</button>
+            <button id="open-fair" class="btn-ghost btn top-btn" title="Check the shuffle was honest — the provably-fair proof">Verify integrity</button>
+            <p class="menu-note">Keys while it's on you:
+              <b>F</b> fold · <b>C</b> call · <b>K</b> check · <b>B</b>/<b>R</b> bet or raise
+              (then type the amount and press Enter).</p>
+          </div>
+        </details>
+
+        <details class="menu-group hidden" id="menu-seat-group" open>
+          <summary class="menu-sec">Seat</summary>
+          <div class="menu-grid">
+            <button id="menu-sit" class="btn-ghost btn top-btn hidden" title="Go away for a bit — the table checks or folds for you until you’re back">Sit out</button>
+            <button id="menu-straddle" class="btn-ghost btn top-btn hidden" title="Straddle: post a blind raise before the deal — two big blinds, under the gun. Your choice, hand by hand.">Straddle: off</button>
+            <button id="menu-restraddle" class="btn-ghost btn top-btn hidden" title="Re-straddle: post double the straddle in front of you — four big blinds, then eight, then sixteen. A separate choice from the straddle itself.">Re-straddle: off</button>
+            <button id="leave-btn" class="btn-ghost btn top-btn hidden" title="Leave your seat — folds your hand if one is running">Stand up</button>
+          </div>
+        </details>
+
+        <details class="menu-group" open>
+          <summary class="menu-sec">Video &amp; voice</summary>
+          <div class="menu-grid">
+            <button id="av-join" class="btn-ghost btn top-btn hidden" title="Turn on your camera and mic">Start video</button>
+            <button id="av-voice" class="btn-ghost btn top-btn hidden" title="Turn on just your mic — no camera, your profile picture stays">Mic on</button>
+            <span id="av-live" class="av-live hidden">
+              <button id="av-cam" class="btn-ghost btn top-btn" title="Turn your camera off">Camera</button>
+              <button id="av-mic" class="btn-ghost btn top-btn" title="Mute your mic — they see you, they can't hear you">Mute mic</button>
+              <button id="av-frame" class="btn-ghost btn top-btn" title="Upload a frame for your webcam">Frame</button>
+              <button id="av-leave" class="btn-ghost btn top-btn" title="Leave video and voice">End video</button>
+            </span>
+            <!-- Deafen sits OUTSIDE av-live: you can hear the table without
+                 broadcasting anything yourself, and the setting is remembered
+                 per device — so hiding its only control the moment you stop
+                 broadcasting would leave you silenced with no way back. -->
+            <button id="av-deafen" class="btn-ghost btn top-btn hidden" title="Deafen — you hear nobody; your own mic is unchanged">Deafen</button>
+            <p class="menu-note">Mute one player from the Mute button on their seat — that's just for you.</p>
+          </div>
+        </details>
+
+        <details class="menu-group" open>
+          <summary class="menu-sec">Your look</summary>
+          <div class="menu-grid">
+            <select id="skin" class="top-select" title="How the table looks on your screen" aria-label="Table look"></select>
+            <select id="name-font" class="top-select" title="The font your name is shown in" aria-label="Your name font"></select>
+            <button id="avatar-btn" class="btn-ghost btn top-btn" title="Your picture, shown in your seat when your camera is off">Profile pic</button>
+            <button id="table-img-btn" class="btn-ghost btn top-btn" title="Put a picture on the table (everyone sees it)">Table pic</button>
+            <input type="file" id="avatar-input" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" hidden>
+            <input type="file" id="table-img-input" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" hidden>
+            <input type="file" id="cam-frame-input" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" hidden>
+          </div>
+        </details>
+
+        <details class="menu-group" open>
+          <summary class="menu-sec">Your names</summary>
+          <div class="menu-stack">
+            <label class="menu-field">
+              <span>Name for the ledger</span>
+              <input type="text" id="real-name" maxlength="40" autocomplete="name"
+                     placeholder="e.g. Ayden Lutes"
+                     title="The name you're settled up under. The table sees this in the ledger, not on the felt.">
+            </label>
+            <p class="menu-hint">
+              Your username is what the table sees on your seat. This is the name
+              the ledger and Settle&nbsp;up pay out to, so nobody has to work out
+              who <em>“chipleader420”</em> is. Leave it blank to use your username.
+            </p>
+          </div>
+        </details>
+
+        <details class="menu-group" open>
+          <summary class="menu-sec">Sound &amp; alerts</summary>
+          <div class="menu-grid">
+            <button id="sound-toggle" class="btn-ghost btn top-btn" title="Sound on or off">Sound</button>
+            <button id="deck-toggle" class="btn-ghost btn top-btn" title="Four-colour deck on or off">Deck</button>
+            <button id="push-bell" class="btn-ghost btn top-btn" title="Alerts when it's your turn and you're away">Alerts</button>
+          </div>
+        </details>
+
+        <details class="menu-group hidden" id="menu-host-sec" open>
+          <summary class="menu-sec">Host</summary>
+          <div class="menu-grid">
+            <button id="host-menu-btn" class="btn-ghost btn top-btn hidden" title="Only you see this — blinds, timer, seats, closing the table">Host controls</button>
+          </div>
+        </details>
+      </div>
+    </header>
+
+    <main id="table-area">
+      <!-- The room behind the table: a skin-tinted skyline (campus towers,
+           chapel, panelling). Same geometry in every skin; only paint and
+           opacity change, so no skin can move anything. -->
+      <svg id="room-scape" viewBox="0 0 1500 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <g style="fill: var(--scape-a)">
+          <rect x="0" y="330" width="230" height="370"/>
+          <rect x="60" y="260" width="90" height="440"/>
+          <rect x="240" y="420" width="220" height="280"/>
+          <rect x="1020" y="380" width="240" height="320"/>
+          <rect x="1290" y="180" width="110" height="520"/>
+          <polygon points="1290,180 1345,110 1400,180"/>
+          <rect x="1420" y="330" width="80" height="370"/>
+        </g>
+        <g style="fill: var(--scape-b)">
+          <rect x="86" y="290" width="14" height="26"/><rect x="112" y="290" width="14" height="26"/>
+          <rect x="1320" y="220" width="16" height="30"/><rect x="1352" y="220" width="16" height="30"/>
+          <circle cx="1345" cy="300" r="22"/>
+        </g>
+      </svg>
+      <div id="table">
+        <!-- The felt watermark: each skin writes its own two lines here. -->
+        <div id="felt-mark" aria-hidden="true"></div>
+        <div id="table-center">
+          <div id="pot-line" class="hidden"></div>
+          <div id="board"></div>
+          <div id="center-message"></div>
+        </div>
+        <div id="bets-layer"></div>
+        <div id="seats-layer"></div>
+        <!-- Chips in flight. Its own layer because renderBets empties the bets
+             layer on every change, which would delete an animation mid-air. -->
+        <div id="fx-layer" aria-hidden="true"></div>
+        <div id="reactions-layer"></div>
+      </div>
+      <div id="cooler-banner" class="hidden"></div>
+    </main>
+
+    <aside id="side-panel" class="collapsed">
+      <button id="panel-arrow" class="panel-arrow" title="Slide the chat away">▸</button>
+      <div id="seat-requests" class="hidden"></div>
+      <div class="tabs">
+        <button data-tab="chat" class="tab active">Chat</button>
+        <button data-tab="log" class="tab">Log</button>
+        <button data-tab="music" class="tab" title="What the table is listening to">Music</button>
+        <!-- The ledger is a pop-up, not a tab — this button just opens it. -->
+        <button id="ledger-tab-btn" class="tab" title="Who bought in for what, who's up, who's down">Ledger</button>
+        <!-- Desktop: folds the dock down to this tab strip, giving the felt
+             the room back. Any tab click opens it again. -->
+        <button id="dock-toggle" class="tab dock-toggle" title="Fold the chat away — the table gets the room">Hide</button>
+        <button id="panel-close" class="tab tab-close" title="Close this panel">Close</button>
+      </div>
+      <div id="tab-chat" class="tab-body">
+        <div id="chat-list" class="scroll-list"></div>
+        <form id="chat-form">
+          <input id="chat-input" maxlength="300" placeholder="Say something…" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Send</button>
+        </form>
+      </div>
+      <div id="tab-log" class="tab-body hidden">
+        <div id="log-list" class="scroll-list"></div>
+      </div>
+      <div id="tab-music" class="tab-body hidden">
+        <div class="music-now" id="music-now"></div>
+        <div class="music-controls">
+          <button class="btn btn-ghost ab-small" id="music-play" type="button">Pause</button>
+          <button class="btn btn-ghost ab-small" id="music-skip" type="button">Skip</button>
+          <button class="btn btn-ghost ab-small" id="music-mute" type="button"
+                  title="Only for you — everyone else keeps hearing it">Mute</button>
+        </div>
+        <label class="music-vol">
+          <span>Volume</span>
+          <input id="music-volume" type="range" min="0" max="100" step="1">
+        </label>
+        <p class="hint" id="music-note"></p>
+        <div id="music-queue" class="scroll-list"></div>
+        <form id="music-form">
+          <input id="music-input" maxlength="200" placeholder="Paste a YouTube link…" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Queue</button>
+        </form>
+        <button class="btn btn-ghost ab-small hidden" id="music-clear" type="button">Clear the queue</button>
+      </div>
+    </aside>
+
+    <footer id="action-bar"></footer>
+  </div>
+
+  <!-- Ledger pop-up: the same live ledger, from anywhere, closable. -->
+  <div class="modal-backdrop hidden" id="ledger-modal">
+    <div class="modal ledger-modal">
+      <div class="modal-head">
+        <h2>Session Ledger</h2>
+        <button class="btn btn-ghost modal-x" id="ledger-close" title="Close the ledger">Close</button>
+      </div>
+      <div id="ledger-table"></div>
+      <details class="running-block">
+        <summary class="menu-sec">Running total across nights</summary>
+        <div id="running-total"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Verifying integrity: the provably-fair readout, from the settings
+       menu or the shuffle chip. Closable, like the ledger. -->
+  <div class="modal-backdrop hidden" id="fair-modal">
+    <div class="modal ledger-modal">
+      <div class="modal-head">
+        <h2>Verifying integrity</h2>
+        <button class="btn btn-ghost modal-x" id="fair-close" title="Close">Close</button>
+      </div>
+      <div id="fair-panel"></div>
+    </div>
+  </div>
+
+  <!-- Seat request modal -->
+  <div class="modal-backdrop hidden" id="join-modal">
+    <div class="modal">
+      <h2 id="join-title">Take a seat</h2>
+      <div class="field">
+        <label for="j-nickname">Nickname</label>
+        <input id="j-nickname" maxlength="20" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="j-buyin">Buy-in <span id="j-buyin-range"></span></label>
+        <input id="j-buyin" type="number">
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" id="j-cancel">Cancel</button>
+        <button class="btn btn-primary" id="j-request">Request seat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Host settings modal -->
+  <div class="modal-backdrop hidden" id="host-modal">
+    <div class="modal">
+      <h2>Host controls</h2>
+      <div class="field">
+        <label for="h-variant">Game (changes from the next hand)</label>
+        <select id="h-variant"></select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="h-sb">Small blind</label>
+          <input id="h-sb" type="number" min="1">
+        </div>
+        <div class="field">
+          <label for="h-bb">Big blind</label>
+          <input id="h-bb" type="number" min="1">
+        </div>
+        <div class="field">
+          <label for="h-timer">Timer</label>
+          <select id="h-timer">
+            <option value="15">15s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+            <option value="0">Off</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="h-timebank">Time bank</label>
+          <select id="h-timebank">
+            <option value="0">Off</option>
+            <option value="15">15s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="h-bomb" title="A bomb pot is dealt as Omaha with two boards: everyone antes, no blinds, straight to the flop, and the pot splits between the best hand on each board.">Bomb pot</label>
+          <select id="h-bomb">
+            <option value="0">Off</option>
+            <option value="freq:frequent">Random — often (~1 in 6)</option>
+            <option value="freq:semi">Random — now and then (~1 in 12)</option>
+            <option value="freq:rare">Random — rare (~1 in 25)</option>
+            <option value="1">Every hand</option>
+            <option value="5">Every 5 hands</option>
+            <option value="10">Every 10 hands</option>
+            <option value="20">Every 20 hands</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="h-bomb-ante">Bomb pot ante</label>
+          <input id="h-bomb-ante" type="number" min="0" step="1"
+                 placeholder="big blind"
+                 title="Chips each player antes into a bomb pot. Leave blank or 0 to use the big blind.">
+        </div>
+        <div class="field">
+          <label for="h-72">7-2 bounty payout</label>
+          <input id="h-72" type="number" min="1" step="1" disabled>
+        </div>
+      </div>
+      <p class="hint" id="h-72-note">
+        The 7-2 bounty is paid in Hold'em and the Pineapples only. Leave it on
+        at a mixed table and it simply applies to those hands and not the
+        others.
+      </p>
+      <div class="row hidden" id="h-tourney-row">
+        <div class="field">
+          <label for="h-level">Minutes a level</label>
+          <input id="h-level" type="number" min="1" max="240">
+        </div>
+        <div class="field">
+          <label for="h-rebuy">Re-buy period (minutes)</label>
+          <input id="h-rebuy" type="number" min="0" max="1440">
+        </div>
+      </div>
+      <div class="row hidden" id="h-747-row">
+        <div class="field">
+          <label for="h-747-ante">747 ante (per hand)</label>
+          <input id="h-747-ante" type="number" min="1" step="1">
+        </div>
+        <div class="field">
+          <label for="h-747-cap">747 most you can pay</label>
+          <input id="h-747-cap" type="number" min="0" step="1">
+        </div>
+      </div>
+      <p class="hint hidden" id="h-747-note">
+        Everyone antes every hand. Only the best hand among the players who hold
+        plays the dealer — everyone else pays the pot, up to this cap, into the
+        <em>next</em> hand's pot. Losing to the dealer pays the same.
+      </p>
+      <div class="option-toggles">
+        <label class="toggle"><input type="checkbox" id="h-straddle"><span>Straddle</span></label>
+        <label class="toggle"><input type="checkbox" id="h-rabbit"><span>Rabbit hunt</span></label>
+        <label class="toggle"><input type="checkbox" id="h-rit"><span>Run it twice</span></label>
+        <label class="toggle"><input type="checkbox" id="h-72-on"><span>7-2 bounty</span></label>
+        <label class="toggle"><input type="checkbox" id="h-rotate"><span>Mixed game</span></label>
+      </div>
+      <div class="hidden" id="h-rotate-row">
+        <div class="row">
+          <div class="field">
+            <label for="h-rotate-every">Change game every (hands)</label>
+            <input id="h-rotate-every" type="number" min="1" max="100" step="1">
+          </div>
+        </div>
+        <div class="field">
+          <label>Formats in the mix</label>
+          <div class="option-toggles" id="h-rotate-list"></div>
+        </div>
+        <p class="hint">
+          Tick at least two — fewer and the table plays every format in turn. The
+          game changes between hands and is announced in the log, so a hand always
+          finishes under the rules it was dealt with. 747 is never in a mix: it runs
+          a different engine, with a pot that rides between hands.
+        </p>
+      </div>
+      <p class="hint">All table changes apply from the next hand. "No limit" on the timer makes the table untimed.</p>
+      <div class="actions" style="justify-content: flex-start">
+        <button class="btn btn-primary" id="h-save">Save settings</button>
+        <button class="btn btn-ghost" id="h-pause">Pause</button>
+      </div>
+      <h2 style="margin-top:22px">Players</h2>
+      <div id="h-players"></div>
+      <div class="actions" style="justify-content: space-between; margin-top: 26px">
+        <button class="btn btn-red" id="h-close-table">Close table</button>
+        <button class="btn btn-ghost" id="h-done">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Closed overlay -->
+  <div class="modal-backdrop hidden" id="closed-overlay">
+    <div class="modal" style="text-align:center">
+      <h2>Table closed</h2>
+      <p id="closed-reason" style="color:var(--text-dim); margin-bottom:18px"></p>
+      <div id="closed-ledger"></div>
+      <a class="btn btn-primary" href="/" style="margin-top:18px; text-decoration:none">Back to home</a>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/game.js"></script>
+</body>
+</html>

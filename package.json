@@ -1,0 +1,34 @@
+{
+  "name": "pineapple-poker",
+  "version": "1.0.0",
+  "description": "Play poker with your friends \u2014 no downloads, no real money.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node test/test-evaluator.js && node test/test-747.js && node test/test-pots.js && node test/test-betting.js && node --disable-warning=ExperimentalWarning test/test-db.js && node --disable-warning=ExperimentalWarning test/test-stats.js && node --disable-warning=ExperimentalWarning test/test-uploads.js && node test/test-cooler.js && node --disable-warning=ExperimentalWarning test/test-notify.js && node --disable-warning=ExperimentalWarning test/test-ledger-mail.js && node --disable-warning=ExperimentalWarning test/test-replay.js && node --disable-warning=ExperimentalWarning test/test-push.js && node --disable-warning=ExperimentalWarning test/test-hardening.js && node --disable-warning=ExperimentalWarning test/test-security.js && node --disable-warning=ExperimentalWarning test/test-fairness.js && node --disable-warning=ExperimentalWarning test/test-host.js && node --disable-warning=ExperimentalWarning test/test-payments.js && node --disable-warning=ExperimentalWarning test/test-webrtc.js && node --disable-warning=ExperimentalWarning test/test-tournament.js && node --disable-warning=ExperimentalWarning test/test-music.js && node test/test-draw.js && node test/test-stud.js",
+    "soak": "node --disable-warning=ExperimentalWarning test/bots.js",
+    "smoke": "node --disable-warning=ExperimentalWarning test/smoke-ui.js",
+    "media": "node --disable-warning=ExperimentalWarning test/media.mjs",
+    "orient": "node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=pineapple node --disable-warning=ExperimentalWarning test/orient.mjs && PP_VARIANT=sevenCardStud node --disable-warning=ExperimentalWarning test/orient.mjs",
+    "allin": "node --disable-warning=ExperimentalWarning test/allin.mjs",
+    "bar": "node --disable-warning=ExperimentalWarning test/bar.mjs",
+    "chips": "node --disable-warning=ExperimentalWarning test/chips.mjs",
+    "sound": "node --disable-warning=ExperimentalWarning test/sound.mjs",
+    "replay": "node --disable-warning=ExperimentalWarning test/replay-ui.mjs",
+    "ledger": "node --disable-warning=ExperimentalWarning test/ledger-ui.mjs",
+    "pay": "node --disable-warning=ExperimentalWarning test/pay-ui.mjs",
+    "topbar": "node --disable-warning=ExperimentalWarning test/topbar.mjs"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "nodemailer": "^9.0.3",
+    "socket.io": "^4.7.5",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0",
+    "socket.io-client": "^4.7.5"
+  }
+}

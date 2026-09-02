@@ -1,0 +1,695 @@
+/* Shared dark theme, reset, and controls. */
+
+/* ---- Velvet Lounge ----
+   A 70s supper-club room: oxblood walls, walnut and brass, emerald felt,
+   cream type. Everything downstream reads these tokens, so the whole app
+   turns together. */
+:root {
+  --bg: #2c0a14;          /* oxblood wall */
+  --bg-raised: #4a1524;
+  --bg-panel: #3a0f1b;
+  --border: #7a3346;      /* warm, not blue-grey */
+  --text: #f6edd9;        /* cream */
+  --text-dim: #c9a58c;
+  --accent: #c9a227;      /* brass */
+  --accent-lite: #f3dc9a; /* polished brass highlight */
+  --accent-dark: #a97d1c;
+  --green: #0e6a4d;
+  --green-dark: #08402f;
+  --red: #8d2036;
+  --blue: #2f74bd;    /* Check/Call — dark enough for white type on it */
+  --felt: #127455;        /* emerald */
+  --felt-dark: #063527;
+  --rail: #4a2e18;        /* walnut */
+  --ink: #1c0709;         /* the near-black everything is outlined in */
+  --radius: 10px;
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+
+  /* Everything a skin needs to repaint a button, so no rule downstream hard-
+     codes a colour. Placement never changes — only these values do. */
+  --btn-ink: #2b1b03;              /* type on a filled primary button */
+  --ghost-bg: rgba(28, 7, 9, 0.55);
+  --ghost-hover: rgba(201, 162, 39, 0.18);
+  --green-lite: #0f7355;
+  --red-lite: #a3283f;
+  --red-deep: #6d1527;
+  --felt-hi: #1a8f68;              /* the lit centre of the felt */
+  --rail-ring: var(--accent);      /* the solid ring on the rail's inside edge */
+  --felt-line: rgba(201, 162, 39, 0.42); /* the faint hairline drawn on the felt */
+  --glow: rgba(255, 214, 140, .16);      /* the warm bloom over the boot cover */
+  --pulse: 245, 197, 66;                 /* the halo around whoever is to act, as r,g,b */
+  --rail-edge: var(--accent-dark); /* the hairline around the outside */
+  --card-face: #ffffff;
+  --card-ink: #14181f;
+  --plate-a: rgba(93, 17, 34, .96);   /* nameplate, lit edge */
+  --plate-b: rgba(58, 15, 27, .96);
+  --chip-ink: #ffe9a8;                /* type on bet chips and pot pills */
+  --card-red: #d92d2d;
+  --card-back-a: #a5252f;
+  --card-back-b: #7d1a22;
+
+  /* The client-format chrome: money readouts, the felt watermark, the room
+     behind the table, and the campus/backdrop silhouette layer. Strings and
+     colours both live in the skin, so a look owns its whole scene. */
+  --money: #f3dc9a;
+  --wm-a: 'REG-POKER';
+  --wm-b: 'ONLINE';
+  --wm-ink: rgba(246, 237, 217, 0.5);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #47101f 0%, #2c0a14 50%, #16050a 100%);
+  --scape-a: #3a0f1b;
+  --scape-b: #4a1524;
+  --scape-o: 0;
+
+  /* Playing cards, at the real 2.5 x 3.5 proportion (1 : 1.4). */
+  --card-ratio: 1.4;
+}
+
+/* ---- Tour Circuit ----
+   The televised-final look: gloss-black rail with a cyan hairline over a cool
+   blue felt, and a red action colour. Chosen per player, on their screen only. */
+:root[data-skin='tour'] {
+  --bg: #0e131c;
+  --bg-raised: #1a2433;
+  --bg-panel: #101825;
+  --border: #2a3949;
+  --text: #e9f1f8;
+  --text-dim: #8ea3b8;
+  --accent: #5fc6f5;
+  --accent-lite: #b8e8ff;
+  --accent-dark: #1f6f9c;
+  --blue: #1f6f9c;
+  --green: #13699f;
+  --green-dark: #0c4869;
+  --red: #b0202f;
+  --felt: #14506e;
+  --felt-dark: #0a2c3f;
+  --felt-hi: #1c6489;
+  --rail: #0b0f16;
+  --ink: #04070c;
+  --btn-ink: #04121d;
+  --ghost-bg: rgba(4, 10, 16, 0.6);
+  --ghost-hover: rgba(95, 198, 245, 0.16);
+  --green-lite: #17709f;
+  --red-lite: #c01f31;
+  --red-deep: #85101f;
+  --rail-ring: rgba(95, 198, 245, 0.55);
+  --rail-edge: #1b2635;
+  --felt-line: rgba(95, 198, 245, 0.22);
+  --glow: rgba(120, 200, 245, .14);
+  --pulse: 95, 198, 245;
+  --card-face: #ffffff;
+  --card-ink: #0d1420;
+  --plate-a: rgba(16, 24, 37, .94);
+  --plate-b: rgba(6, 12, 20, .94);
+  --chip-ink: #dbeefb;
+  --card-red: #d92d2d;
+  --card-back-a: #12385a;
+  --card-back-b: #0d2a44;
+  --money: #9fe3ff;
+  --wm-a: 'TOUR CIRCUIT';
+  --wm-b: 'FINAL TABLE';
+  --wm-ink: rgba(184, 232, 255, 0.4);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #16283c 0%, #0e131c 50%, #05080d 100%);
+  --scape-a: #101825;
+  --scape-b: #1a2433;
+  --scape-o: 0;
+}
+
+/* ---- Championship ----
+   The felt-and-gold room: casino green under a stitched leather rail with a
+   gold double-trim, red/green/gold action colours. */
+:root[data-skin='series'] {
+  --bg: #171009;
+  --bg-raised: #2b1d0c;
+  --bg-panel: #241809;
+  --border: #4a3418;
+  --text: #f5ecd8;
+  --text-dim: #b39b78;
+  --accent: #d4af37;
+  --accent-lite: #f3dd9a;
+  --accent-dark: #8a6d1c;
+  --blue: #1b5c8a;
+  --green: #15794a;
+  --green-dark: #0c5231;
+  --red: #8d1c2c;
+  --felt: #0f6039;
+  --felt-dark: #062d1c;
+  --felt-hi: #17784a;
+  --rail: #4a2e17;
+  --ink: #0b0805;
+  --btn-ink: #231703;
+  --ghost-bg: rgba(11, 8, 5, 0.6);
+  --ghost-hover: rgba(212, 175, 55, 0.18);
+  --green-lite: #15794a;
+  --red-lite: #a72232;
+  --red-deep: #65101c;
+  --rail-ring: var(--accent);
+  --rail-edge: var(--accent-dark);
+  --felt-line: rgba(243, 221, 154, 0.28);
+  --glow: rgba(255, 226, 150, .15);
+  --pulse: 212, 175, 55;
+  --card-face: #ffffff;
+  --card-ink: #171310;
+  --plate-a: rgba(36, 24, 9, .96);
+  --plate-b: rgba(18, 12, 5, .96);
+  --chip-ink: #f3dd9a;
+  --card-red: #d92d2d;
+  --card-back-a: #a3202f;
+  --card-back-b: #6d0f1b;
+  --money: #ffe08a;
+  --wm-a: 'CHAMPIONSHIP';
+  --wm-b: 'SERIES';
+  --wm-ink: rgba(243, 221, 154, 0.38);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #33230f 0%, #171009 50%, #0a0704 100%);
+  --scape-a: #241809;
+  --scape-b: #2b1d0c;
+  --scape-o: 0;
+}
+
+/* ---- CWRU Spartans ----
+   The approved client look: CWRU Blue felt under a gloss-black rail, sky-blue
+   trim, the campus skyline dim behind the table, money in pale green. */
+:root[data-skin='cwru'] {
+  --bg: #0a1626;
+  --bg-raised: #16283e;
+  --bg-panel: #0b1524;
+  --border: #24384f;
+  --text: #e8eef5;
+  --text-dim: #93a5b8;
+  --accent: #a6d2e6;
+  --accent-lite: #d5ecf7;
+  --accent-dark: #4d7f9a;
+  --blue: #12518f;
+  --green: #1f7a52;
+  --green-dark: #124a32;
+  --red: #8d2036;
+  --felt: #12294a;
+  --felt-dark: #0b1d38;
+  --felt-hi: #1a3a66;
+  --rail: #10161f;
+  --ink: #04070c;
+  --btn-ink: #052342;
+  --ghost-bg: rgba(4, 10, 18, 0.6);
+  --ghost-hover: rgba(166, 210, 230, 0.16);
+  --green-lite: #27915f;
+  --red-lite: #a3283f;
+  --red-deep: #6d1527;
+  --rail-ring: rgba(166, 210, 230, 0.5);
+  --rail-edge: #2a3548;
+  --felt-line: rgba(166, 210, 230, 0.24);
+  --glow: rgba(166, 210, 230, .14);
+  --pulse: 63, 142, 247;
+  --card-face: #ffffff;
+  --card-ink: #10233c;
+  --plate-a: rgba(14, 24, 38, .96);
+  --plate-b: rgba(7, 13, 22, .96);
+  --chip-ink: #d5e6f2;
+  --card-red: #d92d2d;
+  --card-back-a: #1c3a63;
+  --card-back-b: #102340;
+  --money: #cdeb8b;
+  --wm-a: 'CASE WESTERN\a RESERVE';
+  --wm-b: 'UNIVERSITY';
+  --wm-ink: rgba(159, 182, 204, 0.5);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #16304f 0%, #0c1c33 45%, #060d18 100%);
+  --scape-a: #101f35;
+  --scape-b: #1a2e4c;
+  --scape-o: 0.5;
+}
+
+/* ---- Wabash Scarlet ----
+   Scarlet felt in a black-leather room: the chapel steeple behind the table,
+   bone type, gold money. */
+:root[data-skin='wabash'] {
+  --bg: #0d0708;
+  --bg-raised: #2b1a1c;
+  --bg-panel: #180d0e;
+  --border: #4a2c2c;
+  --text: #f5ecec;
+  --text-dim: #bb9d9a;
+  --accent: #da291c;
+  --accent-lite: #f0a9a2;
+  --accent-dark: #8f1310;
+  --blue: #3a3134;
+  --green: #1d6f4b;
+  --green-dark: #114630;
+  --red: #a01b1c;
+  --felt: #7e1216;
+  --felt-dark: #560c0f;
+  --felt-hi: #a01b1c;
+  --rail: #17100f;
+  --ink: #0a0505;
+  --btn-ink: #fff5f0;
+  --ghost-bg: rgba(14, 6, 7, 0.6);
+  --ghost-hover: rgba(218, 41, 28, 0.16);
+  --green-lite: #268257;
+  --red-lite: #c8281c;
+  --red-deep: #7a0f0d;
+  --rail-ring: rgba(218, 41, 28, 0.5);
+  --rail-edge: #382423;
+  --felt-line: rgba(246, 239, 230, 0.22);
+  --glow: rgba(218, 41, 28, .14);
+  --pulse: 218, 41, 28;
+  --card-face: #ffffff;
+  --card-ink: #1c1517;
+  --plate-a: rgba(36, 20, 21, .96);
+  --plate-b: rgba(19, 9, 10, .96);
+  --chip-ink: #f6e5db;
+  --card-red: #d92d2d;
+  --card-back-a: #38292c;
+  --card-back-b: #20191b;
+  --money: #ffd977;
+  --wm-a: 'WABASH';
+  --wm-b: 'COLLEGE';
+  --wm-ink: rgba(227, 185, 178, 0.5);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #3d1a1c 0%, #240e10 45%, #0d0607 100%);
+  --scape-a: #2b1416;
+  --scape-b: #40201f;
+  --scape-o: 0.5;
+}
+
+/* ---- Classic Card Room ----
+   Casino green under varnished mahogany in a wood-panelled room: the look of
+   the rooms everybody learned in. */
+:root[data-skin='classic'] {
+  --bg: #120c06;
+  --bg-raised: #32281a;
+  --bg-panel: #14100a;
+  --border: #3d3324;
+  --text: #f0ece2;
+  --text-dim: #b3a893;
+  --accent: #d8b56a;
+  --accent-lite: #f0dbaa;
+  --accent-dark: #96793e;
+  --blue: #2b4f7d;
+  --green: #147444;
+  --green-dark: #0b4a2a;
+  --red: #8f2f2f;
+  --felt: #0e6b42;
+  --felt-dark: #07502f;
+  --felt-hi: #178a58;
+  --rail: #3d2712;
+  --ink: #0b0703;
+  --btn-ink: #241a06;
+  --ghost-bg: rgba(14, 10, 5, 0.6);
+  --ghost-hover: rgba(216, 181, 106, 0.16);
+  --green-lite: #2c9e63;
+  --red-lite: #a83a3a;
+  --red-deep: #6f1f1f;
+  --rail-ring: rgba(216, 181, 106, 0.55);
+  --rail-edge: #6b4622;
+  --felt-line: rgba(240, 236, 226, 0.2);
+  --glow: rgba(255, 226, 150, .13);
+  --pulse: 255, 217, 119;
+  --card-face: #ffffff;
+  --card-ink: #17202a;
+  --plate-a: rgba(74, 80, 88, .96);
+  --plate-b: rgba(42, 47, 54, .96);
+  --chip-ink: #f4eeda;
+  --card-red: #d92d2d;
+  --card-back-a: #29456b;
+  --card-back-b: #16294a;
+  --money: #ffe9a0;
+  --wm-a: 'REG-POKER';
+  --wm-b: 'ONLINE';
+  --wm-ink: rgba(159, 208, 180, 0.45);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #3a2914 0%, #221809 45%, #0e0a05 100%);
+  --scape-a: #1c1309;
+  --scape-b: #291d0e;
+  --scape-o: 0.4;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  color: inherit;
+  background: var(--bg-raised);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  width: 100%;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 22px;
+  font-weight: 600;
+  /* Every button in the Velvet room is a brass-ringed pill: the ring is the
+     through-line, so the table-header controls read as the same family as
+     "Start a New Game". Primary fills it, ghost leaves it hollow. */
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  transition: filter 0.15s, transform 0.05s;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.btn-primary {
+  background: linear-gradient(var(--accent-lite), var(--accent));
+  color: var(--btn-ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+
+.btn-ghost {
+  background: var(--ghost-bg);
+  border: 2px solid var(--accent);
+  color: var(--text);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--ghost-hover);
+  border-color: var(--accent-lite);
+}
+
+.btn-green { background: linear-gradient(var(--green-lite), var(--green-dark)); color: var(--text); }
+.btn-red { background: linear-gradient(var(--red-lite), var(--red-deep)); color: var(--text); }
+
+/* ---- modal ---- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 12, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.modal h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.modal .field {
+  margin-bottom: 14px;
+}
+
+.modal .row {
+  display: flex;
+  gap: 10px;
+}
+
+.modal .row > .field {
+  flex: 1;
+}
+
+.modal .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---- toast ---- */
+
+#toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--red);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  z-index: 200;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+#toast.show {
+  opacity: 1;
+}
+
+/* Something worked — green, so a confirmation doesn't read as an error. */
+#toast.ok {
+  background: var(--green, #2ea043);
+  color: #04240f;
+  font-weight: 600;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-decoration: none;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.brand-mark .brand-hi {
+  color: var(--accent);
+}
+
+/* A poker chip drawn in CSS — no image request, scales with the wordmark. */
+.brand-chip {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--accent) 0 12.5%, var(--bg-panel) 0 25%,
+                   var(--accent) 0 37.5%, var(--bg-panel) 0 50%,
+                   var(--accent) 0 62.5%, var(--bg-panel) 0 75%,
+                   var(--accent) 0 87.5%, var(--bg-panel) 0);
+  box-shadow:
+    inset 0 0 0 0.17em var(--accent-dark),
+    inset 0 0 0 0.3em var(--felt),
+    0 0 0 1px var(--ink);
+}
+
+/* ---- accounts ---- */
+
+.nav-btn {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.nav-account {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 10px;
+}
+
+.nav-account:hover {
+  text-decoration: underline;
+}
+
+.account-chip {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 12px;
+  white-space: nowrap;
+}
+
+.account-chip:hover {
+  border-color: var(--accent);
+}
+
+.auth-blurb {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  margin-bottom: 18px;
+}
+
+.auth-error {
+  color: var(--red);
+  font-size: 13.5px;
+  margin-top: 10px;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.linkish {
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* Checkbox-with-label rows inside modals (e.g. the 7-2 bounty toggle). */
+.modal .check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding-top: 26px;
+}
+
+.modal .check-label input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent, #f0b43c);
+}
+
+/* "Keep me signed in" is its own row under the password, not a grid cell —
+   it doesn't want the column padding the bounty toggle needs. */
+.modal .check-label.remember-row {
+  padding-top: 0;
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+/* ---- Naperville Central Wrestling Club ----
+   The wrestling-room look: Redhawk red mat inside a black rail, white
+   boundary lines, and the club's crest on the felt. */
+:root[data-skin='redhawk'] {
+  --bg: #0b0809;
+  --bg-raised: #2a1517;
+  --bg-panel: #16100f;
+  --border: #4a2422;
+  --text: #f6f1ef;
+  --text-dim: #bda6a2;
+  --accent: #e03127;
+  --accent-lite: #ff8b80;
+  --accent-dark: #8f1a13;
+  --blue: #33272a;
+  --green: #1c7350;
+  --green-dark: #114a33;
+  --red: #b3211a;
+  --felt: #b7241c;
+  --felt-dark: #7b120d;
+  --felt-hi: #d8352a;
+  --rail: #121011;
+  --ink: #070505;
+  --btn-ink: #fff6f4;
+  --ghost-bg: rgba(10, 6, 6, 0.6);
+  --ghost-hover: rgba(224, 49, 39, 0.18);
+  --green-lite: #24895f;
+  --red-lite: #d02a20;
+  --red-deep: #7d130e;
+  --rail-ring: #f2f2f2;
+  --rail-edge: #2c2426;
+  --felt-line: rgba(255, 255, 255, 0.5);
+  --glow: rgba(224, 49, 39, .15);
+  --pulse: 224, 49, 39;
+  --card-face: #ffffff;
+  --card-ink: #17100f;
+  --plate-a: rgba(30, 17, 18, .96);
+  --plate-b: rgba(14, 8, 9, .96);
+  --chip-ink: #ffe4e0;
+  --card-red: #d92d2d;
+  --card-back-a: #3a1c1d;
+  --card-back-b: #1d1011;
+  --money: #ffffff;
+  --wm-a: 'NAPERVILLE';
+  --wm-b: 'WRESTLING CLUB';
+  --wm-ink: rgba(255, 255, 255, 0.42);
+  --room-bg: radial-gradient(120% 130% at 50% -10%, #35181a 0%, #1b0d0e 45%, #090506 100%);
+  --scape-a: #241012;
+  --scape-b: #3a1a1a;
+  --scape-o: 0.45;
+}
+
+/* Small explanatory text under a control. Defined here because both the
+   landing page and the table use it — the landing page's notes had been
+   unstyled paragraphs, since the only .hint rules lived in table.css and
+   profile.css, which it does not load. Those two still load after this and
+   keep their own sizing. */
+.hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* A hint that is telling you the setting above it will not do anything in the
+   game you have picked. Amber rather than red: nothing is broken, it just does
+   not apply here. */
+.hint.warn {
+  color: #e0a33a;
+}
