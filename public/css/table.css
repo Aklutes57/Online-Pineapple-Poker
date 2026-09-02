@@ -289,7 +289,17 @@ body.disconnected::after {
   scrollbar-width: none;
   -ms-overflow-style: none;
   align-items: center;
-  justify-content: center;
+  /* `safe` is doing real work here, not decoration. Plain `center` splits the
+     overflow to BOTH sides of a scrolling row: the left half lands before the
+     scroll origin, where no scroll position can reach it, so the first button
+     was permanently unreachable the moment the bar was 60px too wide — and
+     every re-render re-centred the row and threw away wherever you had slid
+     to. `safe center` centres while it fits and falls back to start alignment
+     the moment it does not, which makes the scrollable range exactly the
+     overflow and nothing more. A browser too old to know `safe` drops the
+     whole declaration and start-aligns always, which is the harmless way to
+     be wrong. */
+  justify-content: safe center;
   gap: 10px;
   flex: 1 1 auto;
   min-width: 0;
@@ -1996,11 +2006,6 @@ td.dim { color: var(--text-dim); }
 /* The spreadsheet is THE ledger — colour-coded, and what everyone actually
    wants. Plain CSV stays for whoever needs to paste it somewhere, but it is
    not the thing you reach for by default. */
-.ledger-plain {
-  font-size: 12px;
-  opacity: 0.8;
-}
-
 .empty-note {
   color: var(--text-dim);
   font-size: 13px;
@@ -2572,10 +2577,8 @@ td.dim { color: var(--text-dim); }
   }
 
   .top-actions {
-    /* Centring inside a nowrap scrolling bar splits the overflow to BOTH
-       sides, and the left half lands before the scroll origin where no scroll
-       position can reach it. On a phone the row simply starts at the start. */
-    justify-content: flex-start;
+    /* The bar is shrink-to-fit here, so alignment inside it is moot — the
+       `safe center` on the base rule covers both cases at every width. */
     flex: 0 0 auto;
     flex-wrap: nowrap;
     gap: 6px;

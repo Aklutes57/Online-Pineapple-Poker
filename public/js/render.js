@@ -208,6 +208,10 @@ export function fitTableStage() {
 let lastClient = null;
 function relayout() {
   const was = portrait;
+  // The counterweight is sized in pixels, so it has to be recomputed when the
+  // window changes — otherwise it keeps a width worked out for a bigger screen
+  // and squeezes the controls into sliding on a screen with room to spare.
+  syncTopBar();
   fitTableStage();
   if (portrait !== was && lastClient?.state) {
     placeSeats(lastClient);
@@ -385,14 +389,53 @@ function renderTheme(client) {
 // the first from its content but cannot mirror that width onto the third, so it
 // is measured here. Without it the controls centre on whatever the badges left
 // over, which is not the middle of the screen.
+// What the row of buttons actually wants, which is NOT actions.scrollWidth:
+// on a wide screen the container is bigger than its contents and scrollWidth
+// just reports the container back.
+function actionsContentWidth(actions) {
+  const kids = [...actions.children].filter((k) => k.getClientRects().length > 0);
+  if (!kids.length) return 0;
+  const gap = parseFloat(getComputedStyle(actions).columnGap) || 0;
+  const sum = kids.reduce((total, k) => total + k.getBoundingClientRect().width, 0);
+  return Math.ceil(sum + gap * (kids.length - 1));
+}
+
 export function syncTopBar() {
+  const bar = document.getElementById('top-bar');
   const meta = document.querySelector('.top-meta');
   const spacer = document.querySelector('.top-spacer');
-  if (!meta || !spacer) return;
-  // Measured with the counterweight collapsed, so it never measures itself.
-  spacer.style.width = '0px';
-  const want = Math.round(meta.getBoundingClientRect().width);
-  spacer.style.width = `${want}px`;
+  const actions = document.querySelector('.top-actions');
+  if (!bar || !meta || !spacer || !actions) return;
+
+  // The counterweight mirrors .top-meta so the controls land on the screen's
+  // centre line. It is decoration, and it now only gets what is genuinely
+  // spare: reserving a full mirror unconditionally was making the row slide on
+  // screens with hundreds of pixels going free — at 760px it kept 267px for an
+  // empty div and left a 333px row of buttons 170px to live in.
+  //
+  // .top-meta is `flex: 0 0 auto` with a percentage max-width, so its size does
+  // not depend on the counterweight and there is no need to collapse it to
+  // measure — which is just as well, because that write was the other half of
+  // the bug.
+  // The bar's own padding and the gaps between its three tracks are not
+  // available to anybody, so they come off before the spare width is shared
+  // out. Leaving them in handed the counterweight ~56px it did not have, which
+  // was enough to push the controls into sliding at 900px.
+  const barCs = getComputedStyle(bar);
+  const tracks = [...bar.children].filter((c) => getComputedStyle(c).display !== 'none').length;
+  const chrome = (parseFloat(barCs.paddingLeft) || 0) + (parseFloat(barCs.paddingRight) || 0)
+    + (parseFloat(barCs.columnGap) || 0) * Math.max(0, tracks - 1);
+
+  const metaWidth = Math.round(meta.getBoundingClientRect().width);
+  const inner = Math.round(bar.getBoundingClientRect().width) - chrome;
+  const spare = Math.max(0, inner - metaWidth - actionsContentWidth(actions));
+  const px = `${Math.min(metaWidth, Math.floor(spare))}px`;
+
+  // Only write when the number actually changes. This runs on every state
+  // update, and rewriting a sibling's width re-lays-out the flex row, which
+  // makes the browser drop wherever you had slid the bar to — mid-slide, on
+  // every tick of the fold clock.
+  if (spacer.style.width !== px) spacer.style.width = px;
 }
 
 function renderHeader(client) {

@@ -17,7 +17,8 @@
     "sound": "node --disable-warning=ExperimentalWarning test/sound.mjs",
     "replay": "node --disable-warning=ExperimentalWarning test/replay-ui.mjs",
     "ledger": "node --disable-warning=ExperimentalWarning test/ledger-ui.mjs",
-    "pay": "node --disable-warning=ExperimentalWarning test/pay-ui.mjs"
+    "pay": "node --disable-warning=ExperimentalWarning test/pay-ui.mjs",
+    "topbar": "node --disable-warning=ExperimentalWarning test/topbar.mjs"
   },
   "license": "MIT",
   "dependencies": {

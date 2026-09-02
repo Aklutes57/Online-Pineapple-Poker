@@ -523,11 +523,12 @@ try {
     'settle-up suggests payments when someone is up',
     someoneIsUp ? settleLines.length > 0 : true
   );
-  await check('the colour spreadsheet is the primary download',
-    (await anna.textContent('#ledger-xlsx')).trim() === 'Download ledger'
-    && (await anna.locator('#ledger-xlsx').getAttribute('class')).includes('btn-primary'));
-  await check('plain CSV is still there, demoted',
-    (await anna.textContent('#ledger-csv')).trim() === 'Plain CSV');
+  await check('the .csv is the download, and the only one',
+    (await anna.textContent('#ledger-csv')).trim() === 'Download ledger'
+    && (await anna.locator('#ledger-csv').getAttribute('class')).includes('btn-primary')
+    && (await anna.locator('#ledger-xlsx').count()) === 0);
+  await check('the saved copy is a .csv too',
+    (await anna.locator('.ledger-actions a').getAttribute('href')).endsWith('/ledger.csv'));
 
   // The books-balance line is the ledger auditing itself, for everyone.
   await check('ledger books balance for the host', await anna.locator('#books-line.ok').isVisible());
@@ -996,9 +997,9 @@ try {
   const gameCode = gameUrl.split('/').pop();
   await check('the home page lists the table this device played at',
     (await ben.evaluate(() => document.getElementById('recent-list').innerHTML)).includes(gameCode));
-  await check('the recent-table ledger link serves the saved spreadsheet',
+  await check('the recent-table ledger link serves the saved .csv',
     (await ben.evaluate(async (id) =>
-      (await fetch(`/api/games/${id}/ledger.xlsx`)).status, gameCode)) === 200);
+      (await fetch(`/api/games/${id}/ledger.csv`)).status, gameCode)) === 200);
 
   // ---- tournament format lives in the create pop-up, cash game is default ----
   const tess = await newPage('tess');

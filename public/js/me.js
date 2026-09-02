@@ -186,12 +186,12 @@ function renderSummary({ totals, sessions, stats }) {
               <td>${s.buyIns}</td>
               <td>${s.cashOuts + s.finalStack}</td>
               <td class="${s.net >= 0 ? 'pos' : 'neg'}">${s.net >= 0 ? '+' : ''}${s.net}</td>
-              <td><a class="csv-link" href="/api/games/${encodeURIComponent(s.gameId)}/ledger.xlsx" target="_blank" rel="noopener" title="Download this game's ledger — winners green, losers red">⬇ Ledger</a></td>
+              <td><a class="csv-link" href="/api/games/${encodeURIComponent(s.gameId)}/ledger.csv" target="_blank" rel="noopener" title="Download this game's ledger as a .csv">⬇ Ledger</a></td>
             </tr>`
           )
           .join('')}</tbody>
       </table>
-      <p class="empty-note">Every game's ledger is saved here as a dated spreadsheet, winners in green and losers in red — nothing is lost if a screenshot isn't taken.</p>`;
+      <p class="empty-note">Every game's ledger is saved here as a dated .csv — nothing is lost if a screenshot isn't taken.</p>`;
   }
 
   const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');

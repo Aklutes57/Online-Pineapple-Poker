@@ -43,7 +43,7 @@ function renderRecentTables() {
         r.ts ? ` · ${new Date(r.ts).toLocaleDateString()}` : ''}</span>
       <span class="recent-links">
         <a class="btn btn-ghost nav-btn" href="/games/${encodeURIComponent(r.id)}">Open table</a>
-        <a class="btn btn-ghost nav-btn" href="/api/games/${encodeURIComponent(r.id)}/ledger.xlsx">Ledger</a>
+        <a class="btn btn-ghost nav-btn" href="/api/games/${encodeURIComponent(r.id)}/ledger.csv">Ledger</a>
       </span>
     </li>`).join('');
   section.classList.remove('hidden');

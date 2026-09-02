@@ -4,7 +4,6 @@ import { EVENTS, GAME_STATUS, VARIANTS, rotatableVariants } from '/shared/consta
 import { settleUp, payeeLabeller } from '/shared/settle.js';
 import { escapeHtml, showToast } from '/js/ui.js';
 import { PAYMENT_SERVICES, paymentLink, displayHandle } from '/shared/payments.js';
-import { buildXlsx, ledgerSheet, LEDGER_WIDTHS } from '/shared/xlsx.js';
 
 let clientRef = null;
 let chatLog = [];
@@ -698,15 +697,13 @@ function renderLedger(client) {
           : '<p class="empty-note">Everyone is square.</p>'
       }
       <div class="ledger-actions">
-        <button class="btn btn-primary ledger-export" id="ledger-xlsx" title="The ledger as a spreadsheet — winners in green, losers in red">Download ledger</button>
-        <button class="btn btn-ghost ledger-export ledger-plain" id="ledger-csv" title="Plain text, no colour — for pasting into something else">Plain CSV</button>
-        <a class="btn btn-ghost ledger-export" href="/api/games/${encodeURIComponent(client.gameId)}/ledger.xlsx" target="_blank" rel="noopener" title="The copy saved on the server — safe even if the game is over">Saved copy</a>
+        <button class="btn btn-primary ledger-export" id="ledger-csv" title="The ledger as a .csv — opens in Excel, Sheets, Numbers, anything">Download ledger</button>
+        <a class="btn btn-ghost ledger-export" href="/api/games/${encodeURIComponent(client.gameId)}/ledger.csv" target="_blank" rel="noopener" title="The copy saved on the server — safe even if the game is over">Saved copy</a>
       </div>
       <p class="empty-note">The ledger is auto-saved on the server, so it's here even if nobody screenshots it.</p>
     </div>`;
 
   document.getElementById('ledger-csv').addEventListener('click', () => exportLedgerCsv(client));
-  document.getElementById('ledger-xlsx')?.addEventListener('click', () => exportLedgerXlsx(client));
 }
 
 // Pay buttons for a settle-up line: the player's own share link for the
@@ -747,61 +744,46 @@ function formatDelta(delta) {
 
 // The same ledger as a spreadsheet, with each row filled by how the night went:
 // green if you are up, red if you are down. A .csv is plain text and cannot
-// carry that, so colour needs a real workbook.
-function exportLedgerXlsx(client) {
+// The ledger, as the .csv every ledger is now exported as. Built from the live
+// table rather than the saved copy, so it is current to the second; laid out
+// exactly like the server's saved copy so the two are the same document.
+function exportLedgerCsv(client) {
   const rows = [...(client.state.ledger || [])].sort((a, b) => b.net - a.net);
   if (!rows.length) {
     showToast('Nobody has bought in yet');
     return;
   }
-  const settle = settleUp(rows);
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const label = payeeLabeller(rows);
-  const bytes = buildXlsx(
-    ledgerSheet(rows, {
-      meta: [
-        ['Game', client.gameId],
-        ['Date', new Date().toISOString().slice(0, 10)],
-        ['Variant', VARIANTS[client.state.settings.variant]?.label || client.state.settings.variant],
-        ['Blinds', `${client.state.settings.smallBlind}/${client.state.settings.bigBlind}`],
-      ],
-      // Same disambiguation the panel itself shows, so the spreadsheet never
-      // says "John Smith pays John Smith".
-      settle: settle.map((p) => ({
-        ...p, from: label(p.fromId, p.from), to: label(p.toId, p.to),
-      })),
-    }),
-    { widths: LEDGER_WIDTHS }
-  );
-  const blob = new Blob([bytes], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `reg-poker-ledger-${client.gameId}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportLedgerCsv(client) {
-  const rows = client.state.ledger || [];
-  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const iso = new Date().toISOString().slice(0, 10);
+  const settings = client.state.settings;
   const lines = [
+    ['Reg-Poker Online ledger'],
+    ['Game', client.gameId],
+    ['Date', iso],
+    ['Variant', VARIANTS[settings.variant]?.label || settings.variant],
+    ['Blinds', `${settings.smallBlind}/${settings.bigBlind}`],
+    [],
     // Both names: the one who gets paid, and the one they played under.
-    ['Name', 'Username', 'Buy-ins', 'Cash-outs', 'Stack', 'Hands', 'Net'].join(','),
-    ...rows.map((r) =>
-      [esc(r.realName || r.nickname), esc(r.nickname), r.buyIns, r.cashOuts, r.stack,
-        r.handsPlayed || 0, r.net].join(',')
-    ),
-    '',
-    ['Settle up: from', 'to', 'amount'].join(','),
-    ...settleUp(rows).map((p) => [esc(p.from), esc(p.to), p.amount].join(',')),
+    ['Name', 'Username', 'Buy-ins', 'Cash-outs', 'Stack', 'Hands', 'Net'],
+    ...rows.map((r) => [
+      r.realName || r.nickname, r.nickname,
+      r.buyIns, r.cashOuts, r.stack, r.handsPlayed || 0, r.net,
+    ]),
+    [],
+    ['Settle up: from', 'to', 'amount'],
+    // Same disambiguation the panel shows, so the file never says
+    // "John Smith pays John Smith".
+    ...settleUp(rows).map((p) => [label(p.fromId, p.from), label(p.toId, p.to), p.amount]),
   ];
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  // CRLF, which is what a .csv is expected to use and what the saved copy
+  // already writes.
+  const body = lines.map((cols) => cols.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `pineapple-ledger-${client.gameId}.csv`;
+  a.download = `pineapple-ledger-${iso}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
